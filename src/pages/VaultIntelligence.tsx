@@ -3,6 +3,7 @@ import { SectionHeader } from "../components/ui/SectionHeader";
 import { DemoLabel } from "../components/ui/DemoLabel";
 import { EmptyState } from "../components/ui/StateViews";
 import { ComingSoon } from "../components/ui/ComingSoon";
+import { ProtocolTable } from "../components/vaults/ProtocolTable";
 import { DEMO_VAULT_METRICS } from "../data/demo";
 
 export function VaultIntelligence() {
@@ -29,6 +30,8 @@ export function VaultIntelligence() {
         title="No vault data loaded"
         description="Vault lists, contract checks and collateral analysis will appear here when a data source is connected. No vault figures are shown as live."
       />
+
+      <ProtocolTable />
 
       <ComingSoon
         stage="Stage 2"

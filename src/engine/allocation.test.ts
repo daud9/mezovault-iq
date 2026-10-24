@@ -106,11 +106,11 @@ describe("risk preference and ordering", () => {
     for (const line of r.lines) assert.equal(line.risk, "Low");
   });
 
-  it("higher-scored strategies receive capital first", () => {
+  it("strategies with higher evidence-adjusted scores receive capital first", () => {
     const r = generateAllocation(req({ maxAllocationPct: 100 }), STRATEGY_PROFILES);
-    const scores = r.lines.map((l) => l.qualityScore ?? -1);
-    const sorted = [...scores].sort((a, b) => b - a);
-    assert.deepEqual(scores, sorted);
+    const adjusted = r.lines.map((l) => l.adjustedScore);
+    const sorted = [...adjusted].sort((a, b) => b - a);
+    assert.deepEqual(adjusted, sorted);
   });
 
   it("is deterministic", () => {

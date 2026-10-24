@@ -144,8 +144,8 @@ export function Landing() {
         </div>
         <div className="mt-10 flex flex-col items-start gap-4 rounded-2xl border border-line bg-ink-900 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-base font-semibold text-mist-100">Connect your wallet when Stage 2 ships</p>
-            <p className="mt-1 text-sm text-mist-400">Wallet connection is not enabled in this preview.</p>
+            <p className="text-base font-semibold text-mist-100">Read your MUSD balance on Mezo Testnet</p>
+            <p className="mt-1 text-sm text-mist-400">Connect a wallet to read your balance. Read-only, with no transactions.</p>
           </div>
           <WalletButton />
         </div>

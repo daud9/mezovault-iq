@@ -59,13 +59,12 @@ export function StrategyCard({ match }: { match: StrategyMatch }) {
 
       <div className="grid grid-cols-2 gap-4 text-sm">
         <div>
-          <p className="text-xs text-mist-500">Yield Quality Score</p>
-          <p className="mt-1 font-semibold text-mist-100">{q.score === null ? "Insufficient evidence" : q.score.toFixed(1)}</p>
-          {q.score !== null && (
-            <p className="mt-0.5 text-xs text-mist-500">
-              {q.label} · {q.coveragePct}% evidence
-            </p>
-          )}
+          <p className="text-xs text-mist-500">Assessment (known evidence only)</p>
+          <p className="mt-1 font-semibold text-mist-100">{q.score === null ? "Withheld" : q.score.toFixed(1)}</p>
+          <p className="mt-0.5 text-xs text-mist-500">
+            Evidence coverage {q.coveragePct}%
+          </p>
+          <p className="mt-0.5 text-xs text-mist-500">Evidence-adjusted {q.adjustedScore.toFixed(1)}</p>
         </div>
         <div>
           <p className="text-xs text-mist-500">Exit time (assumed)</p>
@@ -152,7 +151,7 @@ export function StrategyCard({ match }: { match: StrategyMatch }) {
               </table>
             </div>
             <p className="mt-2 text-xs text-mist-500">
-              Unknown components are excluded from the average, not counted as zero. Scores below 50% evidence coverage are withheld.
+              The assessment averages only known components. The evidence-adjusted score counts unknown components as zero and is used for ranking. Assessments are withheld below 50% evidence coverage.
             </p>
           </section>
         </div>

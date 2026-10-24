@@ -49,7 +49,8 @@ describe("Yield Quality Score", () => {
     });
     const q = scoreYieldQuality(profile);
     assert.equal(q.coveragePct, 50);
-    assert.equal(q.score, 100, "unknown components must not drag the score down");
+    assert.equal(q.score, 100, "assessment averages known components only");
+    assert.equal(q.adjustedScore, 50, "evidence-adjusted score counts unknown components as zero");
     assert.equal(q.label, "Partial evidence");
   });
 
@@ -65,6 +66,26 @@ describe("Yield Quality Score", () => {
     assert.ok(q.coveragePct < MIN_COVERAGE_PCT);
     assert.equal(q.score, null);
     assert.equal(q.label, "Insufficient evidence");
+  });
+
+  it("evidence-adjusted score equals the assessment when everything is known", () => {
+    const q = scoreYieldQuality(
+      base({
+        yieldSource: { description: "x", clarity: "clear" },
+        liquidityDays: 1,
+        protocol: { ...base().protocol, auditStatus: "partial-review" },
+        historicalPerformanceScore: 100,
+      }),
+    );
+    assert.equal(q.coveragePct, 100);
+    assert.equal(q.adjustedScore, q.score);
+  });
+
+  it("missing evidence never raises the adjusted score above the assessment", () => {
+    for (const p of STRATEGY_PROFILES) {
+      const q = scoreYieldQuality(p);
+      if (q.score !== null) assert.ok(q.adjustedScore <= q.score + 0.001, `${p.id} adjusted must not exceed assessment`);
+    }
   });
 
   it("is deterministic for identical inputs", () => {

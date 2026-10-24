@@ -13,8 +13,11 @@
  *   score    = sum(weight * value) / sum(weight of known components)
  *   coverage = sum(weight of known components) / sum(all weights) * 100
  *
- * If coverage is below MIN_COVERAGE_PCT the score is reported as null
- * (insufficient evidence). Coverage is always shown alongside the score.
+ * If coverage is below MIN_COVERAGE_PCT the assessment is reported as null
+ * (insufficient evidence). Coverage is always shown alongside the assessment.
+ *
+ * Evidence-adjusted score = sum(weight * value over known components) / sum(all weights).
+ * It counts unknown components as zero, so it is the value used for ranking.
  */
 import type { StrategyProfile, SecurityStatus, YieldClarity } from "./types";
 
@@ -39,8 +42,16 @@ export interface ScoreComponent {
 }
 
 export interface YieldQualityScore {
-  /** null when coverage is below MIN_COVERAGE_PCT. */
+  /**
+   * Assessment: average over known components only.
+   * null when coverage is below MIN_COVERAGE_PCT.
+   */
   score: number | null;
+  /**
+   * Evidence-adjusted score: unknown components contribute zero.
+   * Used for ranking so missing information never looks like evidence of safety.
+   */
+  adjustedScore: number;
   coveragePct: number;
   components: ScoreComponent[];
   /** Human-readable label for the UI. */
@@ -129,17 +140,18 @@ export function scoreYieldQuality(profile: StrategyProfile): YieldQualityScore {
   const totalWeight = components.reduce((sum, c) => sum + c.weight, 0);
   const known = components.filter((c): c is ScoreComponent & { value: number } => c.value !== null);
   const knownWeight = known.reduce((sum, c) => sum + c.weight, 0);
+  const weighted = known.reduce((sum, c) => sum + c.weight * c.value, 0);
   const coveragePct = round1((knownWeight / totalWeight) * 100);
+  // Unknown components count as zero here, so missing evidence lowers the adjusted score.
+  const adjustedScore = round1(weighted / totalWeight);
 
   if (coveragePct < MIN_COVERAGE_PCT || knownWeight === 0) {
-    return { score: null, coveragePct, components, label: "Insufficient evidence" };
+    return { score: null, adjustedScore, coveragePct, components, label: "Insufficient evidence" };
   }
 
-  const weighted = known.reduce((sum, c) => sum + c.weight * c.value, 0);
-  const score = round1(weighted / knownWeight);
-
   return {
-    score,
+    score: round1(weighted / knownWeight),
+    adjustedScore,
     coveragePct,
     components,
     label: coveragePct >= 100 ? "Scored" : "Partial evidence",

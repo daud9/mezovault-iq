@@ -10,7 +10,7 @@ export function Activity() {
       <SectionHeader
         eyebrow="Activity"
         title="Transaction and event history"
-        description="A chronological record of deposits, withdrawals, rebalances and automation events once a wallet is connected."
+        description="A chronological record of deposits, withdrawals, rebalances and automation events. Transaction history is not implemented yet."
         actions={<DemoLabel note="No live data" />}
       />
 
@@ -25,7 +25,7 @@ export function Activity() {
 
       <EmptyState
         title="No activity to show"
-        description="Connect a wallet to view on-chain activity. Stage 1 does not read or send transactions, so this list stays empty."
+        description="Transaction history is not implemented yet, so no on-chain activity is shown. Wallet balances are read on the Overview page."
         action={<WalletButton />}
       />
     </div>

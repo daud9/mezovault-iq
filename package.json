@@ -12,7 +12,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "start": "deno run --allow-net --allow-read --allow-env server/main.ts",
-    "test": "tsx --test src/engine/*.test.ts"
+    "test": "tsx --test src/engine/*.test.ts src/lib/*.test.ts src/config/*.test.ts"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",

@@ -10,3 +10,16 @@ export const DEFAULT_NETWORK_KEY: MezoNetworkKey =
   requested === "mainnet" ? "mainnet" : "testnet";
 
 export const DEFAULT_NETWORK: MezoNetworkConfig = MEZO_NETWORKS[DEFAULT_NETWORK_KEY];
+
+/**
+ * RPC override for the testnet. Falls back to the official endpoint in chains.ts.
+ * An empty value is treated as "not set".
+ */
+export function resolveRpcUrl(network: MezoNetworkConfig): string {
+  const override =
+    network.key === "testnet"
+      ? (import.meta.env.VITE_MEZO_TESTNET_RPC as string | undefined)
+      : undefined;
+  const trimmed = override?.trim();
+  return trimmed ? trimmed : network.rpcUrl;
+}

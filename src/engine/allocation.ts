@@ -32,6 +32,7 @@ export interface AllocationLine {
   name: string;
   risk: StrategyProfile["risk"];
   qualityScore: number | null;
+  adjustedScore: number;
   coveragePct: number;
   amountUsd: number;
   percentOfCapital: number;
@@ -107,7 +108,7 @@ export function generateAllocation(
   const capUsd = floorCents(req.capitalUsd * (req.maxAllocationPct / 100));
 
   const skipped: SkippedStrategy[] = [];
-  const candidates: { profile: StrategyProfile; score: number | null; coverage: number }[] = [];
+  const candidates: { profile: StrategyProfile; score: number | null; adjusted: number; coverage: number }[] = [];
 
   for (const profile of profiles) {
     if (!req.eligibleIds.includes(profile.id)) {
@@ -118,14 +119,12 @@ export function generateAllocation(
       continue;
     }
     const quality = scoreYieldQuality(profile);
-    candidates.push({ profile, score: quality.score, coverage: quality.coveragePct });
+    candidates.push({ profile, score: quality.score, adjusted: quality.adjustedScore, coverage: quality.coveragePct });
   }
 
-  // Highest-evidence strategies first; unknown scores last; id breaks ties.
+  // Highest evidence-adjusted score first; id breaks ties.
   candidates.sort((a, b) => {
-    const sa = a.score ?? -1;
-    const sb = b.score ?? -1;
-    if (sa !== sb) return sb - sa;
+    if (a.adjusted !== b.adjusted) return b.adjusted - a.adjusted;
     return a.profile.id < b.profile.id ? -1 : a.profile.id > b.profile.id ? 1 : 0;
   });
 
@@ -149,7 +148,7 @@ export function generateAllocation(
   const lines: AllocationLine[] = [];
   let remaining = deployableUsd;
 
-  for (const { profile, score, coverage } of candidates) {
+  for (const { profile, score, adjusted, coverage } of candidates) {
     if (remaining <= 0) {
       skipped.push({ strategyId: profile.id, name: profile.name, reason: "Deployable capital already placed in higher-ranked strategies." });
       continue;
@@ -175,6 +174,7 @@ export function generateAllocation(
       name: profile.name,
       risk: profile.risk,
       qualityScore: score,
+      adjustedScore: adjusted,
       coveragePct: coverage,
       amountUsd: amount,
       percentOfCapital: round2((amount / req.capitalUsd) * 100),

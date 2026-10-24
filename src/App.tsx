@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppShell } from "./components/layout/AppShell";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { WalletProvider } from "./components/wallet/WalletProvider";
 import { Landing } from "./pages/Landing";
 import { Overview } from "./pages/Overview";
 import { IQStrategies } from "./pages/IQStrategies";
@@ -13,6 +14,7 @@ import { Activity } from "./pages/Activity";
 export default function App() {
   return (
     <BrowserRouter>
+      <WalletProvider>
       <ErrorBoundary>
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -29,6 +31,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </ErrorBoundary>
+      </WalletProvider>
     </BrowserRouter>
   );
 }

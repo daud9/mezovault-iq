@@ -7,6 +7,7 @@ import { EmptyState } from "../components/ui/StateViews";
 import { DEMO_ALLOCATION, DEMO_PORTFOLIO_VALUE_USD, DEMO_STRATEGIES } from "../data/demo";
 import { formatRange, formatUsd } from "../lib/format";
 import { RiskBadge } from "../components/ui/Badge";
+import { MusdBalanceCard } from "../components/balance/MusdBalanceCard";
 
 export function Overview() {
   const weightedLow = DEMO_STRATEGIES.reduce((a, s) => a + s.illustrativeApy[0], 0) / DEMO_STRATEGIES.length;
@@ -17,9 +18,15 @@ export function Overview() {
       <SectionHeader
         eyebrow="Overview"
         title="Your portfolio at a glance"
-        description="Balances and figures below are demonstration data. Connect a wallet in Stage 2 to view real positions."
+        description="The wallet balance is read live from Mezo Testnet. Portfolio figures below are demonstration data."
         actions={<DemoLabel note="Demo portfolio" />}
       />
+
+      <MusdBalanceCard />
+
+      <div className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-wider text-mist-500">Demonstration figures</p>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard label="Portfolio value" value={formatUsd(DEMO_PORTFOLIO_VALUE_USD)} hint="Illustrative" icon={<Coins className="h-4 w-4" />} />

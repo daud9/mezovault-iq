@@ -121,8 +121,8 @@ const STATUS_RANK: Record<CheckStatus, number> = { meets: 0, partial: 1, unknown
  *   tier 0: eligible with no unknown hard constraints
  *   tier 1: eligible with unknown hard constraints
  *   tier 2: ineligible
- * Within a tier: better yield-target status first, then higher Yield Quality Score
- * (unknown scores last), then the strategy id, so results are deterministic.
+ * Within a tier: better yield-target status first, then the higher evidence-adjusted
+ * Yield Quality Score, then the strategy id, so results are deterministic.
  */
 export function matchStrategies(profiles: StrategyProfile[], p: StrategyPreferences): StrategyMatch[] {
   const matches = profiles.map((profile) => {
@@ -145,9 +145,9 @@ export function matchStrategies(profiles: StrategyProfile[], p: StrategyPreferen
   matches.sort((a, b) => {
     if (tier(a) !== tier(b)) return tier(a) - tier(b);
     if (yieldStatus(a) !== yieldStatus(b)) return yieldStatus(a) - yieldStatus(b);
-    const sa = a.quality.score ?? -1;
-    const sb = b.quality.score ?? -1;
-    if (sa !== sb) return sb - sa;
+    if (a.quality.adjustedScore !== b.quality.adjustedScore) {
+      return b.quality.adjustedScore - a.quality.adjustedScore;
+    }
     return a.profile.id < b.profile.id ? -1 : a.profile.id > b.profile.id ? 1 : 0;
   });
 

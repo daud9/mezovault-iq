@@ -146,3 +146,85 @@ The test files are excluded from `tsconfig.json`, so `npm run build` does not co
 - Strategy data, liquidity days and minimum capitals are design assumptions, not verified facts.
 - Stress scenarios use constant yield and do not model price moves, depegs, or liquidation cascades.
 - No wallet or blockchain integration is implemented in this stage.
+
+---
+
+## Stage 3: Mezo Testnet, wallet connection and MUSD balance
+
+### Verified network configuration
+
+Checked against Mezo's official documentation on the date of this build. The source of each value is also recorded in `src/config/chains.ts`.
+
+| Item | Testnet | Mainnet | Source |
+| --- | --- | --- | --- |
+| Network name | Mezo Testnet | Mezo Mainnet | developer guide |
+| Chain ID | 31611 (`0x7b7b`) | 31612 (`0x7b7c`) | developer guide |
+| RPC (HTTPS) | `https://rpc.test.mezo.org` | `https://rpc-http.mezo.boar.network` | developer guide |
+| RPC (WSS) | `wss://rpc-ws.test.mezo.org` | `wss://rpc-ws.mezo.boar.network` | developer guide, RPC providers |
+| Explorer | `https://explorer.test.mezo.org` | `https://explorer.mezo.org` | developer guide |
+| Faucet | `https://faucet.test.mezo.org` | none | developer guide |
+| Gas token | BTC, 18 decimals | BTC, 18 decimals | developer guide |
+| MUSD contract | `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` | `0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186` | contracts reference, x402 payments page |
+| MUSD decimals | 18 (checked on-chain at runtime) | 18 | x402 payments page |
+| BorrowerOperations | `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5` | `0x44b1bac67dDA612a41a58AAf779143B181dEe031` | MUSD redemptions page (proxy) |
+
+Corrections from Stage 1: the mainnet RPC was previously `mezo.drpc.org`, which appears only in third-party listings. It has been replaced with the official endpoint.
+
+Conflicting sources: one third-party README states that MUSD has 6 decimals. Official sources state 18. The app does not assume either value. It reads `decimals()` and `symbol()` from the contract and refuses to display a balance unless they match `18` and `MUSD`.
+
+### Wallet connection
+
+- Uses the injected EIP-1193 provider (`window.ethereum`). No third-party wallet library was added, so the dependency surface is unchanged.
+- The app requests only `eth_requestAccounts`, `eth_chainId`, and network switching. It never requests keys, seed phrases, signatures or transactions.
+- Nothing connects automatically. The user presses Connect on each visit.
+- Disconnect clears the app's state. A wallet keeps its site permission until the user revokes it in the wallet's settings.
+- Wrong networks are detected by comparing the wallet's chain with the configured chain. Switching uses `wallet_switchEthereumChain`, falling back to `wallet_addEthereumChain` with the official parameters when the wallet doesn't know the network.
+
+### MUSD balance
+
+`readMusdBalance` runs these checks in order. Each failure returns its own status and never a demonstration value:
+
+1. `eth_chainId` must equal 31611.
+2. `eth_getCode` at the token address must return code.
+3. `decimals()` must equal 18.
+4. `symbol()` must equal `MUSD`.
+5. `balanceOf(owner)` is read and formatted with BigInt. Display values are truncated, and the exact value is shown alongside.
+
+The result also records the block number and the retrieval time.
+
+### Protocol availability
+
+See `src/config/protocols.ts` and the Vault Intelligence page. No deposit, withdrawal, lending, borrowing or yield capability is marked verified. Candidates that appear only in third-party repositories are not used.
+
+| Candidate | Evidence |
+| --- | --- |
+| MUSD token | Official address |
+| BorrowerOperations | Official address; functions not verified in this build |
+| Mezo Earn | Official docs; no testnet address located |
+| Bitcoin savings / yield vaults | Mentioned in public overview; no address located |
+| Morpho aMUSD vault | Named in official contracts reference; no testnet address |
+| Mezo Router | Third-party only; not used |
+| Collat vault | Third-party only; not used |
+
+### Yield Quality Score
+
+Three values are shown separately:
+
+- **Assessment:** weighted average of known components only. Withheld below 50% evidence coverage.
+- **Evidence coverage:** share of the weight that has evidence.
+- **Evidence-adjusted score:** weighted sum over known components divided by the total weight, so unknown components count as zero. Ranking and allocation order use this value, so missing evidence cannot raise a strategy above one with complete evidence.
+
+### Tests
+
+```bash
+npm test
+```
+
+The suite covers network verification, ABI encoding and decoding, token formatting (including truncation and dust display), RPC failure modes (network, timeout, HTTP, JSON-RPC errors, malformed responses, missing configuration), MUSD reads (missing contract, wrong chain, decimals or symbol mismatch, zero balance, failed requests), the wallet state machine, the switch-network fallback, configuration values, and the protocol registry rules.
+
+### Remaining integration requirements
+
+1. **Browser access to the RPC.** The app calls `https://rpc.test.mezo.org` directly from the browser. Whether that endpoint sends CORS headers for the app's origin has not been verified. If it doesn't, balance reads will fail with a network error. Test this on the deployed site, and if needed use a provider that allows browser access, or add a server-side proxy.
+2. **End-to-end wallet test.** The connection flow has been unit-tested through its state machine and fake provider only. It has not been run against a real wallet extension on a phone or desktop.
+3. **Type checking of the UI.** The sandbox has no React or Lucide type packages, so the TSX files were checked for syntax only. `npm run build` is the real check.
+4. **Testnet balance.** Testnet MUSD is minted by borrowing against testnet BTC, so most wallets will show zero until they open a position.
