@@ -30,6 +30,7 @@ export function MusdBalanceCard() {
 
       <Body
         state={state.status}
+        walletFound={state.walletFound}
         error={state.error}
         onConnect={connect}
         onSwitch={switchNetwork}
@@ -45,6 +46,7 @@ export function MusdBalanceCard() {
 
 function Body(props: {
   state: string;
+  walletFound: boolean | null;
   error: string | null;
   onConnect: () => Promise<void>;
   onSwitch: () => Promise<void>;
@@ -54,15 +56,15 @@ function Body(props: {
   view: ReturnType<typeof useMusdBalance>["view"];
   onRetry: () => void;
 }) {
-  const { state, error, onConnect, onSwitch, networkLabel, supported, chainId, view, onRetry } = props;
+  const { state, walletFound, error, onConnect, onSwitch, networkLabel, supported, chainId, view, onRetry } = props;
 
-  if (state === "no-wallet") {
+  if (walletFound === false && state !== "connected") {
     return (
       <Message title="No wallet detected" body="Install a browser wallet that supports EVM networks, then reload this page to read your MUSD balance." status="unavailable" />
     );
   }
 
-  if (state === "disconnected" || state === "idle") {
+  if (state === "disconnected") {
     return (
       <div className="space-y-4">
         <Message title="Connect a wallet to read your balance" body="Read-only. The app asks only for your account address and never requests keys or seed phrases." status="not-configured" />

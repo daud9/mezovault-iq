@@ -1,19 +1,13 @@
-import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useReducer,
-  useCallback,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import type { MezoNetworkConfig } from "../../config/chains";
 import { DEFAULT_NETWORK } from "../../config/env";
+import { isAddress } from "../../lib/abi";
 import { parseChainId } from "../../lib/network";
+import { discoverProviders, selectWallet } from "../../lib/walletDiscovery";
 import {
   describeWalletError,
-  getInjectedProvider,
   INITIAL_WALLET_STATE,
+  NO_WALLET_MESSAGE,
   readChainId,
   requestAccount,
   switchToNetwork,
@@ -21,7 +15,6 @@ import {
   type Eip1193Provider,
   type WalletState,
 } from "../../lib/wallet";
-import { isAddress } from "../../lib/abi";
 
 interface WalletContextValue {
   state: WalletState;
@@ -35,42 +28,69 @@ interface WalletContextValue {
 const WalletContext = createContext<WalletContextValue | null>(null);
 
 /**
- * Holds wallet state for the whole app. Nothing connects automatically: the user must
- * press Connect. The app never reads private keys, seed phrases or signatures.
+ * App-wide wallet state. Nothing connects on its own: every connection starts from a
+ * user press. Wallet discovery runs again on each connect press, so a wallet that loads
+ * after the page can still be used.
  */
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const [state, dispatch] = useReducer(walletReducer, undefined, () =>
-    getInjectedProvider() ? INITIAL_WALLET_STATE : { ...INITIAL_WALLET_STATE, status: "no-wallet" as const },
-  );
+  const [state, dispatch] = useReducer(walletReducer, INITIAL_WALLET_STATE);
+  const providerRef = useRef<Eip1193Provider | null>(null);
+  const detachRef = useRef<(() => void) | null>(null);
   const network = DEFAULT_NETWORK;
 
-  useEffect(() => {
-    const provider = getInjectedProvider();
-    if (!provider || !provider.on || !provider.removeListener) return;
+  /** Subscribes to account, chain and disconnect events from the selected provider. */
+  const attach = useCallback((provider: Eip1193Provider) => {
+    detachRef.current?.();
+    if (!provider.on || !provider.removeListener) {
+      detachRef.current = null;
+      return;
+    }
 
     const onAccounts = (accounts: unknown) => {
       const first = Array.isArray(accounts) ? accounts[0] : undefined;
       dispatch({ type: "accounts-changed", address: isAddress(first) ? first : null });
     };
-    const onChain = (chainId: unknown) => {
-      dispatch({ type: "chain-changed", chainId: parseChainId(chainId) });
-    };
+    const onChain = (chainId: unknown) => dispatch({ type: "chain-changed", chainId: parseChainId(chainId) });
+    const onDisconnect = () => dispatch({ type: "provider-disconnected" });
 
     provider.on("accountsChanged", onAccounts);
     provider.on("chainChanged", onChain);
-    return () => {
+    provider.on("disconnect", onDisconnect);
+    detachRef.current = () => {
       provider.removeListener?.("accountsChanged", onAccounts);
       provider.removeListener?.("chainChanged", onChain);
+      provider.removeListener?.("disconnect", onDisconnect);
     };
   }, []);
 
+  /** Finds a wallet, or returns null after the discovery window closes. */
+  const resolveProvider = useCallback(async (): Promise<Eip1193Provider | null> => {
+    if (providerRef.current) return providerRef.current;
+    const discovered = await discoverProviders(window, 300);
+    const injected = window.ethereum ?? null;
+    const selected = selectWallet(discovered, injected);
+    if (!selected) {
+      dispatch({ type: "no-wallet" });
+      return null;
+    }
+    providerRef.current = selected.provider;
+    dispatch({ type: "wallet-found", name: selected.name });
+    attach(selected.provider);
+    return selected.provider;
+  }, [attach]);
+
+  useEffect(() => {
+    void resolveProvider();
+    return () => detachRef.current?.();
+  }, [resolveProvider]);
+
   const connect = useCallback(async () => {
-    const provider = getInjectedProvider();
+    dispatch({ type: "connect-start" });
+    const provider = await resolveProvider();
     if (!provider) {
-      dispatch({ type: "provider-detected", present: false });
+      dispatch({ type: "connect-error", message: NO_WALLET_MESSAGE });
       return;
     }
-    dispatch({ type: "connect-start" });
     try {
       const address = await requestAccount(provider);
       const chainId = await readChainId(provider);
@@ -78,12 +98,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       dispatch({ type: "connect-error", message: describeWalletError(err).message });
     }
-  }, []);
+  }, [resolveProvider]);
 
   const switchNetwork = useCallback(async () => {
-    const provider: Eip1193Provider | null = getInjectedProvider();
+    const provider = providerRef.current ?? (await resolveProvider());
     if (!provider) {
-      dispatch({ type: "error", message: "No wallet is available to switch networks." });
+      dispatch({ type: "error", message: NO_WALLET_MESSAGE });
       return;
     }
     try {
@@ -93,7 +113,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     } catch (err) {
       dispatch({ type: "error", message: describeWalletError(err).message });
     }
-  }, [network]);
+  }, [network, resolveProvider]);
 
   const disconnect = useCallback(() => dispatch({ type: "disconnect" }), []);
 

@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import {
   describeWalletError,
   INITIAL_WALLET_STATE,
+  NO_WALLET_MESSAGE,
   requestAccount,
   switchToNetwork,
   walletReducer,
   WalletError,
   type Eip1193Provider,
-  type WalletState,
 } from "./wallet";
 import { MEZO_NETWORKS } from "../config/chains";
 
@@ -110,22 +110,32 @@ describe("describeWalletError", () => {
 });
 
 describe("wallet state machine", () => {
-  const connected: WalletState = { status: "connected", address: ADDR, chainId: 31611, error: null };
+  const connected = { ...INITIAL_WALLET_STATE, status: "connected" as const, address: ADDR, chainId: 31611, walletFound: true };
 
-  it("starts disconnected", () => {
+  it("starts disconnected with discovery not yet run", () => {
     assert.equal(INITIAL_WALLET_STATE.status, "disconnected");
+    assert.equal(INITIAL_WALLET_STATE.walletFound, null);
   });
 
-  it("reports no-wallet when no provider is injected", () => {
-    const s = walletReducer(INITIAL_WALLET_STATE, { type: "provider-detected", present: false });
-    assert.equal(s.status, "no-wallet");
+  it("records a discovered wallet and its name", () => {
+    const s = walletReducer(INITIAL_WALLET_STATE, { type: "wallet-found", name: "MetaMask" });
+    assert.equal(s.walletFound, true);
+    assert.equal(s.walletName, "MetaMask");
+  });
+
+  it("records when no wallet exists", () => {
+    const s = walletReducer(INITIAL_WALLET_STATE, { type: "no-wallet" });
+    assert.equal(s.walletFound, false);
+    assert.equal(s.status, "disconnected");
   });
 
   it("moves through connecting to connected", () => {
     const connecting = walletReducer(INITIAL_WALLET_STATE, { type: "connect-start" });
     assert.equal(connecting.status, "connecting");
     const done = walletReducer(connecting, { type: "connect-success", address: ADDR, chainId: 31611 });
-    assert.deepEqual(done, connected);
+    assert.equal(done.status, "connected");
+    assert.equal(done.address, ADDR);
+    assert.equal(done.chainId, 31611);
   });
 
   it("keeps the failure message on connect error and clears the address", () => {
@@ -135,20 +145,15 @@ describe("wallet state machine", () => {
     assert.equal(s.error, "rejected");
   });
 
-  it("updates the chain while connected", () => {
-    const s = walletReducer(connected, { type: "chain-changed", chainId: 31612 });
-    assert.equal(s.chainId, 31612);
+  it("shows the no-wallet guidance as an error message", () => {
+    const s = walletReducer(walletReducer(INITIAL_WALLET_STATE, { type: "no-wallet" }), { type: "connect-error", message: NO_WALLET_MESSAGE });
+    assert.equal(s.error, NO_WALLET_MESSAGE);
+    assert.equal(s.walletFound, false);
   });
 
-  it("ignores chain changes while disconnected", () => {
-    const s = walletReducer(INITIAL_WALLET_STATE, { type: "chain-changed", chainId: 31612 });
-    assert.equal(s.chainId, null);
-  });
-
-  it("disconnects when the wallet reports no accounts", () => {
-    const s = walletReducer(connected, { type: "accounts-changed", address: null });
-    assert.equal(s.status, "disconnected");
-    assert.equal(s.address, null);
+  it("updates the chain while connected and ignores it otherwise", () => {
+    assert.equal(walletReducer(connected, { type: "chain-changed", chainId: 31612 }).chainId, 31612);
+    assert.equal(walletReducer(INITIAL_WALLET_STATE, { type: "chain-changed", chainId: 31612 }).chainId, null);
   });
 
   it("follows an account change while connected", () => {
@@ -156,7 +161,27 @@ describe("wallet state machine", () => {
     assert.equal(walletReducer(connected, { type: "accounts-changed", address: next }).address, next);
   });
 
-  it("clears everything on disconnect", () => {
-    assert.deepEqual(walletReducer(connected, { type: "disconnect" }), INITIAL_WALLET_STATE);
+  it("disconnects when the wallet reports no accounts, keeping discovery results", () => {
+    const s = walletReducer(connected, { type: "accounts-changed", address: null });
+    assert.equal(s.status, "disconnected");
+    assert.equal(s.address, null);
+    assert.equal(s.walletFound, true);
+  });
+
+  it("handles a provider-side disconnect with a clear message", () => {
+    const s = walletReducer(connected, { type: "provider-disconnected" });
+    assert.equal(s.status, "disconnected");
+    assert.equal(s.error, "Your wallet disconnected.");
+  });
+
+  it("ignores a provider disconnect when nothing is connected", () => {
+    assert.deepEqual(walletReducer(INITIAL_WALLET_STATE, { type: "provider-disconnected" }), INITIAL_WALLET_STATE);
+  });
+
+  it("clears the connection on disconnect and keeps discovery results", () => {
+    const s = walletReducer(connected, { type: "disconnect" });
+    assert.equal(s.status, "disconnected");
+    assert.equal(s.address, null);
+    assert.equal(s.walletFound, true);
   });
 });

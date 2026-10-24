@@ -105,22 +105,30 @@ function isWalletCode(err: unknown, code: number): boolean {
 
 /* ----- Pure connection state machine (tested without a browser) ----- */
 
-export type WalletStatus = "no-wallet" | "disconnected" | "connecting" | "connected" | "error";
+export const NO_WALLET_MESSAGE =
+  "No wallet was found in this browser. Install a wallet, or open this page in a wallet app's browser.";
+
+export type WalletStatus = "disconnected" | "connecting" | "connected" | "error";
 
 export interface WalletState {
   status: WalletStatus;
   address: `0x${string}` | null;
   chainId: number | null;
   error: string | null;
+  /** null until discovery has run. */
+  walletFound: boolean | null;
+  walletName: string | null;
 }
 
 export type WalletAction =
-  | { type: "provider-detected"; present: boolean }
+  | { type: "wallet-found"; name: string }
+  | { type: "no-wallet" }
   | { type: "connect-start" }
   | { type: "connect-success"; address: `0x${string}`; chainId: number | null }
   | { type: "connect-error"; message: string }
   | { type: "chain-changed"; chainId: number | null }
   | { type: "accounts-changed"; address: `0x${string}` | null }
+  | { type: "provider-disconnected" }
   | { type: "disconnect" }
   | { type: "error"; message: string };
 
@@ -129,27 +137,37 @@ export const INITIAL_WALLET_STATE: WalletState = {
   address: null,
   chainId: null,
   error: null,
+  walletFound: null,
+  walletName: null,
 };
 
 export function walletReducer(state: WalletState, action: WalletAction): WalletState {
   switch (action.type) {
-    case "provider-detected":
-      return action.present
-        ? { ...INITIAL_WALLET_STATE }
-        : { ...INITIAL_WALLET_STATE, status: "no-wallet" };
+    case "wallet-found":
+      return { ...state, walletFound: true, walletName: action.name };
+    case "no-wallet":
+      return { ...state, walletFound: false, walletName: null };
     case "connect-start":
       return { ...state, status: "connecting", error: null };
     case "connect-success":
-      return { status: "connected", address: action.address, chainId: action.chainId, error: null };
+      return { ...state, status: "connected", address: action.address, chainId: action.chainId, error: null, walletFound: true };
     case "connect-error":
       return { ...state, status: "error", address: null, error: action.message };
     case "chain-changed":
       return state.status === "connected" ? { ...state, chainId: action.chainId } : state;
     case "accounts-changed":
-      if (action.address === null) return { ...INITIAL_WALLET_STATE };
+      if (action.address === null) {
+        return state.status === "connected"
+          ? { ...INITIAL_WALLET_STATE, walletFound: state.walletFound, walletName: state.walletName }
+          : state;
+      }
       return state.status === "connected" ? { ...state, address: action.address } : state;
+    case "provider-disconnected":
+      return state.status === "connected"
+        ? { ...INITIAL_WALLET_STATE, walletFound: state.walletFound, walletName: state.walletName, error: "Your wallet disconnected." }
+        : state;
     case "disconnect":
-      return { ...INITIAL_WALLET_STATE };
+      return { ...INITIAL_WALLET_STATE, walletFound: state.walletFound, walletName: state.walletName };
     case "error":
       return { ...state, error: action.message };
     default:
