@@ -10,7 +10,8 @@ describe("network configuration", () => {
     const t = MEZO_NETWORKS.testnet;
     assert.equal(t.chainId, 31611);
     assert.equal(t.rpcUrl, "https://rpc.test.mezo.org");
-    assert.equal(t.explorerUrl, "https://explorer.test.mezo.org");
+    assert.equal(t.explorerUrl, "https://explorer.test.mezo.org/");
+    assert.equal(t.faucetUrl, "https://faucet.test.mezo.org/");
     assert.equal(t.musd?.address, "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503");
     assert.equal(t.musd?.decimals, 18);
   });

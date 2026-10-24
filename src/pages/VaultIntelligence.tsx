@@ -1,47 +1,39 @@
 import { Card } from "../components/ui/Card";
 import { SectionHeader } from "../components/ui/SectionHeader";
-import { DemoLabel } from "../components/ui/DemoLabel";
-import { EmptyState } from "../components/ui/StateViews";
-import { ComingSoon } from "../components/ui/ComingSoon";
+import { DataStatus } from "../components/ui/DataStatus";
 import { ProtocolTable } from "../components/vaults/ProtocolTable";
-import { DEMO_VAULT_METRICS } from "../data/demo";
+
+const METRICS = [
+  { name: "Total value locked", needs: "A verified vault contract on Mezo Testnet that exposes its total assets." },
+  { name: "Available liquidity", needs: "A verified contract that reports withdrawable or borrowable amounts." },
+  { name: "Utilisation", needs: "A verified lending market that reports borrowed and supplied balances." },
+  { name: "Share price", needs: "A verified vault token whose conversion function can be read." },
+  { name: "Current yield", needs: "A verified rate source. An official rate feed or a readable rate function on a verified contract." },
+  { name: "Historical performance", needs: "An indexed history source for a verified contract. None is connected." },
+];
 
 export function VaultIntelligence() {
   return (
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Vault Intelligence"
-        title="Evaluate vaults before capital moves"
-        description="Metric definitions and their status. Live vault data needs an indexer that is not connected in Stage 1."
-        actions={<DemoLabel note="Definitions only" />}
+        title="Vault data from verified sources"
+        description="Metrics appear only when a verified contract or data source provides them. Otherwise they are marked unavailable, with what is needed."
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        {DEMO_VAULT_METRICS.map((m) => (
-          <Card key={m.id}>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {METRICS.map((m) => (
+          <Card key={m.name} className="space-y-3">
             <p className="text-xs font-medium uppercase tracking-wider text-mist-500">{m.name}</p>
-            <p className="mt-3 text-xl font-semibold text-mist-300">{m.value}</p>
-            <p className="mt-3 text-sm leading-relaxed text-mist-400">{m.explanation}</p>
+            <DataStatus state="unavailable" />
+            <p className="text-sm leading-relaxed text-mist-400">
+              <span className="text-mist-300">Needed:</span> {m.needs}
+            </p>
           </Card>
         ))}
       </div>
 
-      <EmptyState
-        title="No vault data loaded"
-        description="Vault lists, contract checks and collateral analysis will appear here when a data source is connected. No vault figures are shown as live."
-      />
-
       <ProtocolTable />
-
-      <ComingSoon
-        stage="Stage 2"
-        items={[
-          "Live vault list from an indexer",
-          "Verified contract addresses and audit links",
-          "Collateral quality and concentration checks",
-          "Liquidation and utilisation alerts",
-        ]}
-      />
     </div>
   );
 }

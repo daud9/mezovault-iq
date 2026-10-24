@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { scoreYieldQuality, liquidityValue, MIN_COVERAGE_PCT, SCORE_WEIGHTS } from "./scoring";
-import { STRATEGY_PROFILES } from "./catalog";
+import { FIXTURE_PROFILES as STRATEGY_PROFILES } from "./testFixtures";
 import type { StrategyProfile } from "./types";
 
 function base(overrides: Partial<StrategyProfile> = {}): StrategyProfile {
@@ -109,7 +109,7 @@ describe("Yield Quality Score", () => {
   });
 });
 
-describe("demonstration catalogue honesty", () => {
+describe("fixture honesty (test data only)", () => {
   it("never records verified audits, addresses or historical data", () => {
     for (const p of STRATEGY_PROFILES) {
       assert.equal(p.protocol.auditStatus, "unknown", `${p.id} audit must be unknown`);

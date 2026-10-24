@@ -41,7 +41,7 @@ interface Form {
 
 const DEFAULTS: Form = {
   principalUsd: 10_000,
-  annualYieldPct: 6,
+  annualYieldPct: 0,
   months: 12,
   compounding: "monthly",
   entryFeePct: 0,
@@ -93,7 +93,7 @@ export function SimulationLab() {
       <SectionHeader
         eyebrow="Simulation Lab"
         title="Project hypothetical outcomes"
-        description="Model a position from your own assumptions, then stress it with yield declines and a forced withdrawal. Results are hypothetical projections, not guaranteed or live yields."
+        description="A hypothetical calculator. Every figure is derived from assumptions you enter, and none is a live, historical or guaranteed yield."
         actions={<DemoLabel note="Hypothetical" />}
       />
 
@@ -102,7 +102,7 @@ export function SimulationLab() {
           <h2 className="text-sm font-semibold text-mist-100">Baseline assumptions</h2>
 
           <NumberField id="sim-principal" label="Starting amount" value={form.principalUsd} onChange={(v) => set("principalUsd", v)} min={0} step={100} suffix="USD" />
-          <NumberField id="sim-yield" label="Assumed annual yield" value={form.annualYieldPct} onChange={(v) => set("annualYieldPct", v)} min={-100} max={100} step={0.1} suffix="%" hint="Your assumption, not a live rate." />
+          <NumberField id="sim-yield" label="Assumed annual yield" value={form.annualYieldPct} onChange={(v) => set("annualYieldPct", v)} min={-100} max={100} step={0.1} suffix="%" hint="Enter your own assumption. No rate is taken from any protocol. 0% is a placeholder." />
           <NumberField id="sim-months" label="Duration" value={form.months} onChange={(v) => set("months", v)} min={1} max={360} step={1} suffix="months" />
           <ChoiceGroup label="Return method" value={form.compounding} options={COMPOUND_OPTIONS} onChange={(v) => set("compounding", v)} />
 

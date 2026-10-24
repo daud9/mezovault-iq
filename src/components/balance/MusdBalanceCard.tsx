@@ -5,6 +5,7 @@ import { DataStatus } from "../ui/DataStatus";
 import { useWallet } from "../wallet/WalletProvider";
 import { useMusdBalance } from "../../hooks/useMusdBalance";
 import { formatTime, shortAddress } from "../../lib/format";
+import { FaucetPanel } from "./FaucetPanel";
 
 /**
  * Live MUSD balance for the connected wallet. Shows the result of the actual request,
@@ -40,6 +41,8 @@ export function MusdBalanceCard() {
         view={view}
         onRetry={refresh}
       />
+
+      <FaucetPanel />
     </Card>
   );
 }

@@ -53,6 +53,6 @@ describe("checkNetwork", () => {
     assert.equal(testnet.chainId, 31611);
     assert.equal(testnet.chainIdHex, "0x7b7b");
     assert.equal(testnet.rpcUrl, "https://rpc.test.mezo.org");
-    assert.equal(testnet.explorerUrl, "https://explorer.test.mezo.org");
+    assert.equal(testnet.explorerUrl, "https://explorer.test.mezo.org/");
   });
 });

@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { generateAllocation, validateAllocation, floorCents, type AllocationRequest } from "./allocation";
-import { STRATEGY_PROFILES } from "./catalog";
+import { FIXTURE_PROFILES as STRATEGY_PROFILES } from "./testFixtures";
 import type { StrategyProfile } from "./types";
 
 const ALL_IDS = STRATEGY_PROFILES.map((p) => p.id);

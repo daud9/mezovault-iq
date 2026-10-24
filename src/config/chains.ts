@@ -46,8 +46,8 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
     nativeCurrency: { name: "Bitcoin", symbol: "BTC", decimals: 18 },
     rpcUrl: "https://rpc.test.mezo.org",
     wssUrl: "wss://rpc-ws.test.mezo.org",
-    explorerUrl: "https://explorer.test.mezo.org",
-    faucetUrl: "https://faucet.test.mezo.org",
+    explorerUrl: "https://explorer.test.mezo.org/",
+    faucetUrl: "https://faucet.test.mezo.org/",
     musd: {
       address: "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503",
       source: `${OFFICIAL_SOURCES.contractsReference} and ${OFFICIAL_SOURCES.x402Payments}`,

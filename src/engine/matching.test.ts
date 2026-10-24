@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { matchStrategies, validatePreferences, isRiskAllowed, type StrategyPreferences } from "./matching";
-import { STRATEGY_PROFILES } from "./catalog";
+import { FIXTURE_PROFILES as STRATEGY_PROFILES } from "./testFixtures";
 import type { StrategyProfile } from "./types";
 
 const prefs = (o: Partial<StrategyPreferences> = {}): StrategyPreferences => ({

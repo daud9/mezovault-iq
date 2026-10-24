@@ -36,8 +36,8 @@ export function AppShell() {
             ))}
           </nav>
           <div className="mt-auto rounded-xl border border-line bg-ink-800/60 p-4 text-xs leading-relaxed text-mist-400">
-            <p className="font-medium text-mist-200">Stage 1 preview</p>
-            <p className="mt-1">Read-only. No deposits, withdrawals or automated transactions.</p>
+            <p className="font-medium text-mist-200">Read-only</p>
+            <p className="mt-1">No deposits, withdrawals or automated transactions are made by this app.</p>
           </div>
         </aside>
 
@@ -78,7 +78,7 @@ function Brand({ compact = false }: { compact?: boolean }) {
       </span>
       <span className="text-sm font-semibold tracking-tight text-mist-100">
         MezoVault <span className="gold-text">IQ</span>
-        {!compact && <span className="ml-1 text-[10px] font-medium uppercase tracking-wider text-mist-500">Stage 1</span>}
+        
       </span>
     </NavLink>
   );
