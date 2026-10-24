@@ -1,0 +1,6 @@
+node_modules
+.env
+.env.*
+!.env.example
+.DS_Store
+# dist/ is committed so Deno Deploy can serve the build without a build step.

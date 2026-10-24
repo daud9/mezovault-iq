@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+
+  --color-ink-950: #08080a;
+  --color-ink-900: #0d0d10;
+  --color-ink-800: #15151a;
+  --color-ink-700: #1e1e25;
+  --color-line: #2a2a33;
+
+  --color-gold-300: #e6cd93;
+  --color-gold-400: #d4af6a;
+  --color-gold-500: #b8924e;
+
+  --color-mist-100: #f4f1ea;
+  --color-mist-300: #c9c9d1;
+  --color-mist-400: #a6a6b0;
+  --color-mist-500: #7d7d88;
+
+  --color-risk-low: #6fbf8e;
+  --color-risk-medium: #e0b04f;
+  --color-risk-high: #d9685a;
+
+  --animate-fade-up: fade-up 0.6s ease-out both;
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@layer base {
+  html { background: var(--color-ink-950); color-scheme: dark; }
+  body {
+    @apply bg-ink-950 text-mist-100 antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-gold-400);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+}
+
+@layer components {
+  .gold-text {
+    background: linear-gradient(120deg, var(--color-gold-300), var(--color-gold-500));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hairline {
+    border-color: color-mix(in oklab, var(--color-line) 80%, transparent);
+  }
+}
