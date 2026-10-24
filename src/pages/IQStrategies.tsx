@@ -1,86 +1,168 @@
 import { useMemo, useState } from "react";
 import { Card } from "../components/ui/Card";
-import { Badge, RiskBadge } from "../components/ui/Badge";
 import { SectionHeader } from "../components/ui/SectionHeader";
 import { DemoLabel } from "../components/ui/DemoLabel";
 import { EmptyState } from "../components/ui/StateViews";
-import { DEMO_STRATEGIES } from "../data/demo";
-import { formatRange } from "../lib/format";
-import type { RiskLevel } from "../types";
+import { ChoiceGroup } from "../components/forms/ChoiceGroup";
+import { NumberField } from "../components/forms/NumberField";
+import { FormErrors } from "../components/forms/FormErrors";
+import { StrategyCard } from "../components/strategies/StrategyCard";
+import { STRATEGY_PROFILES } from "../engine/catalog";
+import { matchStrategies, validatePreferences, type StrategyPreferences } from "../engine/matching";
+import type { RiskTolerance } from "../engine/types";
 
-const FILTERS: ("All" | RiskLevel)[] = ["All", "Low", "Medium", "High"];
+const RISK_OPTIONS: { value: RiskTolerance; label: string }[] = [
+  { value: "Conservative", label: "Conservative" },
+  { value: "Moderate", label: "Moderate" },
+  { value: "Aggressive", label: "Aggressive" },
+];
+
+const HORIZON_OPTIONS = [
+  { value: "3", label: "3 mo" },
+  { value: "6", label: "6 mo" },
+  { value: "12", label: "12 mo" },
+  { value: "24", label: "24 mo" },
+  { value: "36", label: "36 mo" },
+];
+
+const LIQUIDITY_OPTIONS = [
+  { value: "1", label: "Within 1 day" },
+  { value: "7", label: "Within 7 days" },
+  { value: "14", label: "Within 14 days" },
+  { value: "any", label: "No requirement" },
+];
+
+const DEFAULT_PREFS: StrategyPreferences = {
+  capitalUsd: 5_000,
+  risk: "Moderate",
+  horizonMonths: 12,
+  maxExitDays: 7,
+  targetYieldPct: 6,
+};
 
 export function IQStrategies() {
-  const [filter, setFilter] = useState<"All" | RiskLevel>("All");
-  const strategies = useMemo(
-    () => DEMO_STRATEGIES.filter((s) => filter === "All" || s.risk === filter),
-    [filter],
+  const [prefs, setPrefs] = useState<StrategyPreferences>(DEFAULT_PREFS);
+
+  const errors = useMemo(() => validatePreferences(prefs), [prefs]);
+  const matches = useMemo(
+    () => (errors.length === 0 ? matchStrategies(STRATEGY_PROFILES, prefs) : []),
+    [prefs, errors.length],
   );
+
+  const eligibleCount = matches.filter((m) => m.eligible && !m.hasUnknowns).length;
+  const unverifiedCount = matches.filter((m) => m.eligible && m.hasUnknowns).length;
+  const excludedCount = matches.filter((m) => !m.eligible).length;
+
+  const update = <K extends keyof StrategyPreferences>(key: K, value: StrategyPreferences[K]) =>
+    setPrefs((p) => ({ ...p, [key]: value }));
 
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="IQ Strategies"
-        title="Discover strategies by risk"
-        description="Each entry describes a strategy concept and its risk profile. APY bands are illustrative, not live or historical rates."
-        actions={<DemoLabel note="Illustrative concepts" />}
+        eyebrow="IQ Strategy Engine"
+        title="Find strategies that fit your constraints"
+        description="Set your capital, risk tolerance, horizon, liquidity requirement and target yield. Each strategy is checked against them, with the reasons shown."
+        actions={<DemoLabel note="Demonstration strategies" />}
       />
 
-      <div role="group" aria-label="Filter by risk" className="flex flex-wrap gap-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            aria-pressed={filter === f}
-            className={[
-              "rounded-full border px-4 py-1.5 text-sm font-medium transition",
-              filter === f
-                ? "border-gold-500/50 bg-gold-500/10 text-gold-300"
-                : "border-line text-mist-400 hover:text-mist-100",
-            ].join(" ")}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+        <Card className="h-fit space-y-6 lg:sticky lg:top-40">
+          <h2 className="text-sm font-semibold text-mist-100">Your preferences</h2>
 
-      {strategies.length === 0 ? (
-        <EmptyState title="No strategies match" description="Try a different risk filter." />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {strategies.map((s) => (
-            <Card key={s.id} className="flex flex-col gap-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <Badge>{s.category}</Badge>
-                  <h2 className="mt-3 text-lg font-semibold text-mist-100">{s.name}</h2>
-                </div>
-                <RiskBadge risk={s.risk} />
-              </div>
-              <p className="text-sm leading-relaxed text-mist-400">{s.summary}</p>
-              <div className="mt-auto flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
-                <div className="text-sm">
-                  <span className="text-mist-500">Illustrative APY </span>
-                  <span className="font-semibold text-mist-100">{formatRange(s.illustrativeApy)}</span>
-                </div>
-                <div className="flex gap-1.5">
-                  {s.assets.map((a) => (
-                    <Badge key={a}>{a}</Badge>
-                  ))}
-                </div>
-              </div>
+          <NumberField
+            id="capital"
+            label="Investment capital"
+            value={prefs.capitalUsd}
+            onChange={(v) => update("capitalUsd", v)}
+            min={1}
+            step={100}
+            suffix="USD"
+          />
+
+          <ChoiceGroup
+            label="Risk tolerance"
+            value={prefs.risk}
+            options={RISK_OPTIONS}
+            onChange={(v) => update("risk", v)}
+            hint={
+              prefs.risk === "Conservative"
+                ? "Low-risk strategies only."
+                : prefs.risk === "Moderate"
+                  ? "Low and medium-risk strategies."
+                  : "All risk levels."
+            }
+          />
+
+          <ChoiceGroup
+            label="Investment horizon"
+            value={String(prefs.horizonMonths) as string}
+            options={HORIZON_OPTIONS}
+            onChange={(v) => update("horizonMonths", Number(v))}
+          />
+
+          <ChoiceGroup
+            label="Minimum liquidity"
+            value={prefs.maxExitDays === null ? "any" : String(prefs.maxExitDays)}
+            options={LIQUIDITY_OPTIONS}
+            onChange={(v) => update("maxExitDays", v === "any" ? null : Number(v))}
+            hint="How quickly you need to be able to exit."
+          />
+
+          <NumberField
+            id="target-yield"
+            label="Target annual yield"
+            value={prefs.targetYieldPct}
+            onChange={(v) => update("targetYieldPct", v)}
+            min={0}
+            max={100}
+            step={0.5}
+            suffix="%"
+            hint="Used for ranking only. Illustrative ranges are not guaranteed."
+          />
+
+          <FormErrors errors={errors} />
+        </Card>
+
+        <div className="space-y-6">
+          {errors.length === 0 && (
+            <Card className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+              <span className="text-mist-300">
+                <strong className="text-risk-low">{eligibleCount}</strong> verified match{eligibleCount === 1 ? "" : "es"}
+              </span>
+              <span className="text-mist-300">
+                <strong className="text-risk-medium">{unverifiedCount}</strong> with unverified criteria
+              </span>
+              <span className="text-mist-300">
+                <strong className="text-risk-high">{excludedCount}</strong> excluded
+              </span>
             </Card>
-          ))}
-        </div>
-      )}
+          )}
 
-      <Card className="text-sm leading-relaxed text-mist-400">
-        <p className="font-medium text-mist-200">Strategy analysis arrives in Stage 2</p>
-        <p className="mt-1">
-          Live APY, contract audit status, and smart-contract risk scoring will be added once a data source is connected.
-          Nothing on this page is an endorsement or a recommendation to invest.
-        </p>
-      </Card>
+          {errors.length > 0 ? (
+            <EmptyState title="Fix the highlighted preferences" description="Results appear once every preference is valid." />
+          ) : matches.length === 0 ? (
+            <EmptyState title="No strategies available" description="The catalogue is empty." />
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {matches.map((m) => (
+                <StrategyCard key={m.profile.id} match={m} />
+              ))}
+            </div>
+          )}
+
+          <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
+            <p className="font-medium text-mist-200">How to read these results</p>
+            <p>
+              Ranking puts verified matches first, then unverified ones, then strategies that conflict with a hard constraint.
+              Within each group, the target yield and the Yield Quality Score decide the order.
+            </p>
+            <p>
+              The Yield Quality Score measures how well a strategy is documented and evidenced. It is not a return forecast.
+              Ranges and exit times are illustrative assumptions, and nothing here is a recommendation to invest.
+            </p>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }
