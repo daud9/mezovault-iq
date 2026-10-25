@@ -4,6 +4,7 @@ import { DEFAULT_NETWORK } from "../../config/env";
 import { isAddress } from "../../lib/abi";
 import { parseChainId } from "../../lib/network";
 import { discoverProviders, selectWallet } from "../../lib/walletDiscovery";
+import { isTxHash } from "../../lib/transfer";
 import {
   describeWalletError,
   INITIAL_WALLET_STATE,
@@ -23,6 +24,8 @@ interface WalletContextValue {
   connect: () => Promise<void>;
   disconnect: () => void;
   switchNetwork: () => Promise<void>;
+  /** Asks the connected wallet to sign and send. Resolves to the transaction hash, not to a confirmation. */
+  sendTransaction: (tx: Record<string, string | undefined>) => Promise<string>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -115,6 +118,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [network, resolveProvider]);
 
+  const sendTransaction = useCallback(
+    async (tx: Record<string, string | undefined>): Promise<string> => {
+      const provider = providerRef.current ?? (await resolveProvider());
+      if (!provider) throw new Error(NO_WALLET_MESSAGE);
+      const hash = await provider.request({ method: "eth_sendTransaction", params: [tx] });
+      if (!isTxHash(hash)) throw new Error("The wallet did not return a transaction hash.");
+      return hash;
+    },
+    [resolveProvider],
+  );
+
   const disconnect = useCallback(() => dispatch({ type: "disconnect" }), []);
 
   const value = useMemo<WalletContextValue>(
@@ -125,8 +139,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       switchNetwork,
+      sendTransaction,
     }),
-    [state, network, connect, disconnect, switchNetwork],
+    [state, network, connect, disconnect, switchNetwork, sendTransaction],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

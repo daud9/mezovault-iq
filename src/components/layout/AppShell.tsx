@@ -9,6 +9,7 @@ import {
   Sparkles,
   ShieldCheck,
   Landmark,
+  Send,
 } from "lucide-react";
 import { DEFAULT_NETWORK } from "../../config/env";
 import { WalletButton } from "./WalletButton";
@@ -16,6 +17,7 @@ import { Badge } from "../ui/Badge";
 
 export const APP_NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true },
+  { to: "/app/send", label: "Send", icon: Send },
   { to: "/app/smart-vaults", label: "Smart Vaults", icon: Landmark },
   { to: "/app/strategies", label: "IQ Strategies", icon: Sparkles },
   { to: "/app/vaults", label: "Vault Intelligence", icon: ShieldCheck },

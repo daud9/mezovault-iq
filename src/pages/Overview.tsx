@@ -6,6 +6,7 @@ import { MusdBalanceCard } from "../components/balance/MusdBalanceCard";
 import { BtcBalanceCard } from "../components/balance/BtcBalanceCard";
 import { MezoBalanceCard } from "../components/balance/MezoBalanceCard";
 import { LoanCard } from "../components/balance/LoanCard";
+import { SupportCard } from "../components/support/SupportCard";
 import { Link } from "react-router-dom";
 import { OFFICIAL_SOURCES } from "../config/chains";
 import { useWallet } from "../components/wallet/WalletProvider";
@@ -32,6 +33,8 @@ export function Overview() {
         </div>
         <LoanCard />
       </div>
+
+      <SupportCard />
 
       <div className="space-y-4">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Next steps</h2>

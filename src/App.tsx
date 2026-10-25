@@ -11,6 +11,7 @@ import { SimulationLab } from "./pages/SimulationLab";
 import { Autopilot } from "./pages/Autopilot";
 import { Activity } from "./pages/Activity";
 import { SmartVaults } from "./pages/SmartVaults";
+import { Send } from "./pages/Send";
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Overview />} />
+            <Route path="send" element={<Send />} />
             <Route path="smart-vaults" element={<SmartVaults />} />
             <Route path="strategies" element={<IQStrategies />} />
             <Route path="vaults" element={<VaultIntelligence />} />

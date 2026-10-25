@@ -69,9 +69,6 @@ export function Landing() {
               Explore IQ Strategies
             </ButtonLink>
           </div>
-          <p className="mt-5 text-xs text-mist-500">
-            Read-only. This app sends no transactions. Swaps, deposits and borrowing are not available here yet.
-          </p>
         </div>
       </section>
 
