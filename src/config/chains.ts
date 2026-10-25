@@ -13,10 +13,12 @@ export const OFFICIAL_SOURCES = {
   contractsReference: "https://mezo.org/docs/users/resources/contracts-reference/",
   musdRedemptions: "https://mezo.org/docs/developers/musd/musd-redemptions",
   mezoPools: "https://mezo.org/docs/developers/features/mezo-pools",
-  /** Official Mezo swap app, named in the Mezo swap guide ("Go to mezo.org/swap"). */
-  mezoSwapApp: "https://mezo.org/swap",
-  /** Official vaults page, named in the Mezo vaults guide ("Go to mezo.org/vaults"). */
-  mezoVaultsApp: "https://mezo.org/vaults",
+  /** Borrow page; the official testnet guide says to use it while connected to Mezo Testnet. */
+  mezoBorrowApp: "https://mezo.org/feature/borrow",
+  /** Swap guide. Documented for mainnet only, so the app does not link to it for testnet. */
+  mezoSwapGuideMainnetOnly: "https://mezo.org/swap",
+  /** Vaults guide. Documented for mainnet only, so the app does not link to it for testnet. */
+  mezoVaultsGuideMainnetOnly: "https://mezo.org/vaults",
 } as const;
 
 export interface VerifiedAddress {

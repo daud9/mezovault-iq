@@ -6,6 +6,7 @@ import { useWallet } from "../wallet/WalletProvider";
 import { usePoolPositions } from "../../hooks/usePoolPositions";
 import { TESTNET_BASIC_POOLS } from "../../config/pools";
 import { formatTime, shortAddress } from "../../lib/format";
+import { explorerAddressUrl } from "../../lib/explorer";
 
 /** The wallet's share of each verified testnet basic pool, read from the pool contracts. */
 export function PoolPositionsCard() {
@@ -29,7 +30,9 @@ export function PoolPositionsCard() {
               <div key={poolId} className="rounded-xl border border-line bg-ink-800/60 p-4 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-sm font-semibold text-mist-100">{pool.name} pool</p>
-                  <span className="text-xs text-mist-500">{shortAddress(r.poolAddress)}</span>
+                  <a href={explorerAddressUrl(network, r.poolAddress)} target="_blank" rel="noopener noreferrer" className="text-xs text-gold-300 hover:underline">
+                    {shortAddress(r.poolAddress)} on explorer
+                  </a>
                 </div>
                 {r.hasPosition ? (
                   <>

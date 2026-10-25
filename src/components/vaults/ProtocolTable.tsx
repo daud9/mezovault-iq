@@ -1,6 +1,9 @@
 import { Card } from "../ui/Card";
 import { DataStatus } from "../ui/DataStatus";
 import { PROTOCOL_CANDIDATES, type CapabilityStatus, type ProtocolCandidate } from "../../config/protocols";
+import { DEFAULT_NETWORK } from "../../config/env";
+import { explorerAddressUrl } from "../../lib/explorer";
+import { shortAddress } from "../../lib/format";
 
 const CAPABILITY_LABEL: Record<CapabilityStatus, string> = {
   verified: "Verified",
@@ -51,6 +54,11 @@ export function ProtocolTable() {
               <tr key={p.id} className="border-t border-line align-top">
                 <td className="py-3 pr-3">
                   <p className="font-medium text-mist-100">{p.name}</p>
+                  {p.testnetAddress && (
+                    <a href={explorerAddressUrl(DEFAULT_NETWORK, p.testnetAddress)} target="_blank" rel="noopener noreferrer" className="mt-0.5 inline-block text-xs text-gold-300 hover:underline">
+                      {shortAddress(p.testnetAddress)} on explorer
+                    </a>
+                  )}
                   <p className="mt-0.5 text-xs text-mist-500">{p.notes}</p>
                 </td>
                 <td className="py-3 pr-3 text-xs text-mist-400">{EVIDENCE_TEXT[p.evidence]}</td>

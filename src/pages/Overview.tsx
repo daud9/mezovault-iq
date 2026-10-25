@@ -43,15 +43,15 @@ export function Overview() {
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Borrow MUSD against BTC</p>
-            <p className="text-sm leading-relaxed text-mist-400">Borrowing is done in the official Mezo interface. This app does not build borrow transactions yet.</p>
-            <a href="https://mezo.org/feature/borrow" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open the official borrow page</a>
+            <p className="text-sm leading-relaxed text-mist-400">Borrowing is done in the official Mezo borrow page. This app does not build borrow transactions yet.</p>
+            <a href={OFFICIAL_SOURCES.mezoBorrowApp} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open the official borrow page</a>
+            <p className="text-xs leading-relaxed text-mist-500">The official testnet guide uses this page while connected to Mezo Testnet.</p>
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Swap MUSD and BTC</p>
             <p className="text-sm leading-relaxed text-mist-400">
-              Swapping happens in the official Mezo Swap app. This page does not swap for you. Check that your wallet is on Mezo Testnet first. Testnet support in that app is not verified.
+              Swapping is not available in MezoVault IQ. The official Mezo swap guide is documented for mainnet, and no testnet swap link is verified, so none is shown here.
             </p>
-            <a href={OFFICIAL_SOURCES.mezoSwapApp} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-gold-300 hover:underline">Open Mezo Swap (official)</a>
           </Card>
         </div>
       </div>

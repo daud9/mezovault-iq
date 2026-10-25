@@ -91,7 +91,7 @@ export function LoanCard() {
       </div>
       {body}
       <a href={BORROW_URL} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 border-t border-line pt-4 text-sm font-medium text-gold-300 hover:underline">
-        Manage or open a loan in the official interface <ExternalLink className="h-4 w-4" aria-hidden="true" />
+        Open the official borrow page (testnet guide applies) <ExternalLink className="h-4 w-4" aria-hidden="true" />
       </a>
     </Card>
   );
