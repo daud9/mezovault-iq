@@ -146,6 +146,21 @@ export function SimulationLab() {
         <div className="space-y-6">
           {comparison && comparison.baseline.valid && comparison.stressed.valid && (
             <>
+              <Card highlight className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <h2 className="text-sm font-semibold text-mist-100">Hypothetical result (baseline, your assumptions)</h2>
+                  <DemoLabel note="Hypothetical" />
+                </div>
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  <div><p className="text-xs text-mist-500">Starting amount</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(form.principalUsd)}</p></div>
+                  <div><p className="text-xs text-mist-500">Estimated ending balance</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(comparison.baseline.totalValueUsd)}</p></div>
+                  <div><p className="text-xs text-mist-500">Estimated gain or loss</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(comparison.baseline.netGainUsd)} ({comparison.baseline.netReturnPct}%)</p></div>
+                  <div><p className="text-xs text-mist-500">Fees and direct costs</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(comparison.baseline.totalCostsUsd)}</p></div>
+                </div>
+                <p className="text-xs leading-relaxed text-mist-500">
+                  Based on your assumed {form.annualYieldPct}% annual yield over {form.months} months, {form.compounding === "monthly" ? "with monthly compounding" : "with simple interest"}. The yield is not a live or guaranteed rate. Stress results are below.
+                </p>
+              </Card>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
                   <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Baseline</p>

@@ -5,8 +5,8 @@ import { ButtonLink } from "../components/ui/Button";
 import { WalletButton } from "../components/layout/WalletButton";
 
 const FEATURES = [
-  { icon: Compass, title: "IQ Strategies", body: "Discover MUSD and MEZO strategies with risk tiers and clear mechanics." },
-  { icon: ShieldCheck, title: "Vault Intelligence", body: "Evaluate contracts, collateral quality and concentration before capital moves." },
+  { icon: Compass, title: "IQ Strategies", body: "Lists only strategies backed by verified contracts. None is listed on Mezo Testnet yet." },
+  { icon: ShieldCheck, title: "Vault Intelligence", body: "Verified contract addresses and explorer links, with unavailable metrics shown openly." },
   { icon: SlidersHorizontal, title: "Allocation & Simulation", body: "Test allocations and outcome scenarios against your own assumptions." },
   { icon: Bot, title: "Autopilot (planned)", body: "Future automation limited to permissions you explicitly grant and can revoke." },
 ];
@@ -58,8 +58,8 @@ export function Landing() {
             Make Every MUSD Decision <span className="gold-text">Smarter.</span>
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-mist-400 sm:text-lg">
-            MezoVault IQ helps you discover DeFi strategies, evaluate their risk, simulate portfolio outcomes, and
-            eventually manage allocations through permissions you control.
+            See your live MUSD, BTC and MEZO balances on Mezo Testnet, discover verified DeFi opportunities, read the
+            evidence behind them, and run hypothetical simulations.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <ButtonLink to="/app" className="min-h-11 px-5 py-3">
@@ -70,7 +70,7 @@ export function Landing() {
             </ButtonLink>
           </div>
           <p className="mt-5 text-xs text-mist-500">
-            Read-only. The app does not make deposits, withdrawals or automated transactions.
+            Read-only. This app sends no transactions. Swaps, deposits and borrowing are not available here yet.
           </p>
         </div>
       </section>

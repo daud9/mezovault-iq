@@ -9,7 +9,7 @@ import { formatUsdCents } from "../lib/format";
 import { VERIFIED_STRATEGY_PROFILES } from "../engine/catalog";
 import { useMusdBalance } from "../hooks/useMusdBalance";
 import { useWallet } from "../components/wallet/WalletProvider";
-import { Button } from "../components/ui/Button";
+import { Button, ButtonLink } from "../components/ui/Button";
 import { generateAllocation, validateAllocation, type AllocationRequest } from "../engine/allocation";
 import type { RiskTolerance } from "../engine/types";
 
@@ -72,7 +72,13 @@ export function AllocationLab() {
           {!hasVerified ? (
             <EmptyState
               title="No verified strategies to allocate across"
-              description="Allocations need at least one verified strategy with a readable contract. None is available on Mezo Testnet, so no allocation or projected return is generated."
+              description="Live allocations use only verified strategies with readable contracts. None is available on Mezo Testnet, so no allocation or return is generated."
+              action={
+                <div className="flex flex-wrap justify-center gap-3">
+                  <ButtonLink to="/app/simulation" className="min-h-11">Open Simulation Lab</ButtonLink>
+                  <ButtonLink to="/app/strategies" variant="secondary" className="min-h-11">View IQ Strategies</ButtonLink>
+                </div>
+              }
             />
           ) : result ? (
             <Card className="space-y-4">

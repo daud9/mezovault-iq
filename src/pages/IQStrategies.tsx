@@ -1,5 +1,7 @@
 import { useMemo, useState } from "react";
 import { Card } from "../components/ui/Card";
+import { ButtonLink } from "../components/ui/Button";
+import { DEFAULT_NETWORK } from "../config/env";
 import { SectionHeader } from "../components/ui/SectionHeader";
 import { EmptyState } from "../components/ui/StateViews";
 import { ChoiceGroup } from "../components/forms/ChoiceGroup";
@@ -81,7 +83,14 @@ export function IQStrategies() {
           ) : matches.length === 0 ? (
             <EmptyState
               title="No verified strategies are available"
-              description="No strategy on Mezo Testnet currently has a verified protocol contract, an official source and readable on-chain data. Nothing is shown in its place. This list fills in only when such a strategy is verified."
+              description="No strategy on Mezo Testnet currently has a verified protocol contract, an official source and readable on-chain data. Nothing is shown in its place, and no yields are estimated. This list fills in only when such a strategy is verified."
+              action={
+                <div className="flex flex-wrap justify-center gap-3">
+                  <ButtonLink to="/app/smart-vaults" variant="secondary" className="min-h-11">Explore Smart Vaults</ButtonLink>
+                  <ButtonLink to="/app" variant="secondary" className="min-h-11">Back to portfolio</ButtonLink>
+                  <a href={DEFAULT_NETWORK.explorerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center rounded-xl px-4 text-sm font-semibold text-gold-300 hover:underline">Mezo Testnet explorer</a>
+                </div>
+              }
             />
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
