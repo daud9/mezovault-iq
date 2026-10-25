@@ -4,6 +4,9 @@ import { SectionHeader } from "../components/ui/SectionHeader";
 import { DataStatus } from "../components/ui/DataStatus";
 import { MusdBalanceCard } from "../components/balance/MusdBalanceCard";
 import { BtcBalanceCard } from "../components/balance/BtcBalanceCard";
+import { MezoBalanceCard } from "../components/balance/MezoBalanceCard";
+import { Link } from "react-router-dom";
+import { OFFICIAL_SOURCES } from "../config/chains";
 import { useWallet } from "../components/wallet/WalletProvider";
 
 export function Overview() {
@@ -19,9 +22,34 @@ export function Overview() {
         description="Every figure on this page comes from the chain or is marked unavailable. No demonstration values are shown."
       />
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Wallet balances</h2>
         <MusdBalanceCard />
-        <BtcBalanceCard />
+        <div className="grid gap-6 md:grid-cols-2">
+          <BtcBalanceCard />
+          <MezoBalanceCard />
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Next steps</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="space-y-3">
+            <p className="text-sm font-semibold text-mist-100">Smart Vaults</p>
+            <p className="text-sm leading-relaxed text-mist-400">See which vaults are verified on Mezo Testnet, and what is needed to activate the rest.</p>
+            <Link to="/app/smart-vaults" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Smart Vaults</Link>
+          </Card>
+          <Card className="space-y-3">
+            <p className="text-sm font-semibold text-mist-100">Borrow MUSD against BTC</p>
+            <p className="text-sm leading-relaxed text-mist-400">Borrowing is done in the official Mezo interface. This app does not build borrow transactions yet.</p>
+            <a href="https://mezo.org/feature/borrow" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open the official borrow page</a>
+          </Card>
+          <Card className="space-y-3">
+            <p className="text-sm font-semibold text-mist-100">Swap MUSD and BTC</p>
+            <p className="text-sm leading-relaxed text-mist-400">The testnet router and pools are listed in the official pools documentation. In-app swapping is not implemented yet.</p>
+            <a href={OFFICIAL_SOURCES.mezoPools} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Official pools documentation</a>
+          </Card>
+        </div>
       </div>
 
       <div className="space-y-4">

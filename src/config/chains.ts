@@ -12,6 +12,7 @@ export const OFFICIAL_SOURCES = {
   x402Payments: "https://mezo.org/docs/developers/getting-started/musd-payments-x402/",
   contractsReference: "https://mezo.org/docs/users/resources/contracts-reference/",
   musdRedemptions: "https://mezo.org/docs/developers/musd/musd-redemptions",
+  mezoPools: "https://mezo.org/docs/developers/features/mezo-pools",
 } as const;
 
 export interface VerifiedAddress {
@@ -31,6 +32,8 @@ export interface MezoNetworkConfig {
   faucetUrl: string | null;
   /** The official MUSD token. null when not verified. */
   musd: (VerifiedAddress & { symbol: "MUSD"; name: "Mezo USD"; decimals: 18 }) | null;
+  /** The MEZO token as listed in the official contracts reference. Its testnet deployment is confirmed at runtime. */
+  mezo: (VerifiedAddress & { symbol: "MEZO" }) | null;
   /** The official BorrowerOperations proxy. null when not verified. */
   borrowerOperations: VerifiedAddress | null;
   /** Human-readable source note for the network parameters. */
@@ -55,6 +58,11 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
       name: "Mezo USD",
       decimals: 18,
     },
+    mezo: {
+      address: "0x7B7c000000000000000000000000000000000001",
+      source: OFFICIAL_SOURCES.contractsReference,
+      symbol: "MEZO",
+    },
     borrowerOperations: {
       address: "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5",
       source: OFFICIAL_SOURCES.musdRedemptions,
@@ -77,6 +85,11 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
       symbol: "MUSD",
       name: "Mezo USD",
       decimals: 18,
+    },
+    mezo: {
+      address: "0x7B7c000000000000000000000000000000000001",
+      source: OFFICIAL_SOURCES.contractsReference,
+      symbol: "MEZO",
     },
     borrowerOperations: {
       address: "0x44b1bac67dDA612a41a58AAf779143B181dEe031",
