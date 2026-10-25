@@ -36,9 +36,17 @@ export function SmartVaults() {
               <li>A rate source, shown with its origin and timestamp</li>
             </ul>
           </div>
-          <a href={OFFICIAL_SOURCES.contractsReference} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-gold-300 hover:underline">
-            Official contracts reference <ExternalLink className="h-4 w-4" aria-hidden="true" />
-          </a>
+          <p className="text-xs leading-relaxed text-mist-500">
+            Deposits happen in the official Mezo vaults app, not in MezoVault IQ. Check the vault and your wallet network there first. Testnet availability is not verified.
+          </p>
+          <div className="flex flex-wrap gap-4">
+            <a href={OFFICIAL_SOURCES.mezoVaultsApp} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-gold-300 hover:underline">
+              Open MUSD vaults on Mezo (official) <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            </a>
+            <a href={OFFICIAL_SOURCES.contractsReference} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-mist-300 hover:underline">
+              Contracts reference <ExternalLink className="h-4 w-4" aria-hidden="true" />
+            </a>
+          </div>
         </Card>
 
         <Card className="space-y-4">

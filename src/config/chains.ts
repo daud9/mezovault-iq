@@ -13,6 +13,10 @@ export const OFFICIAL_SOURCES = {
   contractsReference: "https://mezo.org/docs/users/resources/contracts-reference/",
   musdRedemptions: "https://mezo.org/docs/developers/musd/musd-redemptions",
   mezoPools: "https://mezo.org/docs/developers/features/mezo-pools",
+  /** Official Mezo swap app, named in the Mezo swap guide ("Go to mezo.org/swap"). */
+  mezoSwapApp: "https://mezo.org/swap",
+  /** Official vaults page, named in the Mezo vaults guide ("Go to mezo.org/vaults"). */
+  mezoVaultsApp: "https://mezo.org/vaults",
 } as const;
 
 export interface VerifiedAddress {
@@ -36,6 +40,10 @@ export interface MezoNetworkConfig {
   mezo: (VerifiedAddress & { symbol: "MEZO" }) | null;
   /** The official BorrowerOperations proxy. null when not verified. */
   borrowerOperations: VerifiedAddress | null;
+  /** The TroveManager that holds each loan. null when not verified for this network. */
+  troveManager: VerifiedAddress | null;
+  /** Chainlink-compatible BTC/USD aggregator from the official oracle docs. null when not verified. */
+  btcUsdOracle: VerifiedAddress | null;
   /** Human-readable source note for the network parameters. */
   parametersSource: string;
 }
@@ -67,6 +75,14 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
       address: "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5",
       source: OFFICIAL_SOURCES.musdRedemptions,
     },
+    troveManager: {
+      address: "0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0",
+      source: OFFICIAL_SOURCES.musdRedemptions,
+    },
+    btcUsdOracle: {
+      address: "0x2880aB155794e7179c9eE2e38200202908C17B43",
+      source: "https://mezo.org/docs/developers/architecture/oracles/read-oracle",
+    },
     parametersSource: OFFICIAL_SOURCES.developerGuide,
   },
   mainnet: {
@@ -95,6 +111,8 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
       address: "0x44b1bac67dDA612a41a58AAf779143B181dEe031",
       source: OFFICIAL_SOURCES.musdRedemptions,
     },
+    troveManager: null,
+    btcUsdOracle: null,
     parametersSource: OFFICIAL_SOURCES.developerGuide,
   },
 };

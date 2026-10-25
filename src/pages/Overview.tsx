@@ -5,6 +5,7 @@ import { DataStatus } from "../components/ui/DataStatus";
 import { MusdBalanceCard } from "../components/balance/MusdBalanceCard";
 import { BtcBalanceCard } from "../components/balance/BtcBalanceCard";
 import { MezoBalanceCard } from "../components/balance/MezoBalanceCard";
+import { LoanCard } from "../components/balance/LoanCard";
 import { Link } from "react-router-dom";
 import { OFFICIAL_SOURCES } from "../config/chains";
 import { useWallet } from "../components/wallet/WalletProvider";
@@ -29,6 +30,7 @@ export function Overview() {
           <BtcBalanceCard />
           <MezoBalanceCard />
         </div>
+        <LoanCard />
       </div>
 
       <div className="space-y-4">
@@ -46,8 +48,10 @@ export function Overview() {
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Swap MUSD and BTC</p>
-            <p className="text-sm leading-relaxed text-mist-400">The testnet router and pools are listed in the official pools documentation. In-app swapping is not implemented yet.</p>
-            <a href={OFFICIAL_SOURCES.mezoPools} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Official pools documentation</a>
+            <p className="text-sm leading-relaxed text-mist-400">
+              Swapping happens in the official Mezo Swap app. This page does not swap for you. Check that your wallet is on Mezo Testnet first. Testnet support in that app is not verified.
+            </p>
+            <a href={OFFICIAL_SOURCES.mezoSwapApp} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-gold-300 hover:underline">Open Mezo Swap (official)</a>
           </Card>
         </div>
       </div>

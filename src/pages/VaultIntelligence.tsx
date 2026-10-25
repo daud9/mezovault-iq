@@ -2,6 +2,8 @@ import { Card } from "../components/ui/Card";
 import { SectionHeader } from "../components/ui/SectionHeader";
 import { DataStatus } from "../components/ui/DataStatus";
 import { ProtocolTable } from "../components/vaults/ProtocolTable";
+import { LoanCard } from "../components/balance/LoanCard";
+import { PoolPositionsCard } from "../components/balance/PoolPositionsCard";
 
 const METRICS = [
   { name: "Total value locked", needs: "A verified vault contract on Mezo Testnet that exposes its total assets." },
@@ -31,6 +33,12 @@ export function VaultIntelligence() {
             </p>
           </Card>
         ))}
+      </div>
+
+      <div className="space-y-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Your position</h2>
+        <LoanCard />
+        <PoolPositionsCard />
       </div>
 
       <ProtocolTable />
