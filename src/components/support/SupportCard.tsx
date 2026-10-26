@@ -18,7 +18,7 @@ export function SupportCard() {
         {SUPPORT_PRESETS.map((p) => (
           <Link
             key={p.label}
-            to={`/app/send?${buildSendQuery({ to: SUPPORT_ADDRESS, token: p.token, amount: p.amount })}`}
+            to={`/app/pay?${buildSendQuery({ to: SUPPORT_ADDRESS, token: p.token, amount: p.amount })}`}
             className="inline-flex min-h-11 items-center justify-center rounded-xl border border-gold-500/50 bg-gold-500/10 px-4 text-sm font-semibold text-gold-300 hover:bg-gold-500/20"
           >
             Review {p.label}

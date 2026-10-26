@@ -150,6 +150,11 @@ export function Send() {
       const rpc = createRpcClient({ url: resolveRpcUrl(network) });
       const result = await waitForReceipt({ rpc, hash: txHash });
       setOutcome(result);
+      if (result.status === "success") {
+        native.refresh();
+        musd.refresh();
+        mezo.refresh();
+      }
       const ledgerStatus: LedgerStatus =
         result.status === "success" ? "success" : result.status === "reverted" ? "reverted" : "unconfirmed";
       updateEntry(browserStore(), txHash, { status: ledgerStatus, blockNumber: result.status === "timeout" ? null : result.blockNumber });

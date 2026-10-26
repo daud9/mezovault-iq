@@ -12,6 +12,7 @@ import { Autopilot } from "./pages/Autopilot";
 import { Activity } from "./pages/Activity";
 import { SmartVaults } from "./pages/SmartVaults";
 import { Send } from "./pages/Send";
+import { Pay } from "./pages/Pay";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/app" element={<AppShell />}>
             <Route index element={<Overview />} />
             <Route path="send" element={<Send />} />
+            <Route path="pay" element={<Pay />} />
             <Route path="smart-vaults" element={<SmartVaults />} />
             <Route path="strategies" element={<IQStrategies />} />
             <Route path="vaults" element={<VaultIntelligence />} />

@@ -4,7 +4,7 @@
  */
 import { isAddress } from "./abi";
 
-export type PaymentToken = "BTC" | "MUSD";
+export type PaymentToken = "BTC" | "MUSD" | "MEZO";
 
 export interface PaymentRequest {
   to: `0x${string}`;
