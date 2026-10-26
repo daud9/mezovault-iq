@@ -177,8 +177,8 @@ export function Send() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Send"
-        title="Send BTC or MUSD on Mezo Testnet"
+        eyebrow="Mezo Pay"
+        title="Mezo Pay — Send & Request"
         description="You review every transaction and approve it in your wallet. The app never holds your keys. A send is final once confirmed on-chain."
       />
 
@@ -186,7 +186,9 @@ export function Send() {
         <Card className="space-y-6">
           {prefill.request && (
             <div className="rounded-lg border border-gold-500/40 bg-gold-500/10 p-3 text-xs leading-relaxed text-mist-200">
-              Filled in from a payment link. Check the recipient, token and amount against what you expect before you review.
+              {prefill.request.amount
+                ? "Filled in from a payment link. Check the recipient, token and amount against what you expect before you review."
+                : "Recipient and token filled in. Enter the amount, then review."}
             </div>
           )}
           {!from || state.status !== "connected" ? (
