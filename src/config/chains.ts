@@ -44,8 +44,8 @@ export interface MezoNetworkConfig {
   borrowerOperations: VerifiedAddress | null;
   /** The TroveManager that holds each loan. null when not verified for this network. */
   troveManager: VerifiedAddress | null;
-  /** Chainlink-compatible BTC/USD aggregator from the official oracle docs. null when not verified. */
-  btcUsdOracle: VerifiedAddress | null;
+  /** Mezo PriceFeed proxy. fetchPrice() returns the protocol-normalized BTC/USD price. */
+  priceFeed: VerifiedAddress | null;
   /** Human-readable source note for the network parameters. */
   parametersSource: string;
 }
@@ -81,9 +81,9 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
       address: "0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0",
       source: OFFICIAL_SOURCES.musdRedemptions,
     },
-    btcUsdOracle: {
-      address: "0x2880aB155794e7179c9eE2e38200202908C17B43",
-      source: "https://mezo.org/docs/developers/architecture/oracles/read-oracle",
+    priceFeed: {
+      address: "0x86bCF0841622a5dAC14A313a15f96A95421b9366",
+      source: "Verified Mezo Testnet PriceFeed proxy; oracle() resolves to PriceOracleCaller 0x7b7c000000000000000000000000000000000015.",
     },
     parametersSource: OFFICIAL_SOURCES.developerGuide,
   },
@@ -114,7 +114,7 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
       source: OFFICIAL_SOURCES.musdRedemptions,
     },
     troveManager: null,
-    btcUsdOracle: null,
+    priceFeed: null,
     parametersSource: OFFICIAL_SOURCES.developerGuide,
   },
 };

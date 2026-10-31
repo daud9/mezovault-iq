@@ -25,8 +25,11 @@ function handler(o: { coll?: bigint; debt?: bigint; price?: bigint; updatedAt?: 
       if (o.revert) return new Error("execution reverted");
       if (data.startsWith(LOAN_SELECTORS.getTroveColl)) return encodeUintResult(o.coll ?? 0n);
       if (data.startsWith(LOAN_SELECTORS.getTroveDebt)) return encodeUintResult(o.debt ?? 0n);
+      if (data.startsWith(LOAN_SELECTORS.getTroveStatus)) return encodeUintResult((o.coll ?? 0n) > 0n || (o.debt ?? 0n) > 0n ? 1n : 0n);
+      if (to === T.priceFeed?.address && data === LOAN_SELECTORS.fetchPrice) return encodeUintResult(o.price ?? 100_000n * E18);
+      if (to === T.priceFeed?.address && data === LOAN_SELECTORS.oracle) return `0x${"0".repeat(24)}7b7c000000000000000000000000000000000015`;
       if (data === LOAN_SELECTORS.decimals) return encodeUintResult(8n);
-      if (data === LOAN_SELECTORS.latestRoundData) return roundData(o.price ?? 10_000_000_000_000n, o.updatedAt ?? NOW_SEC - 60);
+      if (data === LOAN_SELECTORS.latestRoundData) return roundData(7_729_815_740_000n, o.updatedAt ?? NOW_SEC - 60);
       void to;
     }
     return new Error(`unexpected ${method}`);
@@ -42,16 +45,56 @@ describe("function selectors", () => {
   it("match the Keccak-derived values", () => {
     assert.equal(LOAN_SELECTORS.getTroveColl, "0x480cd578");
     assert.equal(LOAN_SELECTORS.getTroveDebt, "0xd66a2553");
+    assert.equal(LOAN_SELECTORS.getTroveStatus, "0x21e37801");
+    assert.equal(LOAN_SELECTORS.fetchPrice, "0x0fdb11cf");
+    assert.equal(LOAN_SELECTORS.oracle, "0x7dc0d1d0");
     assert.equal(LOAN_SELECTORS.latestRoundData, "0xfeaf968c");
   });
 });
 
 describe("loan position", () => {
-  it("reports no active loan when collateral and debt are both zero", async () => {
-    const r = await run(handler());
+  it("reports no active loan when collateral and debt are both zero without calling the oracle", async () => {
+    const h: Handler = (method, params) => {
+      if (method === "eth_chainId") return "0x7b7b";
+      if (method === "eth_blockNumber") return "0x9";
+      if (method === "eth_call") {
+        const { to, data } = params[0] as { to: string; data: string };
+        if (data.startsWith(LOAN_SELECTORS.getTroveColl)) return encodeUintResult(0n);
+        if (data.startsWith(LOAN_SELECTORS.getTroveDebt)) return encodeUintResult(0n);
+        if (data.startsWith(LOAN_SELECTORS.getTroveStatus)) return encodeUintResult(0n);
+        if (to === T.priceFeed?.address) return new Error("execution reverted");
+      }
+      return new Error(`unexpected ${method}`);
+    };
+    const r = await run(h);
     assert.equal(r.status, "ok");
     if (r.status === "ok") {
       assert.equal(r.hasLoan, false);
+      assert.equal(r.collateralRatioPct, null);
+      assert.equal(r.btcUsd, null);
+    }
+  });
+
+  it("keeps a valid position when the oracle call reverts", async () => {
+    const h: Handler = (method, params) => {
+      if (method === "eth_chainId") return "0x7b7b";
+      if (method === "eth_blockNumber") return "0x9";
+      if (method === "eth_call") {
+        const { to, data } = params[0] as { to: string; data: string };
+        if (data.startsWith(LOAN_SELECTORS.getTroveColl)) return encodeUintResult(2n * E18);
+        if (data.startsWith(LOAN_SELECTORS.getTroveDebt)) return encodeUintResult(1000n * E18);
+        if (data.startsWith(LOAN_SELECTORS.getTroveStatus)) return encodeUintResult(1n);
+        if (to === T.priceFeed?.address) return new Error("execution reverted");
+      }
+      return new Error(`unexpected ${method}`);
+    };
+    const r = await run(h);
+    assert.equal(r.status, "ok");
+    if (r.status === "ok") {
+      assert.equal(r.hasLoan, true);
+      assert.equal(r.collateralBtc, "2");
+      assert.equal(r.debtMusd, "1,000");
+      assert.equal(r.btcUsd, null);
       assert.equal(r.collateralRatioPct, null);
     }
   });
@@ -68,7 +111,7 @@ describe("loan position", () => {
 
   it("computes the collateral ratio from the on-chain BTC/USD price", async () => {
     // 2 BTC at $100,000 is $200,000 of collateral against 1,000 MUSD debt: 20,000%.
-    const r = await run(handler({ coll: 2n * E18, debt: 1000n * E18, price: 10_000_000_000_000n }));
+    const r = await run(handler({ coll: 2n * E18, debt: 1000n * E18, price: 100_000n * E18 }));
     assert.equal(r.status, "ok");
     if (r.status === "ok") {
       assert.equal(r.btcUsd, 100000);

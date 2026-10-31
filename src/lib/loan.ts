@@ -1,7 +1,8 @@
 /**
  * Reads the connected wallet's MUSD loan (trove) and the BTC/USD price from official contracts.
  * Read-only. The collateral ratio is computed from on-chain values. The protocol's own
- * thresholds are not assumed, because they are not verified here.
+ * thresholds are not assumed, because they are not verified here. Price is read through
+ * Mezo PriceFeed.fetchPrice(); its oracle() pointer is used only for update-time metadata.
  */
 import type { MezoNetworkConfig } from "../config/chains";
 import { decodeUint256, isAddress, encodeAddressWord } from "./abi";
@@ -9,10 +10,13 @@ import { RpcError, type RpcClient } from "./rpc";
 import { parseChainId } from "./network";
 import { formatTokenUnits } from "./tokenAmount";
 
-/** Function selectors, derived with Keccak-256 and checked against known ERC-20 values in tests. */
+/** Function selectors transcribed from the verified Mezo Testnet explorer interfaces supplied for this project. */
 export const LOAN_SELECTORS = {
   getTroveColl: "0x480cd578",
   getTroveDebt: "0xd66a2553",
+  getTroveStatus: "0x21e37801",
+  fetchPrice: "0x0fdb11cf",
+  oracle: "0x7dc0d1d0",
   latestRoundData: "0xfeaf968c",
   decimals: "0x313ce567",
 } as const;
@@ -73,7 +77,9 @@ export async function readLoan(options: {
     const ownerWord = encodeAddressWord(owner);
     const collateralRaw = decodeUint256(await call(rpc, trove.address, LOAN_SELECTORS.getTroveColl + ownerWord));
     const debtRaw = decodeUint256(await call(rpc, trove.address, LOAN_SELECTORS.getTroveDebt + ownerWord));
-    const hasLoan = collateralRaw > 0n || debtRaw > 0n;
+    const troveStatus = decodeUint256(await call(rpc, trove.address, LOAN_SELECTORS.getTroveStatus + ownerWord));
+    // Liquity-derived status enum: 1 = active; 0 and other terminal states are not active.
+    const hasLoan = troveStatus === 1n;
 
     // BTC is the gas token with 18 decimals, and MUSD has 18 decimals (both verified in the official docs).
     const collateralBtc = formatTokenUnits(collateralRaw, 18, 8);
@@ -82,13 +88,47 @@ export async function readLoan(options: {
     let btcUsd: number | null = null;
     let priceUpdatedAt: string | null = null;
     let priceAgeSeconds: number | null = null;
-    const oracle = network.btcUsdOracle;
-    if (oracle) {
-      const decimals = Number(decodeUint256(await call(rpc, oracle.address, LOAN_SELECTORS.decimals)));
-      const round = decodeRoundData(await call(rpc, oracle.address, LOAN_SELECTORS.latestRoundData));
-      btcUsd = Number(round.answer) / 10 ** decimals;
-      priceUpdatedAt = new Date(round.updatedAt * 1000).toISOString();
-      priceAgeSeconds = Math.max(0, Math.floor(now().getTime() / 1000) - round.updatedAt);
+
+    // A wallet with no active Trove does not need an oracle read. Mezo's PriceFeed
+    // proxy exposes fetchPrice() in 18-decimal protocol units. Do not call the
+    // PriceOracleCaller directly as though it were the PriceFeed proxy.
+    const priceFeed = network.priceFeed;
+    if (hasLoan && priceFeed) {
+      try {
+        const priceRaw = decodeUint256(await call(rpc, priceFeed.address, LOAN_SELECTORS.fetchPrice));
+        // Build the decimal string from exact digits. Number(raw) / 1e18 loses precision, and
+        // formatTokenUnits adds thousands separators that Number() cannot parse.
+        const digits = priceRaw.toString().padStart(19, "0");
+        const parsedPrice = Number(`${digits.slice(0, -18)}.${digits.slice(-18)}`);
+        if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+          throw new Error("Mezo PriceFeed returned an invalid BTC/USD price");
+        }
+        btcUsd = parsedPrice;
+
+        // PriceFeed.oracle() points to a PriceOracleCaller that exposes the
+        // Chainlink-compatible decimals() and latestRoundData() methods.
+        // Failure here affects freshness metadata only, not fetchPrice().
+        try {
+          const oracleHex = await call(rpc, priceFeed.address, LOAN_SELECTORS.oracle);
+          const oracleAddress = `0x${oracleHex.slice(-40)}`;
+          if (!isAddress(oracleAddress)) throw new Error("PriceFeed returned an invalid oracle address");
+          const decimals = Number(decodeUint256(await call(rpc, oracleAddress, LOAN_SELECTORS.decimals)));
+          const round = decodeRoundData(await call(rpc, oracleAddress, LOAN_SELECTORS.latestRoundData));
+          if (!Number.isInteger(decimals) || decimals < 0 || decimals > 36) {
+            throw new Error("Oracle returned invalid price decimals");
+          }
+          if (round.answer <= 0n) throw new Error("Oracle returned a non-positive BTC/USD price");
+          priceUpdatedAt = new Date(round.updatedAt * 1000).toISOString();
+          priceAgeSeconds = Math.max(0, Math.floor(now().getTime() / 1000) - round.updatedAt);
+        } catch {
+          priceUpdatedAt = null;
+          priceAgeSeconds = null;
+        }
+      } catch {
+        btcUsd = null;
+        priceUpdatedAt = null;
+        priceAgeSeconds = null;
+      }
     }
 
     const collateralValueUsd = btcUsd === null ? null : (Number(collateralRaw) / 1e18) * btcUsd;

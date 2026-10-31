@@ -1,0 +1,11 @@
+[35m.env.example[m[36m:[m[32m2[m[36m:[m# Never put [1;31mprivate key[ms, [1;31mseed phrase[ms, API [1;31msecret[ms or server tokens here.
+[35mREADME.md[m[36m:[m[32m68[m[36m:[mAll `VITE_*` values are embedded in the browser bundle. **Never place [1;31mprivate key[ms, [1;31mseed phrase[ms, API [1;31msecret[ms or server tokens in any variable.** The Deno server needs no [1;31msecret[ms in Stage 1.
+[35mREADME.md[m[36m:[m[32m178[m[36m:[m- The app requests only `eth_requestAccounts`, `eth_chainId`, and network switching. It never requests keys, [1;31mseed phrase[ms, signatures or transactions.
+[35mserver/main.ts[m[36m:[m[32m4[m[36m:[m * Holds no [1;31msecret[ms and makes no outbound calls.
+[35msrc/components/balance/MusdBalanceCard.tsx[m[36m:[m[32m73[m[36m:[m        <Message title="Connect a wallet to read your balance" body="Read-only. The app asks only for your account address and never requests keys or [1;31mseed phrase[ms." status="not-configured" />
+[35msrc/config/env.ts[m[36m:[m[32m5[m[36m:[m * VITE_* values are embedded in the browser bundle and must never contain [1;31msecret[ms.
+[35msrc/lib/transfer.ts[m[36m:[m[32m5[m[36m:[m * sees a [1;31mprivate key[m. Nothing is sent until the user presses Confirm in the app and approves in
+[35msrc/lib/txLedger.ts[m[36m:[m[32m3[m[36m:[m * Stored in the browser only. It holds hashes and amounts, never keys or [1;31msecret[ms.
+[35msrc/lib/wallet.test.ts[m[36m:[m[32m106[m[36m:[m  it("never asks for a [1;31mseed phrase[m or [1;31mprivate key[m", () => {
+[35msrc/lib/wallet.test.ts[m[36m:[m[32m108[m[36m:[m    for (const m of messages) assert.doesNotMatch(m, /seed|[1;31mprivate key[m|[1;31msecret[m phrase/i);
+[35msrc/lib/wallet.ts[m[36m:[m[32m4[m[36m:[m * [1;31mseed phrase[ms or [1;31mprivate key[ms, and it never signs or sends a transaction.
