@@ -147,3 +147,9 @@ The app's current testnet `btcUsdOracle` address is `0x2880aB155794e7179c9eE2e38
 
 - 2026-10-31: Owner supplied TroveManager and PriceFeed explorer screenshots plus the PriceOracleCaller ABI. Recorded the three TroveManager read selectors, PriceFeed `fetchPrice()` / `oracle()` selectors, 18-digit price units, and the observed oracle pointer. Updated the app read path to match this evidence; live RPC verification remains pending.
 - 2026-10-31: Owner supplied the explorer ABI for the exact-match-verified BorrowerOperations implementation. Recorded implementation address, compiler metadata, exact user-operation signatures, mutability, and explorer selectors. This upgrades BorrowerOperations from documentation-only to explorer/implementation-ABI evidence; live RPC behavior and independent selector recomputation remain pending.
+
+## Application selector registry update (2026-10-31)
+
+The application now centralizes the explorer-transcribed selectors in `src/lib/mezoAbi.ts` rather than duplicating read selectors inside `src/lib/loan.ts`. The registry separates TroveManager, PriceFeed, PriceOracleCaller, and BorrowerOperations selectors. It includes the owner-supplied BorrowerOperations user-operation selectors for future transaction integration.
+
+This is an interface registry, not a transaction executor. No BorrowerOperations write path has been enabled by this change. In particular, `addColl` requires native BTC in transaction `value`, while `repayMUSD` is nonpayable and requires valid sorted-trove hints. HintHelpers and SortedTroves verification, proxy getter checks, live RPC calls, and transaction simulations remain prerequisites before enabling either action.

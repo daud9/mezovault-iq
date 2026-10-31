@@ -9,16 +9,17 @@ import { decodeUint256, isAddress, encodeAddressWord } from "./abi";
 import { RpcError, type RpcClient } from "./rpc";
 import { parseChainId } from "./network";
 import { formatTokenUnits } from "./tokenAmount";
+import { MEZO_TESTNET_SELECTORS } from "./mezoAbi";
 
-/** Function selectors transcribed from the verified Mezo Testnet explorer interfaces supplied for this project. */
+/** Read selectors shared with the verified Mezo Testnet ABI registry. */
 export const LOAN_SELECTORS = {
-  getTroveColl: "0x480cd578",
-  getTroveDebt: "0xd66a2553",
-  getTroveStatus: "0x21e37801",
-  fetchPrice: "0x0fdb11cf",
-  oracle: "0x7dc0d1d0",
-  latestRoundData: "0xfeaf968c",
-  decimals: "0x313ce567",
+  getTroveColl: MEZO_TESTNET_SELECTORS.troveManager.getTroveColl,
+  getTroveDebt: MEZO_TESTNET_SELECTORS.troveManager.getTroveDebt,
+  getTroveStatus: MEZO_TESTNET_SELECTORS.troveManager.getTroveStatus,
+  fetchPrice: MEZO_TESTNET_SELECTORS.priceFeed.fetchPrice,
+  oracle: MEZO_TESTNET_SELECTORS.priceFeed.oracle,
+  latestRoundData: MEZO_TESTNET_SELECTORS.priceOracleCaller.latestRoundData,
+  decimals: MEZO_TESTNET_SELECTORS.priceOracleCaller.decimals,
 } as const;
 
 export type LoanResult =
