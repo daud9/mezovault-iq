@@ -16,7 +16,7 @@ import { useMezoBalance } from "../hooks/useMezoBalance";
 import { resolveRpcUrl } from "../config/env";
 import { createRpcClient } from "../lib/rpc";
 import { formatTokenUnits } from "../lib/tokenAmount";
-import { shortAddress, formatTime } from "../lib/format";
+import { shortAddress } from "../lib/format";
 import {
   buildTransfer,
   describeSendError,

@@ -48,7 +48,7 @@ export function AppShell() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 border-b border-line bg-ink-950/85 backdrop-blur-md">
             <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-              <div className="lg:hidden"><Brand compact /></div>
+              <div className="lg:hidden"><Brand /></div>
               <div className="hidden lg:block" />
               <div className="flex items-center gap-2">
                 <Badge tone="gold">{DEFAULT_NETWORK.label}</Badge>
@@ -74,7 +74,7 @@ export function AppShell() {
   );
 }
 
-function Brand({ compact = false }: { compact?: boolean }) {
+function Brand() {
   return (
     <NavLink to="/" className="flex items-center gap-2.5" aria-label="MezoVault IQ home">
       <span className="grid h-8 w-8 place-items-center rounded-lg border border-gold-500/40 bg-ink-800">
