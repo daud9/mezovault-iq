@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { LoanCard } from "../components/balance/LoanCard";
+import { StabilityPoolPanel } from "../components/balance/StabilityPoolPanel";
 import { Card } from "../components/ui/Card";
 import { SectionHeader } from "../components/ui/SectionHeader";
 
@@ -13,6 +14,7 @@ export function Trove() {
       />
 
       <LoanCard />
+      <StabilityPoolPanel />
 
       <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
         <h2 className="font-semibold text-mist-100">What this page can do</h2>

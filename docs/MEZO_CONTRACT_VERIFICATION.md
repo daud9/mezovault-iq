@@ -1,13 +1,13 @@
 # MezoVault IQ — Mezo Contract Verification Pack
 
-**Status:** Historical evidence is retained where labeled. The current app supports Testnet-only, wallet-confirmed `openTrove` and active-Trove `addColl` paths; other Trove transactions remain disabled.
+**Status:** Historical evidence is retained where labeled. The current app supports Testnet-only, wallet-confirmed `openTrove`, active-Trove `addColl`, and a direct Stability Pool MUSD deposit path. Other Trove transactions and Stability Pool withdrawals remain disabled.
 **Network:** Mezo Testnet
 **Chain ID:** 31611 (`0x7b7b`)
 **Last reviewed:** 2026-11-12
 
 ## Verification policy
 
-An official address, published deployment artifact, and proxy explorer verification are distinct evidence. For `openTrove` and `addColl`, the current Mezo `matsnet` artifact and `BorrowerOperations.sol` source establish the exact ABI and semantics; the Testnet explorer verifies the proxy contract source. The live EIP-1967 implementation slot was not independently re-resolved from this sandbox because `https://rpc.test.mezo.org` returned HTTP 403 (`error code: 1010`). Runtime use therefore still requires the app’s fresh chain/code/read/simulation checks to pass. Do not infer ABI from Liquity or another Threshold fork.
+An official address, published deployment artifact, and proxy explorer verification are distinct evidence. For `openTrove` and `addColl`, the current Mezo `matsnet` artifact and `BorrowerOperations.sol` source establish the exact ABI and semantics; the Testnet explorer verifies the proxy contract source. The Stability Pool artifact and exact-match verified implementation source establish its deposit ABI and semantics; its live EIP-1967 slot could not be independently read from this sandbox because the configured Testnet RPC returned HTTP 403. Runtime use therefore requires the app’s fresh chain/code/read/simulation checks to pass. Do not infer ABI from Liquity or another Threshold fork.
 
 ## Officially documented testnet addresses
 
@@ -19,8 +19,9 @@ An official address, published deployment artifact, and proxy explorer verificat
 | HintHelpers proxy | `0x4e4cBA3779d56386ED43631b4dCD6d8EacEcBCF6` | Mezo MUSD Redemptions docs | Documented; implementation not yet verified |
 | SortedTroves proxy | `0x722E4D24FD6Ff8b0AC679450F3D91294607268fA` | Mezo MUSD Redemptions docs | Documented; implementation not yet verified |
 | MUSD token | `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` | Mezo MUSD Redemptions docs | Documented; 18 decimals per app configuration/docs |
+| Stability Pool proxy | `0x1CCA7E410eE41739792eA0A24e00349Dd247680e` | [Official matsnet artifact](https://github.com/mezo-org/musd/blob/main/solidity/artifacts/deployments/matsnet/StabilityPool.json); [Testnet explorer](https://explorer.test.mezo.org/address/0x1CCA7E410eE41739792eA0A24e00349Dd247680e?tab=contract) | Proxy exact-match verified; intended implementation `0x8f0cA419bB1D54AF4Bf6A644f605cC247d6d3E19` is exact-match verified; current live slot not independently read here |
 
-The TroveManager, BorrowerOperations, PriceFeed, HintHelpers, and SortedTroves rows are proxy endpoints; MUSD is a token contract. Use proxy-aware explorer views and distinguish documented proxy source from a live implementation-slot check.
+The TroveManager, BorrowerOperations, PriceFeed, HintHelpers, SortedTroves, and Stability Pool rows are proxy endpoints; MUSD is a token contract. Use proxy-aware explorer views and distinguish verified source from a live implementation-slot check.
 
 ## Function evidence from official Mezo documentation
 
