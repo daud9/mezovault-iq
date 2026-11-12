@@ -12,6 +12,7 @@ import { decodeUint256, encodeAddressWord, isAddress, SELECTORS } from "./abi";
 import { RpcError, type RpcClient } from "./rpc";
 import { parseChainId } from "./network";
 import { formatTokenUnits } from "./tokenAmount";
+import { readSnapshotBlock } from "./readSnapshotBlock";
 
 export interface PoolTokenAmount {
   address: `0x${string}`;
@@ -69,13 +70,13 @@ export async function readPoolPosition(options: {
   if (!network.musd) return { status: "error", kind: "not-configured", message: "MUSD is not configured on this network." };
   if (!isAddress(owner)) return { status: "error", kind: "invalid-input", message: "The connected address is not a valid EVM address." };
 
-  const call = (to: string, data: string) => rpc.call<string>("eth_call", [{ to, data }, "latest"]);
-
   try {
     const chainId = parseChainId(await rpc.call<string>("eth_chainId"));
     if (chainId !== network.chainId) return { status: "wrong-network", actualChainId: chainId, expectedChainId: network.chainId };
 
-    const code = await rpc.call<string>("eth_getCode", [pool.address, "latest"]);
+    const { blockTag, blockNumber } = await readSnapshotBlock(rpc);
+    const call = (to: string, data: string) => rpc.call<string>("eth_call", [{ to, data }, blockTag]);
+    const code = await rpc.call<string>("eth_getCode", [pool.address, blockTag]);
     if (typeof code !== "string" || code === "0x" || code === "0x0") return { status: "no-contract", poolAddress: pool.address };
 
     const token0 = addressFromWord(await call(pool.address, POOL_SELECTORS.token0));
@@ -102,7 +103,6 @@ export async function readPoolPosition(options: {
     const user0 = share(reserve0);
     const user1 = share(reserve1);
 
-    const blockNumber = Number(BigInt(await rpc.call<string>("eth_blockNumber")));
     const sharePct = totalSupplyRaw === 0n ? 0 : Number((lpBalanceRaw * 1_000_000n) / totalSupplyRaw) / 10_000;
 
     const tok = (address: `0x${string}`, decimals: number, reserveRaw: bigint, userRaw: bigint): PoolTokenAmount => ({

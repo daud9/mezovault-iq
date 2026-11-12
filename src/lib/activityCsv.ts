@@ -5,11 +5,12 @@ export interface ActivityCsvTransfer {
   decimals: number;
   log: {
     txHash: string;
+    logIndex: number;
     blockNumber: number;
     from: string;
     to: string;
     valueRaw: bigint;
-    direction: "incoming" | "outgoing";
+    direction: "incoming" | "outgoing" | "self";
   };
 }
 
@@ -33,6 +34,7 @@ export function buildActivityCsv(transfers: ActivityCsvTransfer[], coverage: Act
     "direction",
     "block_number",
     "transaction_hash",
+    "log_index",
     "from_address",
     "to_address",
     "amount",
@@ -48,6 +50,7 @@ export function buildActivityCsv(transfers: ActivityCsvTransfer[], coverage: Act
     log.direction,
     log.blockNumber,
     log.txHash,
+    log.logIndex,
     log.from,
     log.to,
     formatTokenUnits(log.valueRaw, decimals, Math.min(18, decimals)),

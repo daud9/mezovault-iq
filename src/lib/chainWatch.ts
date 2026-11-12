@@ -144,7 +144,7 @@ async function readTokenBalance(
       status: "ok",
       tokenAddress: token.address,
       balanceRaw,
-      formatted: formatTokenUnits(balanceRaw, token.decimals, Math.min(6, token.decimals)),
+      formatted: formatTokenUnits(balanceRaw, token.decimals, token.decimals),
       symbol: token.symbol,
       decimals: token.decimals,
     };

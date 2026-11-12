@@ -61,7 +61,7 @@ describe("Chain Watch read-only balance reader", () => {
     assert.equal(snapshot.tokens.MUSD.status, "ok");
     assert.equal(snapshot.tokens.MEZO.status, "ok");
     if (snapshot.tokens.MUSD.status === "ok") {
-      assert.equal(snapshot.tokens.MUSD.formatted, "1.234567");
+      assert.equal(snapshot.tokens.MUSD.formatted, "1.23456789");
       assert.equal(snapshot.tokens.MUSD.decimals, 18);
     }
     assert.ok(calls.some((call) => call.method === "eth_getCode"));
@@ -93,6 +93,13 @@ describe("Chain Watch read-only balance reader", () => {
     const snapshot = await result;
     assert.equal(snapshot.tokens.MUSD.status, "unavailable");
     if (snapshot.tokens.MUSD.status === "unavailable") assert.match(snapshot.tokens.MUSD.reason, /bytecode/);
+  });
+
+  it("withholds balances when the RPC returns a short uint256 word", async () => {
+    const musdAddress = MEZO.tokens.MUSD!.address.toLowerCase();
+    const { result } = run(MEZO, { balanceByToken: { [musdAddress]: "0x01" } });
+    const snapshot = await result;
+    assert.equal(snapshot.tokens.MUSD.status, "unavailable");
   });
 
   it("withholds balances when a token's on-chain symbol or decimals differ from the verified value", async () => {

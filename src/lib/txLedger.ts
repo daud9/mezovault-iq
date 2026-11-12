@@ -25,12 +25,24 @@ export interface LedgerStore {
 const KEY = "mezovault.txledger.v1";
 const MAX_ENTRIES = 200;
 
+function isLedgerEntry(value: unknown): value is LedgerEntry {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const entry = value as Record<string, unknown>;
+  return typeof entry.hash === "string" && entry.hash.length > 0 &&
+    Number.isSafeInteger(entry.chainId) &&
+    typeof entry.from === "string" && typeof entry.to === "string" &&
+    (entry.token === "BTC" || entry.token === "MUSD" || entry.token === "MEZO") &&
+    typeof entry.amount === "string" && typeof entry.createdAt === "string" &&
+    (entry.status === "pending" || entry.status === "success" || entry.status === "reverted" || entry.status === "unconfirmed") &&
+    (entry.blockNumber === null || Number.isSafeInteger(entry.blockNumber));
+}
+
 export function readLedger(store: LedgerStore): LedgerEntry[] {
   try {
     const raw = store.getItem(KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as LedgerEntry[]) : [];
+    return Array.isArray(parsed) ? parsed.filter(isLedgerEntry) : [];
   } catch {
     return [];
   }
@@ -63,6 +75,7 @@ export function updateEntry(
 /** Entries for one sender on one chain, newest first. */
 export function entriesFor(entries: LedgerEntry[], from: string, chainId: number): LedgerEntry[] {
   return entries
+    .filter(isLedgerEntry)
     .filter((e) => e.from.toLowerCase() === from.toLowerCase() && e.chainId === chainId)
     .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 }

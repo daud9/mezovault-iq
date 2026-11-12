@@ -33,6 +33,7 @@ describe("log decoding", () => {
     const log = {
       transactionHash: "0xabc",
       blockNumber: "0x10",
+      logIndex: "0x2",
       topics: [TRANSFER_TOPIC, pad(OTHER), pad(OWNER)],
       data: `0x${(1_500_000_000_000_000_000n).toString(16).padStart(64, "0")}`,
     };
@@ -41,11 +42,12 @@ describe("log decoding", () => {
     assert.equal(t.to, OWNER);
     assert.equal(t.valueRaw, 1_500_000_000_000_000_000n);
     assert.equal(t.blockNumber, 16);
+    assert.equal(t.logIndex, 2);
     assert.equal(t.direction, "incoming");
   });
 
   it("rejects a log that is not a Transfer event", () => {
-    assert.throws(() => decodeTransferLog({ transactionHash: "0x1", blockNumber: "0x1", topics: ["0x00"], data: "0x0" }, "incoming"));
+    assert.throws(() => decodeTransferLog({ transactionHash: "0x1", blockNumber: "0x1", logIndex: "0x0", topics: ["0x00"], data: "0x0" }, "incoming"));
   });
 });
 
@@ -59,6 +61,7 @@ describe("reading recent transfers", () => {
         return [{
           transactionHash: incoming ? "0xin" : "0xout",
           blockNumber: incoming ? "0x50" : "0x60",
+          logIndex: "0x0",
           topics: incoming ? [TRANSFER_TOPIC, pad(OTHER), pad(OWNER)] : [TRANSFER_TOPIC, pad(OWNER), pad(OTHER)],
           data: "0x01",
         }];
@@ -89,8 +92,9 @@ describe("reading recent transfers", () => {
       assert.equal(filter.toBlock, "0x14");
       const incoming = filter.topics[1] === null;
       return [{
-        transactionHash: incoming ? "0xolder-in" : "0xolder-out",
-        blockNumber: incoming ? "0x11" : "0x13",
+          transactionHash: incoming ? "0xolder-in" : "0xolder-out",
+          blockNumber: incoming ? "0x11" : "0x13",
+          logIndex: "0x0",
         topics: incoming ? [TRANSFER_TOPIC, pad(OTHER), pad(OWNER)] : [TRANSFER_TOPIC, pad(OWNER), pad(OTHER)],
         data: "0x01",
       }];
@@ -99,6 +103,27 @@ describe("reading recent transfers", () => {
     const out = await readTransfersInRange({ rpc, token: TOKEN, owner: OWNER, fromBlock: 16, toBlock: 20 });
     assert.deepEqual(out.map((log) => log.txHash), ["0xolder-out", "0xolder-in"]);
     assert.deepEqual(out.map((log) => log.direction), ["outgoing", "incoming"]);
+  });
+
+  it("returns one self-transfer event when it matches both direction filters", async () => {
+    const handler: Handler = (method, params) => {
+      if (method !== "eth_getLogs") return new Error(`unexpected ${method}`);
+      const filter = params[0] as { topics: (string | null)[] };
+      const incoming = filter.topics[1] === null;
+      return [{
+        transactionHash: "0xself",
+        blockNumber: "0x20",
+        logIndex: "0x3",
+        topics: [TRANSFER_TOPIC, pad(OWNER), pad(OWNER)],
+        data: "0x05",
+        incoming,
+      }];
+    };
+    const rpc = createRpcClient({ url: "https://rpc.example", fetchImpl: fakeFetch(handler).fetchImpl });
+    const out = await readTransfersInRange({ rpc, token: TOKEN, owner: OWNER, fromBlock: 32, toBlock: 32 });
+    assert.equal(out.length, 1);
+    assert.equal(out[0].direction, "self");
+    assert.equal(out[0].logIndex, 3);
   });
 
   it("rejects an invalid range before making any RPC request", async () => {

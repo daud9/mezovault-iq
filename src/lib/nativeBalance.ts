@@ -7,6 +7,7 @@ import { isAddress } from "./abi";
 import { RpcError, type RpcClient } from "./rpc";
 import { parseChainId } from "./network";
 import { formatTokenUnits } from "./tokenAmount";
+import { readSnapshotBlock } from "./readSnapshotBlock";
 
 export type NativeBalanceResult =
   | {
@@ -39,12 +40,12 @@ export async function readNativeBalance(options: {
     if (chainId !== network.chainId) {
       return { status: "wrong-network", actualChainId: chainId, expectedChainId: network.chainId };
     }
-    const hex = await rpc.call<string>("eth_getBalance", [owner, "latest"]);
+    const { blockTag, blockNumber } = await readSnapshotBlock(rpc);
+    const hex = await rpc.call<string>("eth_getBalance", [owner, blockTag]);
     if (typeof hex !== "string" || !/^0x[0-9a-fA-F]+$/.test(hex)) {
       return { status: "error", kind: "invalid-response", message: "The balance response was not valid hex." };
     }
     const balanceRaw = BigInt(hex);
-    const blockNumber = Number(BigInt(await rpc.call<string>("eth_blockNumber")));
     const { decimals, symbol } = network.nativeCurrency;
     return {
       status: "ok",

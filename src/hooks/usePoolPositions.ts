@@ -4,6 +4,7 @@ import { resolveRpcUrl } from "../config/env";
 import { TESTNET_BASIC_POOLS } from "../config/pools";
 import { createRpcClient } from "../lib/rpc";
 import { readPoolPosition, type PoolResult } from "../lib/pool";
+import { selectReadView } from "../lib/readView";
 
 export type PoolsView =
   | { status: "idle" }
@@ -14,32 +15,37 @@ export type PoolsView =
 export function usePoolPositions(): { view: PoolsView; refresh: () => void } {
   const { state, network } = useWallet();
   const [tick, setTick] = useState(0);
-  const [view, setView] = useState<PoolsView>({ status: "idle" });
+  const [stored, setStored] = useState<{ key: string; view: PoolsView } | null>(null);
 
   const address = state.address;
   const connected = state.status === "connected" && address !== null;
   const onNetwork = state.chainId === network.chainId;
+  const key = `${state.status}:${address?.toLowerCase() ?? ""}:${state.chainId ?? ""}:${network.key}:${network.chainId}:${tick}`;
+  const enabled = connected && onNetwork && network.key === "testnet";
 
   useEffect(() => {
     if (!connected || !address || !onNetwork || network.key !== "testnet") {
-      setView({ status: "idle" });
+      setStored({ key, view: { status: "idle" } });
       return;
     }
     let cancelled = false;
-    setView({ status: "loading" });
+    setStored({ key, view: { status: "loading" } });
     const rpc = createRpcClient({ url: resolveRpcUrl(network) });
     (async () => {
       const results: { poolId: string; result: PoolResult }[] = [];
       for (const pool of TESTNET_BASIC_POOLS) {
         results.push({ poolId: pool.id, result: await readPoolPosition({ network, pool, owner: address, rpc }) });
       }
-      if (!cancelled) setView({ status: "done", results });
+      if (!cancelled) setStored({ key, view: { status: "done", results } });
     })();
     return () => {
       cancelled = true;
     };
-  }, [connected, address, onNetwork, network, tick]);
+  }, [connected, address, onNetwork, network, tick, key]);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
-  return { view, refresh };
+  return {
+    view: selectReadView({ stored, currentKey: key, enabled, loading: { status: "loading" }, idle: { status: "idle" } }),
+    refresh,
+  };
 }

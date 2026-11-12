@@ -110,7 +110,7 @@ export function SimulationLab() {
             <NumberField id="sim-entry" label="Entry fee" value={form.entryFeePct} onChange={(v) => set("entryFeePct", v)} min={0} max={100} step={0.1} suffix="%" />
             <NumberField id="sim-annual-fee" label="Annual fee" value={form.annualFeePct} onChange={(v) => set("annualFeePct", v)} min={0} max={100} step={0.1} suffix="%" />
           </div>
-          <NumberField id="sim-fixed" label="Cost per transaction" value={form.fixedCostUsd} onChange={(v) => set("fixedCostUsd", v)} min={0} step={0.5} suffix="USD" hint="Applied to the deposit, the exit, and each withdrawal." />
+          <NumberField id="sim-fixed" label="Cost per transaction" value={form.fixedCostUsd} onChange={(v) => set("fixedCostUsd", v)} min={0} step={0.5} suffix="USD" hint="Applied to the deposit, any withdrawal, and a final exit only if a balance remains." />
 
           <div className="space-y-4 border-t border-line pt-6">
             <h2 className="text-sm font-semibold text-mist-100">Stress settings</h2>
@@ -155,11 +155,12 @@ export function SimulationLab() {
                   <div><p className="text-xs text-mist-500">Starting amount</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(form.principalUsd)}</p></div>
                   <div><p className="text-xs text-mist-500">Estimated ending balance</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(comparison.baseline.totalValueUsd)}</p></div>
                   <div><p className="text-xs text-mist-500">Estimated gain or loss</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(comparison.baseline.netGainUsd)} ({comparison.baseline.netReturnPct}%)</p></div>
-                  <div><p className="text-xs text-mist-500">Fees and direct costs</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(comparison.baseline.totalCostsUsd)}</p></div>
+                  <div><p className="text-xs text-mist-500">Direct fees & transaction costs</p><p className="text-lg font-semibold text-mist-100">{formatUsdCents(comparison.baseline.totalCostsUsd)}</p></div>
                 </div>
                 <p className="text-xs leading-relaxed text-mist-500">
                   Based on your assumed {form.annualYieldPct}% annual yield over {form.months} months, {form.compounding === "monthly" ? "with monthly compounding" : "with simple interest"}. The yield is not a live or guaranteed rate. Stress results are below.
                 </p>
+                <p className="text-xs leading-relaxed text-mist-500">The direct-cost subtotal excludes the annual fee: that fee reduces the modeled monthly yield and is reflected in the ending balance.</p>
               </Card>
               <div className="grid gap-4 sm:grid-cols-2">
                 <Card>
@@ -168,7 +169,7 @@ export function SimulationLab() {
                   <p className="mt-1 text-sm text-mist-400">
                     Net gain {formatUsdCents(comparison.baseline.netGainUsd)} ({comparison.baseline.netReturnPct}%)
                   </p>
-                  <p className="mt-3 text-xs text-mist-500">Effective yield {comparison.baseline.effectiveAnnualYieldPct}% before fees.</p>
+                  <p className="mt-3 text-xs text-mist-500">Effective yield {comparison.baseline.effectiveAnnualYieldPct}% before the annual fee.</p>
                 </Card>
                 <Card highlight>
                   <p className="text-xs font-medium uppercase tracking-wider text-gold-400">Stressed</p>
@@ -176,7 +177,7 @@ export function SimulationLab() {
                   <p className="mt-1 text-sm text-mist-400">
                     Net gain {formatUsdCents(comparison.stressed.netGainUsd)} ({comparison.stressed.netReturnPct}%)
                   </p>
-                  <p className="mt-3 text-xs text-mist-500">Effective yield {comparison.stressed.effectiveAnnualYieldPct}% before fees.</p>
+                  <p className="mt-3 text-xs text-mist-500">Effective yield {comparison.stressed.effectiveAnnualYieldPct}% before the annual fee.</p>
                 </Card>
               </div>
 
@@ -192,7 +193,7 @@ export function SimulationLab() {
                     : "Negative values mean the stressed case ends with less than the baseline."}
                 </p>
                 <p className="mt-3 text-xs text-mist-500">
-                  Transactions counted in the stressed case: {comparison.stressed.transactions}. Direct costs: {formatUsdCents(comparison.stressed.totalCostsUsd)}.
+                  Transactions counted in the stressed case: {comparison.stressed.transactions}. Direct fees and transaction costs: {formatUsdCents(comparison.stressed.totalCostsUsd)}.
                 </p>
               </Card>
 
@@ -247,7 +248,7 @@ export function SimulationLab() {
             <ul className="list-disc space-y-1.5 pl-5">
               <li>Yield is a constant annual rate that you enter. It is not forecast or observed.</li>
               <li>Simple returns earn interest on the invested base only. Monthly compounding earns interest on the running balance.</li>
-              <li>The annual fee reduces the yield every month. Entry fees and cost per transaction are deducted up front or at exit.</li>
+              <li>The annual fee reduces the yield every month and is reflected in the ending balance; it is not included in the displayed direct-cost subtotal. Entry fees and per-transaction costs are deducted up front or at exit.</li>
               <li>A forced withdrawal removes the stated share of the balance, then applies the exit penalty and slippage to that share.</li>
               <li>Outcomes exclude taxes, price moves in the underlying assets, and any loss from a protocol failure.</li>
             </ul>

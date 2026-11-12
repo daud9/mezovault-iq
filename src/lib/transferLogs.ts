@@ -10,11 +10,12 @@ export const TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11
 
 export interface TransferLog {
   txHash: string;
+  logIndex: number;
   blockNumber: number;
   from: `0x${string}`;
   to: `0x${string}`;
   valueRaw: bigint;
-  direction: "incoming" | "outgoing";
+  direction: "incoming" | "outgoing" | "self";
 }
 
 export function logFilter(options: {
@@ -42,17 +43,24 @@ function addressFromTopic(topic: string): `0x${string}` {
 export function decodeTransferLog(log: {
   transactionHash: string;
   blockNumber: string;
+  logIndex: string;
   topics: string[];
   data: string;
 }, direction: "incoming" | "outgoing"): TransferLog {
   if (log.topics.length < 3 || log.topics[0].toLowerCase() !== TRANSFER_TOPIC) throw new Error("Not a Transfer event");
+  const blockNumber = Number(BigInt(log.blockNumber));
+  const logIndex = Number(BigInt(log.logIndex));
+  if (!Number.isSafeInteger(blockNumber) || !Number.isSafeInteger(logIndex)) throw new Error("Log position is unsafe");
+  const from = addressFromTopic(log.topics[1]);
+  const to = addressFromTopic(log.topics[2]);
   return {
     txHash: log.transactionHash,
-    blockNumber: Number(BigInt(log.blockNumber)),
-    from: addressFromTopic(log.topics[1]),
-    to: addressFromTopic(log.topics[2]),
+    logIndex,
+    blockNumber,
+    from,
+    to,
     valueRaw: BigInt(log.data === "0x" ? "0x0" : log.data),
-    direction,
+    direction: from.toLowerCase() === to.toLowerCase() ? "self" : direction,
   };
 }
 
@@ -77,15 +85,17 @@ export async function readTransfersInRange(options: {
   const directions = ["incoming", "outgoing"] as const;
   const logsByDirection = await Promise.all(
     directions.map((direction) =>
-      options.rpc.call<{ transactionHash: string; blockNumber: string; topics: string[]; data: string }[]>(
+      options.rpc.call<{ transactionHash: string; blockNumber: string; logIndex: string; topics: string[]; data: string }[]>(
         "eth_getLogs",
         [logFilter({ token: options.token, owner: options.owner, direction, fromBlock, toBlock })],
       ),
     ),
   );
-  return logsByDirection
+  const byEvent = new Map<string, TransferLog>();
+  logsByDirection
     .flatMap((logs, index) => logs.map((log) => decodeTransferLog(log, directions[index])))
-    .sort((a, b) => b.blockNumber - a.blockNumber);
+    .forEach((log) => byEvent.set(`${log.txHash.toLowerCase()}:${log.logIndex}`, log));
+  return [...byEvent.values()].sort((a, b) => b.blockNumber - a.blockNumber || b.logIndex - a.logIndex);
 }
 
 /** Reads a bounded recent range in both directions. The RPC may refuse the range, so callers handle errors. */

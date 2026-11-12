@@ -35,7 +35,7 @@ export function ClPositionMonitor() {
       {!testnet ? (
         <Card className="space-y-3">
           <DataStatus state="not-configured" detail="Mezo Testnet only" />
-          <p className="text-sm leading-relaxed text-mist-400">This monitor reads only the official Mezo Testnet CL deployments. Select Mezo Testnet in the app and wallet to use it; no mainnet CL positions are queried.</p>
+          <p className="text-sm leading-relaxed text-mist-400">This monitor reads only the official Mezo Testnet CL deployments. This app build is configured for {network.label}; changing the wallet network alone cannot change the app’s configured network. No mainnet CL positions are queried.</p>
         </Card>
       ) : !connected ? (
         <Card className="space-y-3">

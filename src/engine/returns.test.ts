@@ -107,12 +107,18 @@ describe("month-by-month scenario engine", () => {
     near(stress.baseline.totalValueUsd, 10_600);
   });
 
-  it("a full withdrawal at month 1 leaves no balance to keep earning", () => {
-    const r = runScenario(scenario({ withdrawal: { month: 1, withdrawPct: 100, exitPenaltyPct: 0, slippagePct: 0 } }));
+  it("a full withdrawal at month 1 leaves no balance and does not count a phantom final exit", () => {
+    const r = runScenario(scenario({
+      fees: { entryFeePct: 0, annualFeePct: 0, fixedCostUsd: 5 },
+      withdrawal: { month: 1, withdrawPct: 100, exitPenaltyPct: 0, slippagePct: 0 },
+    }));
     if (!r.valid) assert.fail("expected a valid scenario");
     assert.equal(r.finalNetUsd, 0);
-    // Month-1 simple interest on 10,000 at 6% is 50, so the full balance is 10,050.
-    near(r.withdrawnNetUsd, 10_050);
+    assert.equal(r.totalCostsUsd, 10);
+    assert.equal(r.transactions, 2);
+    // The $5 deposit cost leaves $9,995 invested; month-1 simple interest is $49.98,
+    // then the $5 withdrawal cost is deducted from the full gross balance.
+    near(r.withdrawnNetUsd, 10_039.98);
   });
 });
 

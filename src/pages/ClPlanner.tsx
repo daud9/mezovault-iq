@@ -80,7 +80,7 @@ export function ClPlanner() {
       {!testnet ? (
         <Card className="space-y-3">
           <DataStatus state="not-configured" detail="Mezo Testnet only" />
-          <p className="text-sm leading-relaxed text-mist-400">This planner reads only the official Mezo Testnet CL Factory. Change the app’s configured network to Mezo Testnet; no other chain is queried.</p>
+          <p className="text-sm leading-relaxed text-mist-400">This planner reads only the official Mezo Testnet CL Factory. This app build is configured for {network.label}; changing the wallet network alone cannot change the app’s configured network, and no other chain is queried.</p>
         </Card>
       ) : view.status === "loading" ? (
         <LoadingState label="Reading factory-listed pools and live CL state from Mezo Testnet" />

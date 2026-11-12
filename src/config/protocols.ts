@@ -57,7 +57,7 @@ export const PROTOCOL_CANDIDATES: ProtocolCandidate[] = [
     addressSource: OFFICIAL_SOURCES.contractsReference,
     capabilities: { deposit: "not-applicable", withdraw: "not-applicable", lend: "not-applicable", borrow: "not-applicable", yield: "not-applicable" },
     notes: "Balance reads only. The token is minted by borrowing against BTC, not by a faucet.",
-    usedByApp: false,
+    usedByApp: true,
   },
   {
     id: "borrower-operations",

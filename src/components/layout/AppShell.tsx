@@ -10,6 +10,9 @@ import {
   Link2,
   LifeBuoy,
   Waves,
+  Compass,
+  SlidersHorizontal,
+  Bot,
 } from "lucide-react";
 import { DEFAULT_NETWORK } from "../../config/env";
 import { WalletButton } from "./WalletButton";
@@ -18,6 +21,9 @@ import { Badge } from "../ui/Badge";
 export const APP_NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/app/trove", label: "Trove", icon: Gauge },
+  { to: "/app/strategies", label: "IQ Strategies", icon: Compass },
+  { to: "/app/allocation", label: "Allocation Lab", icon: SlidersHorizontal },
+  { to: "/app/autopilot", label: "Autopilot (planned)", icon: Bot },
   { to: "/app/send", label: "Send", icon: Send },
   { to: "/app/pay-links", label: "MUSD Pay Links", icon: Link2 },
   { to: "/app/bridge-rescue", label: "Bridge Rescue", icon: LifeBuoy },

@@ -124,7 +124,7 @@ export function runScenario(s: ScenarioInput): ScenarioOutcome {
   let balance = entryNetUsd;
   let withdrawnNetUsd = 0;
   let withdrawalCosts = 0;
-  let transactions = 2;
+  let transactions = 1;
 
   for (let month = 1; month <= s.months; month++) {
     if (s.compounding === "monthly") {
@@ -149,11 +149,12 @@ export function runScenario(s: ScenarioInput): ScenarioOutcome {
 
   const finalGross = Math.max(0, balance);
   const finalNetUsd = Math.max(0, finalGross - s.fees.fixedCostUsd);
+  if (finalGross > 0) transactions += 1;
   const totalValueUsd = withdrawnNetUsd + finalNetUsd;
-  // Direct costs: deposit fee, fixed cost for the deposit and the final exit, and
-  // penalties, slippage and fixed cost for each partial withdrawal.
+  // Direct costs: deposit fee, deposit fixed cost, final-exit fixed cost only if
+  // a balance remains, and penalties/slippage/fixed cost for each withdrawal.
   // Annual fees reduce the growing balance, so they appear in the outcome, not here.
-  const totalCostsUsd = entryFee + s.fees.fixedCostUsd * 2 + withdrawalCosts;
+  const totalCostsUsd = entryFee + s.fees.fixedCostUsd + (finalGross > 0 ? s.fees.fixedCostUsd : 0) + withdrawalCosts;
 
   const netGainUsd = totalValueUsd - s.principalUsd;
 

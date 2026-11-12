@@ -53,8 +53,8 @@ describe("protocol investigation", () => {
     assert.equal(borrowerOperations.capabilities.yield, "not-verified");
   });
 
-  it("uses only BorrowerOperations for the limited open-Trove flow", () => {
-    assert.deepEqual(PROTOCOL_CANDIDATES.filter((p) => p.usedByApp).map((p) => p.id), ["borrower-operations"]);
+  it("marks the MUSD balance read and limited open-Trove protocol as used by the app", () => {
+    assert.deepEqual(PROTOCOL_CANDIDATES.filter((p) => p.usedByApp).map((p) => p.id), ["musd-token", "borrower-operations"]);
   });
 
   it("records a testnet address only where an official source is named", () => {

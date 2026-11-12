@@ -29,12 +29,12 @@ function stripHex(hex: string): string {
   return hex.slice(2);
 }
 
-/** Decodes a single uint256 return word. Empty return data ("0x") is an error. */
+/** Decodes exactly one ABI uint256 return word. Empty or non-canonical data is an error. */
 export function decodeUint256(hex: string): bigint {
   const body = stripHex(hex);
   if (body.length === 0) throw new Error("Empty return data");
+  if (body.length !== 64) throw new Error("Return data is not exactly one 32-byte word");
   if (!/^[0-9a-fA-F]+$/.test(body)) throw new Error("Return data is not hex");
-  if (body.length > 64) throw new Error("Return data is longer than one word");
   return BigInt(`0x${body}`);
 }
 

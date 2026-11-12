@@ -66,6 +66,17 @@ describe("MUSD balance: successful reads", () => {
     assert.ok(balanceCall, "balanceOf must be called");
     assert.ok((balanceCall!.params[0] as { data: string }).data.endsWith(OWNER.slice(2).toLowerCase()));
   });
+
+  it("pins contract verification and all token calls to the displayed block", async () => {
+    const { result, calls } = run(healthy());
+    const snapshot = await result;
+    assert.equal(snapshot.status, "ok");
+    assert.equal(snapshot.status === "ok" ? snapshot.blockNumber : null, 16);
+    assert.equal(calls.find((call) => call.method === "eth_getCode")?.params[1], "0x10");
+    const tokenCalls = calls.filter((call) => call.method === "eth_call");
+    assert.ok(tokenCalls.length > 0);
+    assert.ok(tokenCalls.every((call) => call.params[1] === "0x10"));
+  });
 });
 
 describe("MUSD balance: missing configuration", () => {

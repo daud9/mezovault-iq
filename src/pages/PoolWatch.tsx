@@ -9,6 +9,7 @@ import { OFFICIAL_SOURCES } from "../config/chains";
 import { usePoolMarkets } from "../hooks/usePoolMarkets";
 import { explorerAddressUrl } from "../lib/explorer";
 import { formatTime, shortAddress } from "../lib/format";
+import { TESTNET_BASIC_POOLS } from "../config/pools";
 
 export function PoolWatch() {
   const { network } = useWallet();
@@ -34,13 +35,15 @@ export function PoolWatch() {
       {!testnet ? (
         <Card className="space-y-2">
           <DataStatus state="not-configured" detail="Mezo Testnet only" />
-          <p className="text-sm leading-relaxed text-mist-400">Pool Watch reads only the official Mezo Testnet pools. Switch the app network to Mezo Testnet to query them.</p>
+          <p className="text-sm leading-relaxed text-mist-400">Pool Watch reads only the official Mezo Testnet pools. This app build is configured for {network.label}; changing the wallet network alone cannot change that configuration.</p>
         </Card>
       ) : view.status === "loading" || view.status === "idle" ? (
         <Card><p className="text-sm text-mist-400" role="status">Reading official pool contracts on {network.label}…</p></Card>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {view.results.map(({ poolId, result }) => {
+            const pool = TESTNET_BASIC_POOLS.find((item) => item.id === poolId);
+            const poolLabel = pool ? `${pool.name} pool` : `Pool ${poolId}`;
             if (result.status !== "ok") {
               const message = result.status === "error"
                 ? result.message
@@ -50,10 +53,11 @@ export function PoolWatch() {
               return (
                 <Card key={poolId} className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h2 className="text-base font-semibold text-mist-100">{result.status === "no-contract" ? "Pool address" : "Pool read unavailable"}</h2>
+                    <h2 className="text-base font-semibold text-mist-100">{poolLabel} · read unavailable</h2>
                     <DataStatus state="unavailable" />
                   </div>
                   <p className="text-sm text-mist-400">{message}</p>
+                  <p className="break-all font-mono text-xs text-mist-500">{result.status === "no-contract" ? result.poolAddress : pool?.address}</p>
                 </Card>
               );
             }

@@ -25,6 +25,15 @@ describe("native BTC balance", () => {
     }
   });
 
+  it("uses the same pinned block for the balance and displayed block number", async () => {
+    const transport = fakeFetch((method) => method === "eth_chainId" ? "0x7b7b" : method === "eth_blockNumber" ? "0x20" : "0xde0b6b3a7640000");
+    const rpc = createRpcClient({ url: T.rpcUrl, fetchImpl: transport.fetchImpl });
+    const r = await readNativeBalance({ network: T, owner: OWNER, rpc, now });
+    const balanceCall = transport.calls.find((call) => call.method === "eth_getBalance");
+    assert.deepEqual(balanceCall?.params, [OWNER, "0x20"]);
+    assert.equal(r.status === "ok" ? r.blockNumber : null, 32);
+  });
+
   it("reports a true zero balance as zero", async () => {
     const r = await run((m) => (m === "eth_chainId" ? "0x7b7b" : m === "eth_blockNumber" ? "0x1" : "0x0"));
     assert.equal(r.status, "ok");

@@ -52,10 +52,11 @@ export function Send() {
   const [recipient, setRecipient] = useState(prefill.request?.to ?? "");
   const [amountText, setAmountText] = useState(prefill.request?.amount ?? "");
   const [errors, setErrors] = useState<string[]>(prefill.error ? [prefill.error] : []);
-  const [busy, setBusy] = useState<"estimating" | "signing" | null>(null);
+  const [busy, setBusy] = useState<"estimating" | "signing" | "checking" | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [hash, setHash] = useState<string | null>(null);
   const [outcome, setOutcome] = useState<ReceiptOutcome | null>(null);
+  const [receiptLookupFailed, setReceiptLookupFailed] = useState(false);
 
   const btcBalance = native.view.status === "done" && native.view.result.status === "ok" ? native.view.result : null;
   const musdBalance = musd.view.status === "done" && musd.view.result.status === "ok" ? musd.view.result : null;
@@ -67,7 +68,18 @@ export function Send() {
 
   const from = state.address;
   const ready = state.status === "connected" && from !== null && isSupportedNetwork;
-  const locked = busy !== null || (hash !== null && outcome === null);
+  const locked = busy !== null || (hash !== null && outcome?.status !== "success" && outcome?.status !== "reverted");
+  const reviewContextValid = review !== null && state.status === "connected" && from !== null &&
+    from.toLowerCase() === review.tx.from.toLowerCase() && state.chainId === network.chainId && isSupportedNetwork;
+  const balanceText = (view: typeof native.view | typeof musd.view | typeof mezo.view, tokenSymbol: string) => {
+    if (view.status !== "done") return view.status === "loading" ? "loading" : "not read";
+    return view.result.status === "ok" ? `${view.result.formatted} ${tokenSymbol}` : "unavailable";
+  };
+  const balanceIssues = [
+    native.view.status === "done" && native.view.result.status !== "ok" ? `BTC: ${balanceProblem(native.view.result)}` : null,
+    musd.view.status === "done" && musd.view.result.status !== "ok" ? `MUSD: ${balanceProblem(musd.view.result)}` : null,
+    mezo.view.status === "done" && mezo.view.result.status !== "ok" ? `MEZO: ${balanceProblem(mezo.view.result)}` : null,
+  ].filter((issue): issue is string => issue !== null);
 
   function tokenFor(sym: SendSymbol): { token: SendToken; balanceRaw: bigint | null; decimals: number } | string {
     if (sym === "BTC") return { token: { kind: "native", symbol: "BTC", decimals: 18 }, balanceRaw: btcBalance?.balanceRaw ?? null, decimals: 18 };
@@ -86,7 +98,7 @@ export function Send() {
   async function prepare() {
     setErrors([]);
     setReview(null);
-    if (!from || !ready) return setErrors(["Connect a wallet on Mezo Testnet first."]);
+    if (!from || !ready) return setErrors([`Connect a wallet on ${network.label} first.`]);
     const resolved = tokenFor(symbol);
     if (typeof resolved === "string") return setErrors([resolved]);
 
@@ -95,6 +107,8 @@ export function Send() {
     if (recipientError) problems.push(recipientError);
     const amount = parseAmount(amountText, resolved.decimals);
     if (!amount.ok) problems.push(amount.error);
+    if (btcBalance === null) problems.push("Your BTC balance is not verified yet. Retry its read before preparing a transfer.");
+    if (resolved.token.kind !== "native" && resolved.balanceRaw === null) problems.push(`Your ${symbol} balance is not verified yet. Retry its read before preparing a transfer.`);
     if (problems.length > 0 || !amount.ok) return setErrors(problems);
 
     setBusy("estimating");
@@ -127,11 +141,13 @@ export function Send() {
 
   async function confirm() {
     if (!review) return;
+    if (!reviewContextValid) return setErrors(["The wallet account or network changed after review. Edit the transaction and prepare it again."]);
     setErrors([]);
     setBusy("signing");
     setOutcome(null);
+    setReceiptLookupFailed(false);
     try {
-      const txHash = await sendTransaction({ ...review.tx });
+      const txHash = await sendTransaction({ ...review.tx }, { account: review.tx.from, chainId: network.chainId });
       setHash(txHash);
       // Record the submitted transaction before waiting, so it is kept even if the page is closed.
       addEntry(browserStore(), {
@@ -146,6 +162,18 @@ export function Send() {
         blockNumber: null,
       });
       setBusy(null);
+      await checkReceipt(txHash);
+    } catch (err) {
+      setErrors([describeSendError(err)]);
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function checkReceipt(txHash: string) {
+    setReceiptLookupFailed(false);
+    setBusy("checking");
+    try {
       const rpc = createRpcClient({ url: resolveRpcUrl(network) });
       const result = await waitForReceipt({ rpc, hash: txHash });
       setOutcome(result);
@@ -157,8 +185,8 @@ export function Send() {
       const ledgerStatus: LedgerStatus =
         result.status === "success" ? "success" : result.status === "reverted" ? "reverted" : "unconfirmed";
       updateEntry(browserStore(), txHash, { status: ledgerStatus, blockNumber: result.status === "timeout" ? null : result.blockNumber });
-    } catch (err) {
-      setErrors([describeSendError(err)]);
+    } catch {
+      setReceiptLookupFailed(true);
     } finally {
       setBusy(null);
     }
@@ -168,6 +196,7 @@ export function Send() {
     setReview(null);
     setHash(null);
     setOutcome(null);
+    setReceiptLookupFailed(false);
     setErrors([]);
     setAmountText("");
     setRecipient("");
@@ -222,13 +251,16 @@ export function Send() {
                   className="w-full rounded-xl border border-line bg-ink-800 px-3 py-2.5 text-sm text-mist-100 outline-none focus:border-gold-500/60"
                 />
                 <p className="text-xs text-mist-500">
-                  Available: {symbol === "BTC"
-                    ? (btcBalance ? `${btcBalance.formatted} BTC` : "loading")
-                    : symbol === "MUSD"
-                      ? (musdBalance ? `${musdBalance.formatted} MUSD` : "loading")
-                      : (mezoBalance ? `${mezoBalance.formatted} MEZO` : "unavailable")}
+                  Available: {symbol === "BTC" ? balanceText(native.view, "BTC") : symbol === "MUSD" ? balanceText(musd.view, "MUSD") : balanceText(mezo.view, "MEZO")}
                 </p>
               </div>
+              {balanceIssues.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3">
+                  <p className="text-sm font-medium text-mist-200">Some balance reads are unavailable; a transfer that needs an unverified balance cannot be prepared.</p>
+                  <ul className="list-inside list-disc space-y-1 text-xs text-mist-400">{balanceIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
+                  <Button variant="secondary" onClick={() => { native.refresh(); musd.refresh(); mezo.refresh(); }} disabled={busy !== null} className="min-h-11">Retry balance reads</Button>
+                </div>
+              )}
               <FormErrors errors={errors} />
               {!review && (
                 <Button onClick={prepare} disabled={locked} className="min-h-11 w-full">
@@ -253,9 +285,10 @@ export function Send() {
               <p className="text-xs leading-relaxed text-mist-500">
                 Check the recipient carefully. A confirmed transaction cannot be reversed by this app.
               </p>
+              {!reviewContextValid && <p role="alert" className="text-sm text-risk-medium">The wallet account or network changed after this review. Edit and prepare again before continuing.</p>}
               <div className="grid gap-3 sm:grid-cols-2">
                 <Button variant="secondary" onClick={() => setReview(null)} disabled={busy !== null} className="min-h-11">Edit</Button>
-                <Button onClick={confirm} disabled={busy !== null} className="min-h-11">
+                <Button onClick={confirm} disabled={busy !== null || !reviewContextValid} className="min-h-11">
                   {busy === "signing" ? "Waiting for wallet…" : "Confirm in wallet"}
                 </Button>
               </div>
@@ -267,9 +300,16 @@ export function Send() {
               <h2 className="text-sm font-semibold text-mist-100">Transaction</h2>
               <p className="break-all font-mono text-xs text-mist-300">{hash}</p>
               <a href={`${network.explorerUrl.replace(/\/?$/, "/")}tx/${hash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">
-                View on the Mezo Testnet explorer
+                View on the {network.label} explorer
               </a>
-              {!outcome && <DataStatus state="unverified" detail="waiting for confirmation" />}
+              {!outcome && !receiptLookupFailed && <DataStatus state="unverified" detail={busy === "checking" ? "checking receipt" : "waiting for confirmation"} />}
+              {receiptLookupFailed && (
+                <div className="space-y-2" role="status">
+                  <DataStatus state="unverified" detail="receipt lookup failed; transaction outcome unknown" />
+                  <p className="text-sm text-mist-300">The wallet returned this transaction hash, but the network receipt could not be checked. It may have succeeded or remain pending. This retry checks the existing hash and will not submit another transaction.</p>
+                  <Button variant="secondary" onClick={() => void checkReceipt(hash)} disabled={busy !== null} className="min-h-11">{busy === "checking" ? "Checking receipt…" : "Check receipt again"}</Button>
+                </div>
+              )}
               {outcome?.status === "success" && (
                 <div className="space-y-2">
                   <DataStatus state="live" detail="confirmed" />
@@ -286,9 +326,10 @@ export function Send() {
                 <div className="space-y-2">
                   <DataStatus state="unverified" detail="not yet confirmed" />
                   <p className="text-sm text-mist-300">No confirmation yet. It may still complete. Check the explorer link before sending again.</p>
+                  <Button variant="secondary" onClick={() => void checkReceipt(hash)} disabled={busy !== null} className="min-h-11">{busy === "checking" ? "Checking receipt…" : "Check receipt again"}</Button>
                 </div>
               )}
-              {outcome && <Button variant="secondary" onClick={startOver} className="min-h-11">Send another</Button>}
+              {(outcome?.status === "success" || outcome?.status === "reverted") && <Button variant="secondary" onClick={startOver} className="min-h-11">Send another</Button>}
             </Card>
           )}
 
@@ -301,4 +342,12 @@ export function Send() {
       </div>
     </div>
   );
+}
+
+function balanceProblem(result: { status: string; message?: string; reason?: string }): string {
+  if (result.status === "error") return result.message ?? "The RPC read failed.";
+  if (result.status === "wrong-network") return "The RPC reports a different chain.";
+  if (result.status === "not-configured") return result.reason ?? "No token contract is configured.";
+  if (result.status === "no-contract") return "The configured token address has no contract code.";
+  return `Read status: ${result.status}.`;
 }

@@ -65,11 +65,12 @@ export function BtcBalanceCard() {
         const estimatedUsd = estimateBtcBalanceUsd(view.result.balanceRaw, price.priceUsdWad);
         btcEstimate = (
           <div className="space-y-2 rounded-lg border border-line bg-ink-800/60 p-3">
-            <p className="text-sm font-semibold text-mist-100">BTC-only estimate: ≈ ${estimatedUsd}</p>
+            <p className="text-sm font-semibold text-mist-100">BTC-only oracle reference: ≈ ${estimatedUsd}</p>
             <DataStatus state="live" detail={`BTC/USD oracle · ${ageSeconds}s old · block ${price.blockNumber}`} />
             <p className="text-xs leading-relaxed text-mist-500">
               Uses this wallet’s native BTC balance and Mezo’s on-chain BTC/USD price. It is not a portfolio total; MUSD, MEZO, and DeFi positions are excluded.
             </p>
+            {network.key === "testnet" && <p className="text-xs leading-relaxed text-mist-500">Testnet BTC has no real monetary value; this oracle reference does not imply redeemable or realizable USD value.</p>}
             <p className="text-xs text-mist-500">Oracle updated {formatTime(new Date(price.updatedAt * 1_000).toISOString())}.</p>
           </div>
         );

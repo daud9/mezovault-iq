@@ -48,9 +48,10 @@ describe("uint256 decoding", () => {
     assert.throws(() => decodeUint256("0x"), /Empty/);
   });
 
-  it("rejects non-hex and over-long data", () => {
-    assert.throws(() => decodeUint256("0xzz"));
+  it("rejects short, long, and non-hex ABI words", () => {
+    assert.throws(() => decodeUint256("0x01"), /one 32-byte word/);
     assert.throws(() => decodeUint256("0x" + "1".repeat(66)));
+    assert.throws(() => decodeUint256("0x" + "z".repeat(64)), /not hex/);
   });
 
   it("requires a 0x prefix", () => {

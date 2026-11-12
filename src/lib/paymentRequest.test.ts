@@ -34,6 +34,15 @@ describe("payment request links", () => {
     assert.match(parsePaymentParams(new URLSearchParams(`to=${TO}&token=BTC&amount=abc`)).error ?? "", /invalid amount/);
   });
 
+  it("rejects zero payment amounts before they reach the Pay page", () => {
+    for (const amount of ["0", "0.0", "00.000", "000"]) {
+      const parsed = parsePaymentParams(new URLSearchParams(`to=${TO}&token=BTC&amount=${amount}`));
+      assert.equal(parsed.request, null, amount);
+      assert.match(parsed.error ?? "", /invalid amount/i, amount);
+    }
+    assert.equal(parsePaymentParams(new URLSearchParams(`to=${TO}&token=BTC&amount=0.000000000000000001`)).error, null);
+  });
+
   it("accepts the configured support address", () => {
     const p = parsePaymentParams(new URLSearchParams(`to=${SUPPORT_ADDRESS}&token=BTC&amount=0.001`));
     assert.equal(p.error, null);

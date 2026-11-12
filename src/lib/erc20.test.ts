@@ -41,6 +41,18 @@ describe("ERC-20 balance reader", () => {
     }
   });
 
+  it("pins contract verification and token reads to the displayed block", async () => {
+    const transport = fakeFetch(tokenHandler());
+    const rpc = createRpcClient({ url: T.rpcUrl, fetchImpl: transport.fetchImpl });
+    const r = await readErc20Balance({ network: T, token: MEZO, owner: OWNER, rpc, now });
+    assert.equal(r.status, "ok");
+    assert.equal(r.status === "ok" ? r.blockNumber : null, 7);
+    assert.equal(transport.calls.find((call) => call.method === "eth_getCode")?.params[1], "0x7");
+    const tokenCalls = transport.calls.filter((call) => call.method === "eth_call");
+    assert.ok(tokenCalls.length > 0);
+    assert.ok(tokenCalls.every((call) => call.params[1] === "0x7"));
+  });
+
   it("uses the decimals the contract reports rather than assuming 18", async () => {
     const r = await run(tokenHandler({ decimals: encodeUintResult(6n), balance: encodeUintResult(1_500_000n) }));
     assert.equal(r.status, "ok");

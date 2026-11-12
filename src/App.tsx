@@ -18,6 +18,9 @@ import { TroveRiskLab } from "./pages/TroveRiskLab";
 import { ChainWatch } from "./pages/ChainWatch";
 import { ClPositionMonitor } from "./pages/ClPositionMonitor";
 import { ClPlanner } from "./pages/ClPlanner";
+import { IQStrategies } from "./pages/IQStrategies";
+import { AllocationLab } from "./pages/AllocationLab";
+import { Autopilot } from "./pages/Autopilot";
 
 const X402Checkout = lazy(() => import("./pages/X402Checkout").then(({ X402Checkout }) => ({ default: X402Checkout })));
 
@@ -43,11 +46,11 @@ export default function App() {
               <Route path="smart-vaults" element={<ProtocolEvidence />} />
               <Route path="vaults" element={<ProtocolEvidence />} />
               <Route path="protocol-evidence" element={<ProtocolEvidence />} />
-              <Route path="strategies" element={<PoolWatch />} />
+              <Route path="strategies" element={<IQStrategies />} />
               <Route path="pools" element={<PoolWatch />} />
-              <Route path="allocation" element={<Navigate to="/app/pools" replace />} />
+              <Route path="allocation" element={<AllocationLab />} />
               <Route path="simulation" element={<SimulationLab />} />
-              <Route path="autopilot" element={<Navigate to="/app/trove-risk" replace />} />
+              <Route path="autopilot" element={<Autopilot />} />
               <Route path="activity" element={<Activity />} />
               <Route path="*" element={<Navigate to="/app" replace />} />
             </Route>

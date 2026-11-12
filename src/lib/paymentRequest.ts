@@ -14,9 +14,13 @@ export interface PaymentRequest {
 
 const AMOUNT = /^\d+(\.\d{1,18})?$/;
 
+function isPositiveAmount(value: string): boolean {
+  return AMOUNT.test(value) && /[1-9]/.test(value.replace(".", ""));
+}
+
 export function buildSendQuery(req: PaymentRequest): string {
   if (!isAddress(req.to)) throw new Error("Invalid recipient address.");
-  if (!AMOUNT.test(req.amount) || Number(req.amount) <= 0) throw new Error("Enter a positive amount.");
+  if (!isPositiveAmount(req.amount)) throw new Error("Enter a positive amount.");
   const params = new URLSearchParams({ to: req.to, token: req.token, amount: req.amount });
   return params.toString();
 }
@@ -31,7 +35,7 @@ export function parsePaymentParams(params: URLSearchParams): { error: string | n
   }
   if (to === null || !isAddress(to)) return { error: "The payment link has an invalid recipient address. Nothing was filled in.", request: null };
   if (token !== "BTC" && token !== "MUSD" && token !== "MEZO") return { error: "The payment link names an unknown token.", request: null };
-  if (amount !== "" && !AMOUNT.test(amount)) return { error: "The payment link has an invalid amount. Enter it again.", request: null };
+  if (amount !== "" && !isPositiveAmount(amount)) return { error: "The payment link has an invalid amount. Enter it again.", request: null };
   return {
     error: null,
     request: { to, token: token as PaymentToken, amount },

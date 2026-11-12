@@ -10,6 +10,7 @@ import { RpcError, type RpcClient } from "./rpc";
 import { SELECTORS, decodeAbiString, decodeUint256, encodeBalanceOf, isAddress } from "./abi";
 import { formatTokenUnits } from "./tokenAmount";
 import { parseChainId } from "./network";
+import { readSnapshotBlock } from "./readSnapshotBlock";
 
 export type MusdBalanceResult =
   | {
@@ -54,12 +55,13 @@ export async function readMusdBalance(options: ReadMusdOptions): Promise<MusdBal
       return { status: "wrong-network", actualChainId: chainId, expectedChainId: network.chainId };
     }
 
-    const code = await rpc.call<string>("eth_getCode", [token.address, "latest"]);
+    const { blockTag, blockNumber } = await readSnapshotBlock(rpc);
+    const code = await rpc.call<string>("eth_getCode", [token.address, blockTag]);
     if (typeof code !== "string" || code === "0x" || code === "0x0") {
       return { status: "no-contract", tokenAddress: token.address };
     }
 
-    const decimals = decodeUint256(await call(rpc, token.address, SELECTORS.decimals));
+    const decimals = decodeUint256(await call(rpc, token.address, SELECTORS.decimals, blockTag));
     if (Number(decimals) !== token.decimals) {
       return {
         status: "error",
@@ -68,7 +70,7 @@ export async function readMusdBalance(options: ReadMusdOptions): Promise<MusdBal
       };
     }
 
-    const symbol = decodeAbiString(await call(rpc, token.address, SELECTORS.symbol));
+    const symbol = decodeAbiString(await call(rpc, token.address, SELECTORS.symbol, blockTag));
     if (symbol !== token.symbol) {
       return {
         status: "error",
@@ -77,8 +79,7 @@ export async function readMusdBalance(options: ReadMusdOptions): Promise<MusdBal
       };
     }
 
-    const balanceRaw = decodeUint256(await call(rpc, token.address, encodeBalanceOf(owner)));
-    const blockNumber = Number(BigInt(await rpc.call<string>("eth_blockNumber")));
+    const balanceRaw = decodeUint256(await call(rpc, token.address, encodeBalanceOf(owner), blockTag));
 
     return {
       status: "ok",
@@ -100,6 +101,6 @@ export async function readMusdBalance(options: ReadMusdOptions): Promise<MusdBal
   }
 }
 
-function call(rpc: RpcClient, to: string, data: string): Promise<string> {
-  return rpc.call<string>("eth_call", [{ to, data }, "latest"]);
+function call(rpc: RpcClient, to: string, data: string, blockTag: `0x${string}`): Promise<string> {
+  return rpc.call<string>("eth_call", [{ to, data }, blockTag]);
 }

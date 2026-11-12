@@ -63,6 +63,13 @@ describe("transaction ledger", () => {
     assert.deepEqual(readLedger(memoryStore('{"a":1}')), []);
   });
 
+  it("filters malformed entries from otherwise valid JSON arrays", () => {
+    const valid = entry("0xaa");
+    const store = memoryStore(JSON.stringify([null, 4, { hash: "0xbb" }, valid]));
+    assert.deepEqual(readLedger(store), [valid]);
+    assert.deepEqual(entriesFor(readLedger(store), FROM, 31611).map((item) => item.hash), ["0xaa"]);
+  });
+
   it("keeps the newest entries when storage holds more than the limit", () => {
     const s = memoryStore();
     for (let i = 0; i < 205; i++) addEntry(s, entry(`0x${i.toString(16).padStart(4, "0")}`));

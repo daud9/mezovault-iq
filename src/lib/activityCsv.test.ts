@@ -11,6 +11,7 @@ describe("bounded Activity CSV export", () => {
       decimals: 18,
       log: {
         txHash: "0xabc",
+        logIndex: 1,
         blockNumber: 180,
         from: "0x1111111111111111111111111111111111111111",
         to: "0x2222222222222222222222222222222222222222",
@@ -21,7 +22,7 @@ describe("bounded Activity CSV export", () => {
     const lines = csv.trimEnd().split("\r\n");
     assert.equal(lines.length, 2);
     assert.match(lines[0], /coverage_from_block/);
-    assert.match(lines[1], /"MUSD","incoming","180","0xabc"/);
+    assert.match(lines[1], /"MUSD","incoming","180","0xabc","1"/);
     assert.match(lines[1], /"1.25","1250000000000000000","18","100","200","200"/);
     assert.match(lines[1], /"2026-11-12T11:00:00.000Z"/);
   });
@@ -38,6 +39,7 @@ describe("bounded Activity CSV export", () => {
       decimals: 18,
       log: {
         txHash: '=HYPERLINK("https://bad.example")',
+        logIndex: 0,
         blockNumber: 199,
         from: "0x1111111111111111111111111111111111111111",
         to: "0x2222222222222222222222222222222222222222",
@@ -46,5 +48,23 @@ describe("bounded Activity CSV export", () => {
       },
     }], coverage);
     assert.match(csv, /"'=HYPERLINK\(""https:\/\/bad\.example""\)"/);
+  });
+
+  it("exports a self-transfer once with its explicit direction", () => {
+    const csv = buildActivityCsv([{
+      token: "MUSD",
+      decimals: 18,
+      log: {
+        txHash: "0xself",
+        logIndex: 4,
+        blockNumber: 190,
+        from: "0x1111111111111111111111111111111111111111",
+        to: "0x1111111111111111111111111111111111111111",
+        valueRaw: 1n,
+        direction: "self",
+      },
+    }], coverage);
+    assert.match(csv, /"MUSD","self"/);
+    assert.match(csv, /"0xself","4"/);
   });
 });

@@ -42,6 +42,20 @@ function run(h: Handler, pool = POOL, network = T) {
 }
 
 describe("pool position", () => {
+  it("pins code, metadata, reserves and balances to the reported block", async () => {
+    const transport = fakeFetch(handler({ lp: 5n }));
+    const rpc = createRpcClient({ url: T.rpcUrl, fetchImpl: transport.fetchImpl });
+    const r = await readPoolPosition({ network: T, pool: POOL, owner: OWNER, rpc, now });
+    assert.equal(r.status, "ok");
+    if (r.status !== "ok") return;
+    assert.equal(r.blockNumber, 5);
+    const codeRead = transport.calls.find((call) => call.method === "eth_getCode");
+    assert.equal(codeRead?.params[1], "0x5");
+    const calls = transport.calls.filter((call) => call.method === "eth_call");
+    assert.ok(calls.length > 0);
+    assert.ok(calls.every((call) => call.params[1] === "0x5"));
+  });
+
   it("reports no position when the wallet holds no pool tokens", async () => {
     const r = await run(handler({ lp: 0n }));
     assert.equal(r.status, "ok");

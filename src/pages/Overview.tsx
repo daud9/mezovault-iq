@@ -19,7 +19,7 @@ export function Overview() {
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Overview"
-        title="Your wallet on Mezo Testnet"
+        title={`Your wallet on ${network.label}`}
         description="Every figure on this page comes from the chain or is marked unavailable. No demonstration values are shown."
       />
 
@@ -126,7 +126,7 @@ export function Overview() {
           rel="noopener noreferrer"
           className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-gold-300 hover:underline"
         >
-          View this wallet on the Mezo Testnet explorer <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          View this wallet on the {network.label} explorer <ExternalLink className="h-4 w-4" aria-hidden="true" />
         </a>
       )}
     </div>

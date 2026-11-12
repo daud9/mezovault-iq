@@ -281,13 +281,14 @@ export function Activity() {
                   {transfers.map((transfer) => {
                     const amount = formatTokenUnits(transfer.log.valueRaw, transfer.decimals, Math.min(6, transfer.decimals));
                     const incoming = transfer.log.direction === "incoming";
+                    const self = transfer.log.direction === "self";
                     const counterpart = incoming ? transfer.log.from : transfer.log.to;
                     return (
-                      <li key={`${transfer.log.txHash}-${transfer.log.direction}-${transfer.token}`} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <li key={`${transfer.log.txHash}-${transfer.log.logIndex}-${transfer.token}`} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="text-sm text-mist-100">
-                            {incoming ? <ArrowDownLeft className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" /> : <ArrowUpRight className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" />}
-                            {incoming ? "Received" : "Sent"} {amount} {transfer.token} {incoming ? "from" : "to"} {shortAddress(counterpart)}
+                            {self ? null : incoming ? <ArrowDownLeft className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" /> : <ArrowUpRight className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" />}
+                            {self ? `Self-transfer ${amount} ${transfer.token}` : `${incoming ? "Received" : "Sent"} ${amount} ${transfer.token} ${incoming ? "from" : "to"} ${shortAddress(counterpart)}`}
                           </p>
                           <p className="text-xs text-mist-500">Block {transfer.log.blockNumber} · {shortAddress(transfer.log.txHash)}</p>
                         </div>
