@@ -1,16 +1,17 @@
 /**
- * Exact-integer, read-only Mezo Testnet open-trove planner.
- * It calculates protocol checks only; it does not encode, sign, or submit transactions.
+ * Exact-integer Mezo Testnet open-trove planner.
+ * The calculator has no wallet access and never submits transactions.
  */
 import { MEZO_NETWORKS } from "../config/chains";
 import { MEZO_TESTNET_SELECTORS } from "./mezoAbi";
 
 export const WAD = 10n ** 18n;
+export const UINT256_MAX = (1n << 256n) - 1n;
 export const MEZO_TESTNET_CHAIN_ID = MEZO_NETWORKS.testnet.chainId;
 export const MEZO_TESTNET_BORROWER_OPERATIONS = MEZO_NETWORKS.testnet.borrowerOperations!.address;
 export const OPEN_TROVE_SELECTOR = MEZO_TESTNET_SELECTORS.borrowerOperations.openTrove;
 
-/** Exact explorer-verified payable BorrowerOperations ABI. BTC collateral is msg.value. */
+/** Mezo's published Testnet BorrowerOperations ABI. BTC collateral is msg.value. */
 export const OPEN_TROVE_ABI = [
   {
     type: "function",
@@ -56,6 +57,7 @@ export interface PlannerOptions {
 export interface OpenTrovePlan {
   status: "unavailable" | "invalid-input" | "calculated";
   reason?: string;
+  collateralWei?: bigint;
   requestWei?: bigint;
   feeWei?: bigint;
   netDebtWei?: bigint;
@@ -73,6 +75,7 @@ export interface OpenTrovePlan {
 /** Parse a non-negative decimal amount into exact 18-decimal units; reject exponent and excess precision. */
 export function parseUnits18(input: string): bigint | null {
   const value = input.trim();
+  if (value.length > 97) return null;
   const match = /^(\d+)(?:\.(\d{0,18}))?$/.exec(value);
   if (!match) return null;
   const whole = BigInt(match[1]);
@@ -132,10 +135,16 @@ function snapshotError(
   return null;
 }
 
+function overflowsUint256(value: bigint): boolean {
+  return value < 0n || value > UINT256_MAX;
+}
+
 /**
  * Calculate expected open-trove debt and protocol checks. The requested MUSD is the
- * verified `_debtAmount` argument. In normal mode, a non-exempt account pays
- * floor(amount * live borrowingRate / 1e18); Recovery Mode has no borrowing fee.
+ * verified `_debtAmount` argument and BTC is sent as `msg.value`. Normal-mode,
+ * non-exempt accounts pay floor(amount * live borrowingRate / 1e18); Recovery Mode
+ * has no borrowing fee. Inputs and intermediate contract-style arithmetic fail closed
+ * when they cannot fit in uint256.
  */
 export function calculateOpenTrovePlan(
   snapshot: OpenTroveLiveSnapshot | null,
@@ -159,34 +168,58 @@ export function calculateOpenTrovePlan(
   }
   if (collateralWei <= 0n) return { status: "invalid-input", reason: "BTC collateral must be greater than zero." };
   if (requestWei <= 0n) return { status: "invalid-input", reason: "Requested debt must be greater than zero." };
+  if (overflowsUint256(collateralWei) || overflowsUint256(requestWei)) {
+    return { status: "invalid-input", reason: "The requested amount is outside the contract's uint256 range." };
+  }
 
   const live = snapshot as OpenTroveLiveSnapshot;
-  const feeWei = live.mode === "normal" && !live.feeExempt
-    ? (requestWei * live.borrowingRateWei) / WAD
-    : 0n;
+  const feeApplies = live.mode === "normal" && !live.feeExempt;
+  if (feeApplies && live.borrowingRateWei !== 0n && requestWei > UINT256_MAX / live.borrowingRateWei) {
+    return { status: "invalid-input", reason: "The amount is too large for safe contract fee arithmetic." };
+  }
+  const feeWei = feeApplies ? (requestWei * live.borrowingRateWei) / WAD : 0n;
   const netDebtWei = requestWei + feeWei;
   const reserveWei = live.gasCompensationWei;
   const compositeDebtWei = netDebtWei + reserveWei;
-  const collateralValueWei = (collateralWei * live.btcUsdWei) / WAD;
+  const collateralValueProduct = collateralWei * live.btcUsdWei;
+  const icrThresholdWei = live.mode === "normal" ? live.mcrWei : live.ccrWei;
+  const icrDebtProduct = compositeDebtWei * icrThresholdWei;
+  const icrBasisNumerator = collateralValueProduct * 10_000n;
+  const icrBasisDenominator = compositeDebtWei * WAD;
+  if (
+    overflowsUint256(feeWei) || overflowsUint256(netDebtWei) || overflowsUint256(compositeDebtWei) ||
+    overflowsUint256(collateralValueProduct) || overflowsUint256(icrDebtProduct) ||
+    overflowsUint256(icrBasisNumerator) || overflowsUint256(icrBasisDenominator)
+  ) {
+    return { status: "invalid-input", reason: "The entered amounts produce unsafe uint256 arithmetic for this live price and debt configuration." };
+  }
+  const collateralValueWei = collateralValueProduct / WAD;
 
   // minNetDebt applies to the amount plus fee; the gas reserve is added afterward.
   const minDebtPass = netDebtWei >= live.minNetDebtWei;
-  const icrThresholdWei = live.mode === "normal" ? live.mcrWei : live.ccrWei;
-  const icrPass = collateralWei * live.btcUsdWei >= compositeDebtWei * icrThresholdWei;
-  const icrBasisPoints = (collateralWei * live.btcUsdWei * 10_000n) / (compositeDebtWei * WAD);
+  const icrPass = collateralValueProduct >= icrDebtProduct;
+  const icrBasisPoints = icrBasisNumerator / icrBasisDenominator;
 
   let postOpenTcrBasisPoints: bigint | null = null;
   let postOpenTcrPass: boolean | null = null;
   if (live.mode === "normal") {
     const totalCollateralBtcWei = live.systemCollateralBtcWei + collateralWei;
     const totalDebtWei = live.systemDebtWei + compositeDebtWei;
-    postOpenTcrBasisPoints = (totalCollateralBtcWei * live.btcUsdWei * 10_000n) / (totalDebtWei * WAD);
-    postOpenTcrPass = totalCollateralBtcWei * live.btcUsdWei >= totalDebtWei * live.ccrWei;
+    const totalCollateralValueProduct = totalCollateralBtcWei * live.btcUsdWei;
+    const tcrDebtProduct = totalDebtWei * live.ccrWei;
+    const tcrBasisNumerator = totalCollateralValueProduct * 10_000n;
+    const tcrBasisDenominator = totalDebtWei * WAD;
+    if (overflowsUint256(totalCollateralBtcWei) || overflowsUint256(totalDebtWei) || overflowsUint256(totalCollateralValueProduct) || overflowsUint256(tcrDebtProduct) || overflowsUint256(tcrBasisNumerator) || overflowsUint256(tcrBasisDenominator)) {
+      return { status: "invalid-input", reason: "This request causes unsafe uint256 arithmetic in the live system-ratio check." };
+    }
+    postOpenTcrBasisPoints = tcrBasisNumerator / tcrBasisDenominator;
+    postOpenTcrPass = totalCollateralValueProduct >= tcrDebtProduct;
   }
 
   const allowed = minDebtPass && icrPass && (live.mode === "recovery" || postOpenTcrPass === true);
   return {
     status: "calculated",
+    collateralWei,
     requestWei,
     feeWei,
     netDebtWei,

@@ -6,7 +6,8 @@
  * Anything found only in third-party repositories is recorded as "third-party-only"
  * and is never used by the app.
  *
- * Stage 2 is read-only. No deposit, withdrawal, lending or vault transaction is implemented.
+ * Protocol candidates distinguish broader capability evidence from the narrow
+ * operation currently implemented by the app.
  */
 import { OFFICIAL_SOURCES } from "./chains";
 
@@ -34,8 +35,8 @@ export interface ProtocolCandidate {
     yield: CapabilityStatus;
   };
   notes: string;
-  /** Whether the app calls this protocol. Always false in this stage. */
-  usedByApp: false;
+  /** Whether the app currently uses this protocol candidate. */
+  usedByApp: boolean;
 }
 
 const NOT_VERIFIED: ProtocolCandidate["capabilities"] = {
@@ -61,13 +62,13 @@ export const PROTOCOL_CANDIDATES: ProtocolCandidate[] = [
   {
     id: "borrower-operations",
     name: "BorrowerOperations",
-    purpose: "Opens and manages BTC-collateralised loans that mint MUSD.",
+    purpose: "Opens and manages BTC-collateralised loans that mint MUSD; this app enables only new-Trove opening.",
     evidence: "official-address",
     testnetAddress: "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5",
     addressSource: OFFICIAL_SOURCES.musdRedemptions,
-    capabilities: { ...NOT_VERIFIED, deposit: "not-verified", borrow: "not-verified", withdraw: "not-verified" },
-    notes: "The official source lists this proxy address. Its functions are not verified in this build, and no write call is made.",
-    usedByApp: false,
+    capabilities: { ...NOT_VERIFIED, borrow: "verified" },
+    notes: "Only openTrove on Mezo Testnet is implemented: live preflight and simulation, followed by the user's own wallet confirmation. Add-collateral, repay, withdraw, borrow-more, and close are not enabled.",
+    usedByApp: true,
   },
   {
     id: "mezo-earn",

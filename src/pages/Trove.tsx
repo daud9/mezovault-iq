@@ -17,11 +17,11 @@ export function Trove() {
       <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
         <h2 className="font-semibold text-mist-100">What this page can do</h2>
         <p>
-          The position is read from Mezo Testnet contracts. This page provides a read-only Trove view and, when no position is active, a preview-only opening planner.
+          The position is read from Mezo Testnet contracts. When no Trove is active, the planner can prepare a fresh review for opening a new Trove on Testnet.
         </p>
         <p>
-          Planner values are informational and are not used to prepare a transaction. Opening, adding collateral,
-          withdrawing, repaying, borrowing more and closing a Trove are not available in this app.
+          Only opening a new Trove is available: fresh same-block checks and simulation run before the wallet opens, and your own wallet must approve the transaction. Adding collateral,
+          withdrawing, repaying, borrowing more, closing and liquidation are not available in this app.
         </p>
         <div className="flex flex-wrap gap-4">
           <Link to="/app/trove-risk" className="inline-flex min-h-11 items-center font-medium text-gold-300 hover:underline">Open Trove Risk Lab</Link>

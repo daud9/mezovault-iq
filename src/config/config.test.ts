@@ -42,12 +42,19 @@ describe("network configuration", () => {
 });
 
 describe("protocol investigation", () => {
-  it("does not mark any deposit, lending, borrowing or yield capability as verified", () => {
-    assert.equal(verifiedCapabilityCount(), 0);
+  it("marks only the limited BorrowerOperations borrowing capability as verified", () => {
+    assert.equal(verifiedCapabilityCount(), 1);
+    const borrowerOperations = PROTOCOL_CANDIDATES.find((p) => p.id === "borrower-operations");
+    assert.ok(borrowerOperations);
+    assert.equal(borrowerOperations.capabilities.borrow, "verified");
+    assert.equal(borrowerOperations.capabilities.deposit, "not-verified");
+    assert.equal(borrowerOperations.capabilities.withdraw, "not-verified");
+    assert.equal(borrowerOperations.capabilities.lend, "not-verified");
+    assert.equal(borrowerOperations.capabilities.yield, "not-verified");
   });
 
-  it("never uses a protocol in this stage", () => {
-    for (const p of PROTOCOL_CANDIDATES) assert.equal(p.usedByApp, false);
+  it("uses only BorrowerOperations for the limited open-Trove flow", () => {
+    assert.deepEqual(PROTOCOL_CANDIDATES.filter((p) => p.usedByApp).map((p) => p.id), ["borrower-operations"]);
   });
 
   it("records a testnet address only where an official source is named", () => {

@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { toFunctionSelector } from "viem";
 import {
   calculateOpenTrovePlan,
   formatBasisPoints,
@@ -8,6 +9,8 @@ import {
   MEZO_TESTNET_CHAIN_ID,
   OPEN_TROVE_ABI,
   OPEN_TROVE_SELECTOR,
+  parseUnits18,
+  UINT256_MAX,
   WAD,
   type OpenTroveLiveSnapshot,
 } from "./openTrovePlanner";
@@ -145,6 +148,13 @@ describe("read-only open-trove planner", () => {
     assert.equal(calculateOpenTrovePlan(base(), "0", "1800", { nowMs: NOW }).status, "invalid-input");
   });
 
+  it("rejects pathological-length input, uint256 overflow, and unsafe intermediate arithmetic", () => {
+    assert.equal(parseUnits18("9".repeat(100)), null);
+    assert.equal(calculateOpenTrovePlan(base(), "1", "9".repeat(78), { nowMs: NOW }).status, "invalid-input");
+    assert.equal(calculateOpenTrovePlan(base({ btcUsdWei: UINT256_MAX }), "1", "1800", { nowMs: NOW }).status, "invalid-input");
+    assert.equal(calculateOpenTrovePlan(base({ borrowingRateWei: UINT256_MAX }), "1", "2", { nowMs: NOW }).status, "invalid-input");
+  });
+
   it("formats integer amounts and basis points without floating point", () => {
     assert.equal(formatUnits18(1_234_500_000_000_000_000_000n, 4), "1,234.5");
     assert.equal(formatBasisPoints(12_345n), "123.45%");
@@ -153,6 +163,7 @@ describe("read-only open-trove planner", () => {
   it("records only the verified payable openTrove ABI and selector", () => {
     assert.equal(MEZO_TESTNET_BORROWER_OPERATIONS, "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5");
     assert.equal(OPEN_TROVE_SELECTOR, "0x2f3a6d98");
+    assert.equal(toFunctionSelector("openTrove(uint256,address,address)"), OPEN_TROVE_SELECTOR);
     assert.equal(OPEN_TROVE_ABI.length, 1);
     assert.equal(OPEN_TROVE_ABI[0].name, "openTrove");
     assert.equal(OPEN_TROVE_ABI[0].stateMutability, "payable");

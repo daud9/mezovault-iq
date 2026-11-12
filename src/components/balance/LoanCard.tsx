@@ -4,6 +4,7 @@ import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { OpenTrovePlanner } from "./OpenTrovePlanner";
+import { OpenTroveAction } from "./OpenTroveAction";
 import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
@@ -11,7 +12,7 @@ import { formatTime } from "../../lib/format";
 
 const STALE_AFTER_SECONDS = 3600;
 
-/** Read-only loan view and preview-only opening planner; no Trove transaction controls are exposed. */
+/** Read-only loan view plus the separately wallet-confirmed open-only action. */
 export function LoanCard() {
   const { state, network, isSupportedNetwork } = useWallet();
   const { view, refresh } = useLoan();
@@ -47,8 +48,8 @@ export function LoanCard() {
         <div className="space-y-3">
           <p className="text-sm font-semibold text-mist-100">No active Trove</p>
           <p className="text-sm text-mist-400">
-            No active trove was read for this wallet on {network.label}. The planner below is a read-only estimate; it
-            does not prepare or submit a borrowing transaction.
+            No active Trove was read for this wallet on {network.label}. The planner below estimates a new position from
+            fresh protocol data. A separate open-only action rechecks and simulates the exact transaction before your wallet is opened.
           </p>
           <OpenTrovePlanner
             live={plannerSnapshot}
@@ -58,6 +59,11 @@ export function LoanCard() {
             requestedMusd={plannerRequestedMusd}
             onCollateralBtcChange={setPlannerCollateralBtc}
             onRequestedMusdChange={setPlannerRequestedMusd}
+          />
+          <OpenTroveAction
+            collateralBtc={plannerCollateralBtc}
+            requestedMusd={plannerRequestedMusd}
+            onConfirmed={() => { refresh(); refreshPlanner(); }}
           />
         </div>
       );
@@ -143,8 +149,8 @@ export function LoanCard() {
       </div>
       {body}
       <p className="border-t border-line pt-4 text-xs leading-relaxed text-mist-500">
-        Trove transactions are not available in this app. Planner inputs are informational only and are never used to
-        build a wallet request.
+        Only opening a new Trove is enabled, on Mezo Testnet (chain 31611), after fresh same-block preflight and your own wallet approval.
+        Adding collateral, withdrawing, repaying, borrowing more, closing and liquidating are not available in this app.
       </p>
     </Card>
   );

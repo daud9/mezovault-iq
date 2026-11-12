@@ -25,7 +25,7 @@ export function ProtocolEvidence() {
       </section>
       <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
         <p className="font-medium text-mist-200">Not enabled from this board</p>
-        <p>Vault deposits and withdrawals, yield calculations, swaps, automated actions, and general Trove transactions are not enabled. OpturaFi Range appears only as an unvalidated candidate; its implementation, assets, and operation are not established here.</p>
+        <p>Vault deposits and withdrawals, yield calculations, swaps, automated actions, and Trove management other than opening a new Trove are not enabled. The open-only flow is Testnet-only and requires fresh preflight plus wallet confirmation. OpturaFi Range appears only as an unvalidated candidate; its implementation, assets, and operation are not established here.</p>
       </Card>
     </div>
   );

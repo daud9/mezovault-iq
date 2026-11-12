@@ -36,7 +36,7 @@ function CheckLine({ label, pass }: { label: string; pass: boolean | null | unde
   );
 }
 
-/** Read-only open-trove preview. It has no transaction callback, encoder, or wallet writer. */
+/** Live-parameter preview. It has no wallet writer or submission behavior. */
 export function OpenTrovePlanner({
   live,
   loading = false,
@@ -66,10 +66,14 @@ export function OpenTrovePlanner({
   const ccrPercent = live ? formatBasisPoints((live.ccrWei * 10_000n) / WAD) : "Unavailable";
   const rows: ReactNode = plan.status === "calculated" ? (
     <>
+      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">BTC collateral sent as native transaction value</span><span>{formatUnits18(plan.collateralWei ?? 0n)} BTC</span></div>
+      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Requested MUSD (_debtAmount)</span><span>{amount(plan.requestWei)}</span></div>
       <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Borrowing fee</span><span>{amount(plan.feeWei)}</span></div>
       <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Net debt (request + fee)</span><span>{amount(plan.netDebtWei)}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Gas reserve added after minimum debt</span><span>{amount(plan.reserveWei)}</span></div>
+      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">MUSD gas reserve added after minimum debt</span><span>{amount(plan.reserveWei)}</span></div>
       <div className="flex justify-between gap-3 border-t border-line pt-2 text-sm font-semibold"><span>Composite debt (used for ICR)</span><span>{amount(plan.compositeDebtWei)}</span></div>
+      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Live BTC/USD oracle price</span><span>${formatUnits18(live?.btcUsdWei ?? 0n, 2)}</span></div>
+      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Current Mezo system mode</span><span>{live?.mode === "recovery" ? "Recovery Mode" : "Normal Mode"}</span></div>
       <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Collateral value at live BTC/USD</span><span>${plan.collateralValueWei === undefined ? "Unavailable" : formatUnits18(plan.collateralValueWei)}</span></div>
       <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Open-time ICR</span><span>{formatBasisPoints(plan.icrBasisPoints)}</span></div>
       <CheckLine label={`Minimum net debt (${live ? formatUnits18(live.minNetDebtWei) : "—"} MUSD; amount + fee)`} pass={plan.minDebtPass} />
@@ -84,9 +88,9 @@ export function OpenTrovePlanner({
   return (
     <section className="space-y-4 rounded-xl border border-line bg-ink-900 p-4 text-mist-100" aria-labelledby="open-trove-planner-title">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wider text-mist-500">MUSD borrowing</p>
-        <h2 id="open-trove-planner-title" className="mt-1 text-lg font-semibold">Open-trove planner</h2>
-        <p className="mt-1 text-sm text-mist-400">These editable values are a read-only preview and are never used to prepare a transaction. A general borrowing flow is not enabled.</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-mist-500">MUSD borrowing · Mezo Testnet only</p>
+        <h2 id="open-trove-planner-title" className="mt-1 text-lg font-semibold">Open-Trove planner</h2>
+        <p className="mt-1 text-sm text-mist-400">Edit the collateral and requested MUSD. This live-parameter preview is informational; the separate open-only action below repeats protocol reads, eligibility checks, gas estimation, and exact-call simulation before the wallet is opened.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -128,30 +132,19 @@ export function OpenTrovePlanner({
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">{plan.reason}</p>
       ) : (
         <div className="space-y-2 rounded-lg border border-line bg-ink-800/60 p-3" aria-live="polite">
-          <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Requested debt</span><span>{amount(plan.requestWei)}</span></div>
           {rows}
           <p className={`border-t border-line pt-2 text-sm font-semibold ${plan.allowed ? "text-emerald-300" : "text-rose-300"}`}>
-            {plan.allowed ? "Planner checks pass" : "Planner checks do not pass"}
+            {plan.allowed ? "Planner checks pass; final checks still required" : "Planner checks do not pass"}
           </p>
         </div>
       )}
 
       <p className="text-xs leading-relaxed text-mist-500">
         {live
-          ? `Mezo Testnet · block ${live.blockNumber} · snapshot ${snapshotAgeSeconds === null ? "time unavailable" : `${snapshotAgeSeconds}s old`} · BTC/USD $${formatUnits18(live.btcUsdWei, 2)} · ${live.mode === "normal" ? "Normal Mode" : "Recovery Mode"} · ${live.feeExempt ? "fee-exempt account" : "standard fee status"}`
+          ? `Mezo Testnet · block ${live.blockNumber} · snapshot ${snapshotAgeSeconds === null ? "time unavailable" : `${snapshotAgeSeconds}s old`} · oracle updated ${new Date(live.priceUpdatedAt * 1_000).toLocaleString()} · ${live.feeExempt ? "fee-exempt account" : "standard fee status"}`
           : "Live Mezo Testnet parameters and a fresh oracle price are required; hard-coded fallback values are not used."}
       </p>
-
-      <button
-        type="button"
-        disabled
-        aria-disabled="true"
-        title="This planner does not build transactions. A general borrowing flow requires separate owner authorization and operation-specific safety review."
-        className="min-h-11 w-full cursor-not-allowed rounded-lg bg-mist-700 px-4 font-semibold text-mist-300 opacity-60"
-      >
-        Generic open-trove action — disabled
-      </button>
-      <p className="text-xs text-mist-500">Enabling a borrowing transaction is a separate decision from showing this estimate and requires operation-specific safety review.</p>
+      <p className="text-xs leading-relaxed text-mist-500">Only opening a new Trove is available here. Adding collateral, borrowing more, repaying, withdrawing, closing, and liquidation actions are not implemented. No action runs without your explicit click and your own wallet approval.</p>
     </section>
   );
 }

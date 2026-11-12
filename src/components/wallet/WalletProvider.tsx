@@ -150,7 +150,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           throw new Error("The approved transaction does not match the app's selected network.");
         }
         if (typeof tx.from !== "string" || tx.from.toLowerCase() !== expected.account.toLowerCase()) {
-          throw new Error("The transaction sender does not match the approved test wallet.");
+          throw new Error("The transaction sender does not match the reviewed wallet account.");
         }
         await assertWalletContext(provider, expected);
       }

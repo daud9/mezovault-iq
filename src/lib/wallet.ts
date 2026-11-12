@@ -102,7 +102,7 @@ export async function assertWalletContext(provider: Eip1193Provider, expected: W
   }
   const selected = Array.isArray(accounts) ? accounts[0] : undefined;
   if (!isAddress(selected) || selected.toLowerCase() !== expected.account.toLowerCase()) {
-    throw new WalletError("no-account", "The connected wallet account changed and no longer matches the approved test wallet.");
+    throw new WalletError("no-account", "The connected wallet account changed and no longer matches the reviewed transaction.");
   }
 }
 

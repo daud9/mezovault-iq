@@ -45,7 +45,7 @@ export function AppShell() {
           </nav>
           <div className="mt-auto rounded-xl border border-line bg-ink-800/60 p-4 text-xs leading-relaxed text-mist-400">
             <p className="font-medium text-mist-200">Testnet wallet actions</p>
-            <p className="mt-1">Wallet changes always need your confirmation. The app currently exposes one fixed Trove test path; general borrowing, Trove management, vault deposits and automation are not enabled.</p>
+            <p className="mt-1">Wallet transactions require your own approval. Only opening a new Trove is enabled, on Mezo Testnet after fresh preflight; other Trove operations, vault deposits and automation remain unavailable.</p>
           </div>
         </aside>
 
