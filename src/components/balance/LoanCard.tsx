@@ -1,10 +1,12 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
+import { OpenTrovePlanner } from "./OpenTrovePlanner";
 import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
+import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
 import { formatTime } from "../../lib/format";
 
 const BORROW_URL = "https://mezo.org/feature/borrow";
@@ -14,6 +16,23 @@ const STALE_AFTER_SECONDS = 3600;
 export function LoanCard() {
   const { state, network, isSupportedNetwork } = useWallet();
   const { view, refresh } = useLoan();
+  const plannerEnabled = view.status === "done" && view.result.status === "ok" && !view.result.hasLoan;
+  const { view: plannerView, refresh: refreshPlanner } = useOpenTroveSnapshot(plannerEnabled);
+  const [plannerCollateralBtc, setPlannerCollateralBtc] = useState("");
+  const [plannerRequestedMusd, setPlannerRequestedMusd] = useState("");
+
+  const plannerSnapshot = plannerView.status === "done" && plannerView.result.status === "ok"
+    ? plannerView.result.snapshot
+    : null;
+  const plannerUnavailableReason = plannerView.status === "idle"
+    ? "Live protocol reads have not started. Refresh to try again."
+    : plannerView.status === "done" && plannerView.result.status !== "ok"
+      ? plannerView.result.status === "error"
+        ? plannerView.result.message
+        : plannerView.result.status === "not-configured"
+          ? plannerView.result.reason
+          : "The RPC reports a different network. No planner values are shown."
+      : undefined;
 
   let body: ReactNode;
   if (state.status !== "connected") {
@@ -31,6 +50,15 @@ export function LoanCard() {
           <p className="text-sm text-mist-400">
             This wallet has no collateral or debt on {network.label}. Loans are opened in the official Mezo borrow interface.
           </p>
+          <OpenTrovePlanner
+            live={plannerSnapshot}
+            loading={plannerView.status === "loading"}
+            unavailableReason={plannerUnavailableReason}
+            collateralBtc={plannerCollateralBtc}
+            requestedMusd={plannerRequestedMusd}
+            onCollateralBtcChange={setPlannerCollateralBtc}
+            onRequestedMusdChange={setPlannerRequestedMusd}
+          />
         </div>
       );
     } else if (r.status === "ok") {
@@ -84,7 +112,7 @@ export function LoanCard() {
           <p className="mt-1 text-sm text-mist-400">BTC collateral and MUSD debt on {network.label}</p>
         </div>
         {state.status === "connected" && isSupportedNetwork && (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
+          <Button variant="ghost" onClick={() => { refresh(); refreshPlanner(); }} className="min-h-11 px-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
           </Button>
         )}

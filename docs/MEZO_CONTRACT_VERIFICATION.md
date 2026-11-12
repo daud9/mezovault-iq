@@ -1,9 +1,9 @@
 # MezoVault IQ — Mezo Contract Verification Pack
 
-**Status:** Partial explorer/ABI verification — read-only loan and price selectors now confirmed from owner-supplied explorer screenshots; live RPC verification still pending  
-**Network:** Mezo Testnet  
-**Chain ID:** 31611 (`0x7b7b`)  
-**Last reviewed:** 2026-10-31
+**Status:** Historical explorer/ABI notes are retained below; the 2026-11-12 read-only planner integration and live testnet reads are recorded in the final section.
+**Network:** Mezo Testnet
+**Chain ID:** 31611 (`0x7b7b`)
+**Last reviewed:** 2026-11-12
 
 ## Verification policy
 
@@ -153,3 +153,11 @@ The app's current testnet `btcUsdOracle` address is `0x2880aB155794e7179c9eE2e38
 The application now centralizes the explorer-transcribed selectors in `src/lib/mezoAbi.ts` rather than duplicating read selectors inside `src/lib/loan.ts`. The registry separates TroveManager, PriceFeed, PriceOracleCaller, and BorrowerOperations selectors. It includes the owner-supplied BorrowerOperations user-operation selectors for future transaction integration.
 
 This is an interface registry, not a transaction executor. No BorrowerOperations write path has been enabled by this change. In particular, `addColl` requires native BTC in transaction `value`, while `repayMUSD` is nonpayable and requires valid sorted-trove hints. HintHelpers and SortedTroves verification, proxy getter checks, live RPC calls, and transaction simulations remain prerequisites before enabling either action.
+
+## Read-only open-trove planner integration (2026-11-12)
+
+The app now includes a read-only open-trove planner in the no-active-loan card. Its read selectors are taken from the official Mezo MUSD `matsnet` deployment ABI artifacts for the same BorrowerOperations and TroveManager implementation addresses recorded above. See the [BorrowerOperations artifact](https://github.com/mezo-org/musd/blob/main/solidity/artifacts/deployments/matsnet/BorrowerOperations.json), [TroveManager artifact](https://github.com/mezo-org/musd/blob/main/solidity/artifacts/deployments/matsnet/TroveManager.json), and [GovernableVariables artifact](https://github.com/mezo-org/musd/blob/main/solidity/artifacts/deployments/matsnet/GovernableVariables.json). The governance-variable contract is discovered through the live `BorrowerOperations.governableVariables()` read rather than a hard-coded address.
+
+At a single checked Mezo Testnet block, the reader verifies chain ID and code for BorrowerOperations, TroveManager, PriceFeed, the discovered GovernableVariables contract, and the PriceOracleCaller. It reads `minNetDebt()`, `borrowingRate()`, `MUSD_GAS_COMPENSATION()`, `MCR()`, `CCR()`, `getEntireSystemColl()`, `getEntireSystemDebt()`, `feeExemptAccounts(address)`, `PriceFeed.fetchPrice()`, and `TroveManager.checkRecoveryMode(price)`. Oracle update metadata must be present and no more than one hour old; the calculator rejects snapshots older than one minute. Missing, malformed, stale, or wrong-chain data produces no calculation. Current values are read dynamically and are not stored as protocol constants.
+
+The calculator uses integer math only: normal-mode fee is `floor(amount * live borrowingRate / 1e18)` unless the live account flag is fee-exempt; Recovery Mode charges no fee. `minNetDebt` applies to requested amount plus fee, then the live reserve is added to form composite debt for ICR. Normal Mode checks ICR against live MCR and projected TCR against live CCR; Recovery Mode checks ICR against live CCR. The verified `openTrove(uint256,address,address)` payable ABI and selector `0x2f3a6d98` are recorded for interface accuracy only. The UI action remains disabled, and the planner contains no transaction builder, signer, or submitter; no live transaction was signed or sent.
