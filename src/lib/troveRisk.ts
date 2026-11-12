@@ -16,6 +16,18 @@ export interface TroveRiskResult {
   scenarios: TroveRiskScenario[];
 }
 
+/** Computes the collateral/debt percentage in basis points without floating-point math. */
+export function calculateCollateralRatioBps(input: {
+  collateralBtcWei: bigint;
+  debtMusdWei: bigint;
+  btcUsdWei: bigint;
+}): bigint | null {
+  const { collateralBtcWei, debtMusdWei, btcUsdWei } = input;
+  if (collateralBtcWei <= 0n || debtMusdWei <= 0n || btcUsdWei <= 0n) return null;
+  const ratioWad = (collateralBtcWei * btcUsdWei) / debtMusdWei;
+  return (ratioWad * 10_000n) / WAD;
+}
+
 function ceilDiv(numerator: bigint, denominator: bigint): bigint {
   return (numerator + denominator - 1n) / denominator;
 }
@@ -35,8 +47,9 @@ export function calculateTroveRisk(input: {
   const { collateralBtcWei, debtMusdWei, btcUsdWei, mcrWei } = input;
   if (collateralBtcWei <= 0n || debtMusdWei <= 0n || btcUsdWei <= 0n || mcrWei <= 0n) return null;
 
+  const ratioBps = calculateCollateralRatioBps({ collateralBtcWei, debtMusdWei, btcUsdWei });
+  if (ratioBps === null) return null;
   const ratioWad = (collateralBtcWei * btcUsdWei) / debtMusdWei;
-  const ratioBps = (ratioWad * 10_000n) / WAD;
   const thresholdBps = (mcrWei * 10_000n) / WAD;
   const thresholdPriceWei = ceilDiv(debtMusdWei * mcrWei, collateralBtcWei);
   const signedPriceDelta = btcUsdWei - thresholdPriceWei;

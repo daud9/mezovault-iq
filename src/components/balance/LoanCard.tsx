@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
@@ -9,14 +9,25 @@ import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
 import { formatTime } from "../../lib/format";
-
-const STALE_AFTER_SECONDS = 3600;
+import { isLoanPriceFresh, isLoanReadFresh, loanReadAgeMs } from "../../lib/loan";
+import { calculateCollateralRatioBps, formatPercentBps } from "../../lib/troveRisk";
 
 /** Read-only loan view plus the separately wallet-confirmed open-only action. */
 export function LoanCard() {
   const { state, network, isSupportedNetwork } = useWallet();
   const { view, refresh } = useLoan();
-  const plannerEnabled = view.status === "done" && view.result.status === "ok" && !view.result.hasLoan;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => clearInterval(timer);
+  }, []);
+  const loan = view.status === "done" && view.result.status === "ok" ? view.result : null;
+  const readFresh = loan ? isLoanReadFresh(loan, nowMs) : false;
+  const priceFresh = loan?.hasLoan ? isLoanPriceFresh(loan, nowMs) : false;
+  const ratioBps = loan?.hasLoan && priceFresh && loan.btcUsdWei !== null
+    ? calculateCollateralRatioBps({ collateralBtcWei: loan.collateralRaw, debtMusdWei: loan.debtRaw, btcUsdWei: loan.btcUsdWei })
+    : null;
+  const plannerEnabled = loan !== null && readFresh && !loan.hasLoan;
   const { view: plannerView, refresh: refreshPlanner } = useOpenTroveSnapshot(plannerEnabled);
   const [plannerCollateralBtc, setPlannerCollateralBtc] = useState("");
   const [plannerRequestedMusd, setPlannerRequestedMusd] = useState("");
@@ -41,11 +52,19 @@ export function LoanCard() {
     body = <p className="text-sm text-mist-400">Switch to {network.label} to read the loan.</p>;
   } else if (view.status === "idle" || view.status === "loading") {
     body = <p className="text-sm text-mist-400" role="status">Reading loan from {network.label}…</p>;
+  } else if (view.status === "wrong-network") {
+    body = <DataStatus state="unverified" detail={`wallet chain ${view.actualChainId ?? "unknown"}; expected ${view.expectedChainId}`} />;
   } else {
     const r = view.result;
     if (r.status === "ok" && !r.hasLoan) {
-      body = (
+      body = !readFresh ? (
         <div className="space-y-3">
+          <DataStatus state="unverified" detail="the no-loan read is stale" />
+          <p className="text-sm text-mist-400">The last pinned-block read at block {r.blockNumber} found no active Trove, but it is not current. Refresh and verify the wallet's status before the open-Trove planner is made available.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <DataStatus state="live" detail={`no active Trove · block ${r.blockNumber}`} />
           <p className="text-sm font-semibold text-mist-100">No active Trove</p>
           <p className="text-sm text-mist-400">
             No active Trove was read for this wallet on {network.label}. The planner below estimates a new position from
@@ -68,30 +87,36 @@ export function LoanCard() {
         </div>
       );
     } else if (r.status === "ok") {
-      const stale = r.priceAgeSeconds !== null && r.priceAgeSeconds > STALE_AFTER_SECONDS;
+      const readAgeMs = loanReadAgeMs(r, nowMs);
       body = (
         <div className="space-y-4">
+          {!readFresh ? (
+            <DataStatus state="unverified" detail={`position read stale${readAgeMs === null ? "" : ` · ${Math.floor(readAgeMs / 1_000)}s old`}`} />
+          ) : priceFresh ? (
+            <DataStatus state="live" detail={`position and price inputs · block ${r.blockNumber}`} />
+          ) : (
+            <DataStatus state="unverified" detail="position current; BTC/USD oracle stale or unavailable" />
+          )}
           <div className="grid grid-cols-2 gap-4">
             <div><p className="text-xs text-mist-500">Collateral (BTC)</p><p className="text-lg font-semibold text-mist-100">{r.collateralBtc}</p></div>
             <div><p className="text-xs text-mist-500">Debt (MUSD)</p><p className="text-lg font-semibold text-mist-100">{r.debtMusd}</p></div>
             <div>
               <p className="text-xs text-mist-500">Collateral ratio (informational health indicator)</p>
-              <p className="text-lg font-semibold text-mist-100">{r.collateralRatioPct === null ? "Unavailable" : `${r.collateralRatioPct.toFixed(0)}%`}</p>
+              <p className="text-lg font-semibold text-mist-100">{!readFresh || !priceFresh || ratioBps === null ? "Unavailable" : formatPercentBps(ratioBps)}</p>
             </div>
             <div>
               <p className="text-xs text-mist-500">Collateral value (USD)</p>
-              <p className="text-lg font-semibold text-mist-100">{r.collateralValueUsd === null ? "Unavailable" : `$${r.collateralValueUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}</p>
+              <p className="text-lg font-semibold text-mist-100">{!readFresh || !priceFresh || r.collateralValueUsd === null ? "Unavailable" : `$${r.collateralValueUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}`}</p>
             </div>
           </div>
           <p className="text-xs leading-relaxed text-mist-500">
-            Ratio = collateral value ÷ debt, using the BTC/USD price from Mezo PriceFeed. It is not a safe/at-risk verdict:
-            the protocol liquidation threshold is not verified here.
+            Ratio = collateral value ÷ debt, using the fresh BTC/USD price from Mezo PriceFeed. It is not a safe/at-risk verdict; use Trove Risk Lab for a fresh live MCR comparison.
           </p>
           <div className="flex flex-wrap items-center gap-2">
-            {r.priceUpdatedAt ? (
-              <DataStatus state={stale ? "unverified" : "live"} detail={stale ? "price is stale" : `price updated ${formatTime(r.priceUpdatedAt)}`} />
+            {r.priceUpdatedAt && r.priceAgeSeconds !== null ? (
+              <DataStatus state={priceFresh ? "live" : "unverified"} detail={`${priceFresh ? "oracle updated" : "stale oracle update"} ${formatTime(r.priceUpdatedAt)}`} />
             ) : (
-              <DataStatus state="unavailable" detail="no price" />
+              <DataStatus state="unavailable" detail={r.riskInputsError ?? "no verified price"} />
             )}
             <span className="text-xs text-mist-500">Block {r.blockNumber} · retrieved {formatTime(r.retrievedAt)}</span>
           </div>

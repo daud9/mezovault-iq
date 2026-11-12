@@ -5,6 +5,7 @@ import { DataStatus } from "../components/ui/DataStatus";
 import { MusdBalanceCard } from "../components/balance/MusdBalanceCard";
 import { BtcBalanceCard } from "../components/balance/BtcBalanceCard";
 import { MezoBalanceCard } from "../components/balance/MezoBalanceCard";
+import { TrovePositionCard } from "../components/balance/TrovePositionCard";
 import { SupportCard } from "../components/support/SupportCard";
 import { Link } from "react-router-dom";
 import { useWallet } from "../components/wallet/WalletProvider";
@@ -30,6 +31,8 @@ export function Overview() {
           <MezoBalanceCard />
         </div>
       </div>
+
+      <TrovePositionCard />
 
       <SupportCard />
 

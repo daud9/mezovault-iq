@@ -1,10 +1,19 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { calculateTroveRisk, formatPercentBps, formatWad } from "./troveRisk";
+import { calculateCollateralRatioBps, calculateTroveRisk, formatPercentBps, formatWad } from "./troveRisk";
 
 const WAD = 10n ** 18n;
 
 describe("Trove risk calculations", () => {
+  it("calculates the current collateral ratio exactly without an MCR input", () => {
+    assert.equal(calculateCollateralRatioBps({
+      collateralBtcWei: 2n * WAD,
+      debtMusdWei: 1_000n * WAD,
+      btcUsdWei: 100_000n * WAD,
+    }), 2_000_000n);
+    assert.equal(calculateCollateralRatioBps({ collateralBtcWei: 0n, debtMusdWei: WAD, btcUsdWei: WAD }), null);
+  });
+
   it("computes the live ratio, price distance, and drawdown scenarios", () => {
     const result = calculateTroveRisk({
       collateralBtcWei: 1n * WAD,
