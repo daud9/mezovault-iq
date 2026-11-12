@@ -12,6 +12,7 @@ import { Send } from "./pages/Send";
 import { Pay } from "./pages/Pay";
 import { Trove } from "./pages/Trove";
 import { TroveRiskLab } from "./pages/TroveRiskLab";
+import { ChainWatch } from "./pages/ChainWatch";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
             <Route path="pay" element={<Pay />} />
             <Route path="trove" element={<Trove />} />
             <Route path="trove-risk" element={<TroveRiskLab />} />
+            <Route path="chain-watch" element={<ChainWatch />} />
             <Route path="smart-vaults" element={<ProtocolEvidence />} />
             <Route path="vaults" element={<ProtocolEvidence />} />
             <Route path="protocol-evidence" element={<ProtocolEvidence />} />

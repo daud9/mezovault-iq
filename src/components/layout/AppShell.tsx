@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
   Activity as ActivityIcon,
+  Radar,
   FlaskRound,
   Gauge,
   LayoutDashboard,
@@ -16,6 +17,7 @@ export const APP_NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/app/trove", label: "Trove", icon: Gauge },
   { to: "/app/send", label: "Mezo Pay", icon: Send },
+  { to: "/app/chain-watch", label: "Chain Watch", icon: Radar },
   { to: "/app/protocol-evidence", label: "Protocol Evidence", icon: ShieldCheck },
   { to: "/app/pools", label: "Pool Watch", icon: Waves },
   { to: "/app/simulation", label: "Simulation Lab", icon: FlaskRound },

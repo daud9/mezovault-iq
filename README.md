@@ -17,6 +17,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 | Live BTC (native gas token) balance | Implemented |
 | Live MUSD balance (contract checked on-chain: code, symbol, decimals) | Implemented |
 | MEZO balance (shown only if the on-chain token check passes on the connected network) | Implemented, tested on Mezo Testnet |
+| MUSD / MEZO Chain Watch: manually entered public address with per-network code, symbol, and decimal checks | Implemented, read-only |
 | Send BTC or MUSD: review screen, wallet confirmation, receipt-verified status | Implemented |
 | Send MEZO (same flow, only when the on-chain token check passes) | Implemented, tested on Mezo Testnet |
 | Payment-request links (asset, amount, recipient and network in the link; copy and share) | Implemented, tested on Mezo Testnet |
@@ -33,6 +34,15 @@ Every balance and transaction shown in the app is read from the chain or from th
 | Simulation Lab | Assumption-based preview only; not a live strategy or yield claim |
 | MUSD/MEZO dollar totals, vault-yield claims, and general Trove transactions | Not presented as working features until sources/contracts are verified |
 
+### MUSD / MEZO Chain Watch
+
+- Supports Mezo Mainnet, Ethereum, Base, BNB Chain, and Mezo Testnet. The first version is EVM-only.
+- The official contracts reference supplies the token addresses. On every lookup, the app verifies the RPC chain ID and each supported token's contract code, symbol, and 18 decimals before showing its balance. Unsupported routes are labelled **Not supported**, not zero; failed reads are **Unavailable**.
+- MUSD is shown only for Mezo, Ethereum, Base, and Mezo Testnet. BNB Chain has no verified MUSD route here. MEZO's verified EVM routes include Mezo, Ethereum, Base, and BNB Chain.
+- Ethereum, Base, and BNB Chain use shared PublicNode RPC endpoints; Mezo uses the configured public mainnet/testnet endpoints. These providers receive the entered address in read-only balance calls and may log it. The page does not connect a wallet, sign, transact, place the address in the URL, or write it to browser storage.
+- Official route documentation: [MUSD bridge](https://mezo.org/docs/users/borrow/musd-bridge/) and [MEZO bridge](https://mezo.org/docs/users/mezo/mezo-bridge). The app links to the guides only; it does not initiate a bridge.
+- Balances remain separate by network. No total USD value, token price, or cross-network fungibility is inferred.
+
 ### Tested on Mezo Testnet
 
 - **BTC transfer, confirmed on-chain.** Sent 0.0001 BTC from the app's review screen to a second address. Transaction `0x350755cfcb66c7c1fdd25c56b29ecc26f335cb5498c850f3f5d71e530a41dde3`, confirmed in block 16376406. The app showed the status as confirmed only after the receipt reported success.
@@ -40,7 +50,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **MEZO transfer, confirmed.** Sent 1 MEZO; the Activity page shows it as live from chain at block 16375491. Transaction `0xf8deebc206d05cfe4f8bf2b6ca6dc820fc4c01eff2823cb98f31686ececf2dff`. The same on-chain check that enables MEZO sending also read the wallet's MEZO balance (100 MEZO) on Mezo Testnet.
 - **Payment-request link.** A link generated in Mezo Pay opened the payment page with the recipient, token (BTC) and amount (0.0001) filled in, and the payer confirmed it in the review step.
 - **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
-- **Automated unit tests.** 291 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, pool-market snapshots, protocol-evidence integrity, CSV escaping, and fail-closed preflight behavior. New oracle, pool, and history tests use fake JSON-RPC only.
+- **Automated unit tests.** 301 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, pool-market snapshots, protocol-evidence integrity, CSV escaping, Chain Watch route/contract checks, and fail-closed preflight behavior. Chain Watch unit tests use fake JSON-RPC; public endpoint checks used chain IDs and token metadata without querying an account address.
 
 ### Still under development (not operational)
 
@@ -149,6 +159,7 @@ deno task start      # serves dist/ on http://localhost:8000
 
 - **You authorise every transaction in your own wallet.** The app never has access to private keys or seed phrases. The only open-trove path is limited to the approved account, 0.05 BTC, 3,000 MUSD, and the verified testnet proxy; the app rechecks live protocol conditions and performs block-pinned call/gas simulations before its explicit wallet request. The app does not sign or auto-submit.
 - **Payment links move no funds.** A link only fills in the payment form. The payer must review and confirm it in their own wallet.
+- **Chain Watch is public-address only.** It queries only the address manually entered and submitted on that page. The relevant public RPC providers receive that address in balance calls and may log requests; the app does not connect a wallet or persist the address.
 - **Testnet assets have no real monetary value.** BTC, MUSD and MEZO on Mezo Testnet are for testing only.
 - **Hypothetical simulations are not actual yield.** The Simulation Lab calculates results from assumptions you enter. Its outputs are not forecasts, and the app does not present them as live rates.
 - **Transaction status is read from the chain.** A transaction is shown as confirmed only after its receipt reports success.
@@ -189,8 +200,8 @@ src/
   lib/        RPC client, ABI helpers, balance, send, ledger and log readers
   hooks/      wallet and balance hooks
   components/ UI components (wallet, balance, send, support, activity, evidence)
-  pages/      routes: Overview, Mezo Pay, Pay, Activity, Pool Watch, Trove Risk Lab,
-              Protocol Evidence, Simulation Lab
+  pages/      routes: Overview, Mezo Pay, Pay, Activity, Pool Watch, Chain Watch,
+              Trove Risk Lab, Protocol Evidence, Simulation Lab
   engine/     strategy scoring, matching, simulation and allocation logic
 server/       optional local Deno static server
 ```

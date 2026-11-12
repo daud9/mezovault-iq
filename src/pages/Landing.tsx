@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Compass, LineChart, ShieldCheck, SlidersHorizontal, Bot } from "lucide-react";
+import { ArrowRight, Compass, LineChart, ShieldCheck, SlidersHorizontal, Bot, Radar } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { ButtonLink } from "../components/ui/Button";
 import { WalletButton } from "../components/layout/WalletButton";
@@ -7,6 +7,7 @@ import { WalletButton } from "../components/layout/WalletButton";
 const FEATURES = [
   { icon: Compass, title: "IQ Strategies", body: "Lists only strategies backed by verified contracts. None is listed on Mezo Testnet yet." },
   { icon: ShieldCheck, title: "Vault Intelligence", body: "Verified contract addresses and explorer links, with unavailable metrics shown openly." },
+  { icon: Radar, title: "MUSD / MEZO Chain Watch", body: "Check a public address across verified EVM token routes without connecting a wallet." },
   { icon: SlidersHorizontal, title: "Allocation & Simulation", body: "Test allocations and outcome scenarios against your own assumptions." },
   { icon: Bot, title: "Autopilot (planned)", body: "Future automation limited to permissions you explicitly grant and can revoke." },
 ];
@@ -58,8 +59,8 @@ export function Landing() {
             Make Every MUSD Decision <span className="gold-text">Smarter.</span>
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-mist-400 sm:text-lg">
-            See your live MUSD, BTC and MEZO balances on Mezo Testnet, discover verified DeFi opportunities, read the
-            evidence behind them, and run hypothetical simulations.
+            See your live MUSD, BTC and MEZO balances on Mezo Testnet, or use Chain Watch to check a public address
+            across verified EVM routes without connecting a wallet. Explore DeFi evidence and hypothetical simulations.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <ButtonLink to="/app" className="min-h-11 px-5 py-3">
@@ -68,12 +69,15 @@ export function Landing() {
             <ButtonLink to="/app/strategies" variant="secondary" className="min-h-11 px-5 py-3">
               Explore IQ Strategies
             </ButtonLink>
+            <ButtonLink to="/app/chain-watch" variant="secondary" className="min-h-11 px-5 py-3">
+              Open Chain Watch <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            </ButtonLink>
           </div>
         </div>
       </section>
 
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-20 sm:px-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {FEATURES.map(({ icon: Icon, title, body }) => (
             <Card key={title} className="transition hover:border-gold-500/40">
               <Icon className="h-5 w-5 text-gold-400" aria-hidden="true" />
