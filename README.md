@@ -29,6 +29,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 | Trove Risk Lab: live MCR comparison and hypothetical 10%, 20%, and 30% BTC price drops | Read-only, withheld when live inputs are stale or incomplete |
 | Open-trove planner plus fixed test-only action (0.05 BTC / 3,000 MUSD, approved wallet only) | Fresh same-block protocol checks, `eth_call`, and gas estimation before explicit wallet confirmation; no transaction was sent during this change |
 | Liquidity-pool position read for the three official testnet basic pools | Read-only |
+| CL Position Monitor at `/app/cl-positions` | Mezo Testnet only; reads wallet-held and gauge-staked NFTs, live tick/range, simulated collect estimates, and gauge schedule data where available; read-only |
 | Pool Watch: official Testnet pool reserves and reserve-implied spot price | Read-only; fee tier and USD liquidity are not verified; no APY or recommendations |
 | Protocol Evidence board: documented, deployed, source-verified, and operationally-tested stages | Read-only; unknown and partial evidence is labelled explicitly |
 | Simulation Lab | Assumption-based preview only; not a live strategy or yield claim |
@@ -50,7 +51,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **MEZO transfer, confirmed.** Sent 1 MEZO; the Activity page shows it as live from chain at block 16375491. Transaction `0xf8deebc206d05cfe4f8bf2b6ca6dc820fc4c01eff2823cb98f31686ececf2dff`. The same on-chain check that enables MEZO sending also read the wallet's MEZO balance (100 MEZO) on Mezo Testnet.
 - **Payment-request link.** A link generated in Mezo Pay opened the payment page with the recipient, token (BTC) and amount (0.0001) filled in, and the payer confirmed it in the review step.
 - **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
-- **Automated unit tests.** 301 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, pool-market snapshots, protocol-evidence integrity, CSV escaping, Chain Watch route/contract checks, and fail-closed preflight behavior. Chain Watch unit tests use fake JSON-RPC; public endpoint checks used chain IDs and token metadata without querying an account address.
+- **Automated unit tests.** 306 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, basic-pool snapshots, CL NFT ownership and gauge enumeration, same-block tick/range and fee simulations, protocol-evidence integrity, CSV escaping, Chain Watch route/contract checks, and fail-closed preflight behavior. Chain Watch unit tests use fake JSON-RPC; public endpoint checks used chain IDs and token metadata without querying an account address.
 
 ### Still under development (not operational)
 
@@ -201,7 +202,7 @@ src/
   hooks/      wallet and balance hooks
   components/ UI components (wallet, balance, send, support, activity, evidence)
   pages/      routes: Overview, Mezo Pay, Pay, Activity, Pool Watch, Chain Watch,
-              Trove Risk Lab, Protocol Evidence, Simulation Lab
+              CL Position Monitor, Trove Risk Lab, Protocol Evidence, Simulation Lab
   engine/     strategy scoring, matching, simulation and allocation logic
 server/       optional local Deno static server
 ```

@@ -1,8 +1,8 @@
 /**
  * Mezo Basic Pools on Mezo Testnet, copied from the official Mezo Pools documentation
- * (https://mezo.org/docs/developers/features/mezo-pools). Only these addresses are read.
- * Concentrated-liquidity pools are not listed with addresses in the official testnet docs,
- * so they are not read.
+ * (https://mezo.org/docs/developers/features/mezo-pools). This list is limited to the
+ * three fungible basic pools; wallet-specific CL NFT positions are read separately by
+ * the read-only monitor in `src/lib/clPositions.ts`.
  */
 import { OFFICIAL_SOURCES } from "./chains";
 
