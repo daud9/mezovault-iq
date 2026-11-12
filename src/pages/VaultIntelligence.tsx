@@ -2,8 +2,8 @@ import { Card } from "../components/ui/Card";
 import { SectionHeader } from "../components/ui/SectionHeader";
 import { DataStatus } from "../components/ui/DataStatus";
 import { ProtocolTable } from "../components/vaults/ProtocolTable";
-import { LoanCard } from "../components/balance/LoanCard";
 import { PoolPositionsCard } from "../components/balance/PoolPositionsCard";
+import { Link } from "react-router-dom";
 
 const METRICS = [
   { name: "Total value locked", needs: "a verified vault or lending contract on Mezo Testnet that reports its total assets" },
@@ -30,7 +30,10 @@ export function VaultIntelligence() {
 
       <section className="space-y-3">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">2. Your positions</h2>
-        <LoanCard />
+        <Card className="space-y-3">
+          <p className="text-sm leading-relaxed text-mist-400">Read your BTC-backed MUSD trove and its collateral ratio on the dedicated Trove page.</p>
+          <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Trove</Link>
+        </Card>
         <PoolPositionsCard />
       </section>
 

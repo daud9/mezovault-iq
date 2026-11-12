@@ -5,10 +5,8 @@ import { DataStatus } from "../components/ui/DataStatus";
 import { MusdBalanceCard } from "../components/balance/MusdBalanceCard";
 import { BtcBalanceCard } from "../components/balance/BtcBalanceCard";
 import { MezoBalanceCard } from "../components/balance/MezoBalanceCard";
-import { LoanCard } from "../components/balance/LoanCard";
 import { SupportCard } from "../components/support/SupportCard";
 import { Link } from "react-router-dom";
-import { OFFICIAL_SOURCES } from "../config/chains";
 import { useWallet } from "../components/wallet/WalletProvider";
 
 export function Overview() {
@@ -31,24 +29,34 @@ export function Overview() {
           <BtcBalanceCard />
           <MezoBalanceCard />
         </div>
-        <LoanCard />
       </div>
 
       <SupportCard />
 
       <div className="space-y-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Next steps</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Explore MezoVault IQ</h2>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <Card className="space-y-3">
+            <p className="text-sm font-semibold text-mist-100">Your Trove</p>
+            <p className="text-sm leading-relaxed text-mist-400">
+              View current BTC collateral, MUSD debt and the informational collateral ratio. If no trove is active, a
+              preview is available; the only in-app wallet request is a fixed test limited to one approved wallet, not
+              general borrowing.
+              Trove management actions are disabled.
+            </p>
+            <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">
+              Open Trove
+            </Link>
+          </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Smart Vaults</p>
             <p className="text-sm leading-relaxed text-mist-400">See which vaults are verified on Mezo Testnet, and what is needed to activate the rest.</p>
             <Link to="/app/smart-vaults" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Smart Vaults</Link>
           </Card>
           <Card className="space-y-3">
-            <p className="text-sm font-semibold text-mist-100">Borrow MUSD against BTC</p>
-            <p className="text-sm leading-relaxed text-mist-400">Borrowing is done in the official Mezo borrow page. This app does not build borrow transactions yet.</p>
-            <a href={OFFICIAL_SOURCES.mezoBorrowApp} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open the official borrow page</a>
-            <p className="text-xs leading-relaxed text-mist-500">The official testnet guide uses this page while connected to Mezo Testnet.</p>
+            <p className="text-sm font-semibold text-mist-100">Activity</p>
+            <p className="text-sm leading-relaxed text-mist-400">Review recent MUSD and MEZO transfers plus transactions sent from this app in this browser.</p>
+            <Link to="/app/activity" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Activity</Link>
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Swap MUSD and BTC</p>
@@ -60,28 +68,36 @@ export function Overview() {
       </div>
 
       <div className="space-y-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">What is not available yet</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Data coverage limits</h2>
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Portfolio valuation</p>
-            <DataStatus state="unavailable" detail="no price source" />
+            <DataStatus state="unavailable" detail="incomplete price coverage" />
             <p className="text-sm leading-relaxed text-mist-400">
-              A total in dollars needs a reliable price feed for MUSD and BTC on Mezo Testnet. None is connected, so no total is shown.
+              Mezo PriceFeed provides BTC/USD for the Trove ratio, but this app has no confirmed MUSD valuation source or
+              wallet-wide pricing calculation. A portfolio total is therefore not shown.
             </p>
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">DeFi positions</p>
-            <DataStatus state="unavailable" detail="no verified contracts" />
+            <DataStatus state="unverified" detail="partial coverage" />
             <p className="text-sm leading-relaxed text-mist-400">
-              Deposits and loans appear here once a protocol with a verified testnet address and readable balances is confirmed.
+              Trove reads and shares in the documented Mezo basic pools are supported elsewhere in the app. Broader
+              protocols remain unavailable until their testnet contracts and readable positions are verified.
             </p>
+            <div className="flex flex-wrap gap-x-4">
+              <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View Trove</Link>
+              <Link to="/app/vaults" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View verified positions</Link>
+            </div>
           </Card>
           <Card className="space-y-3">
-            <p className="text-sm font-semibold text-mist-100">Transactions</p>
-            <DataStatus state="unavailable" detail="no history source" />
+            <p className="text-sm font-semibold text-mist-100">Transaction history</p>
+            <DataStatus state="unverified" detail="partial history" />
             <p className="text-sm leading-relaxed text-mist-400">
-              Transaction history needs an explorer API that is not yet connected. See the Activity page.
+              Activity reads MUSD/MEZO transfers within the last 5,000 blocks and local app submissions. Full history,
+              activity from other apps and native BTC transfers need an indexed history source.
             </p>
+            <Link to="/app/activity" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Activity</Link>
           </Card>
         </div>
       </div>
