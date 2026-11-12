@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
+import { Download, ExternalLink, ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
+import { CoverageMap } from "../components/activity/CoverageMap";
 import { SectionHeader } from "../components/ui/SectionHeader";
 import { DataStatus } from "../components/ui/DataStatus";
 import { useWallet } from "../components/wallet/WalletProvider";
@@ -12,6 +13,7 @@ import { readTransfersInRange, type TransferLog } from "../lib/transferLogs";
 import { browserStore, entriesFor, readLedger, updateEntry, type LedgerEntry } from "../lib/txLedger";
 import { formatTokenUnits } from "../lib/tokenAmount";
 import { formatTime, shortAddress } from "../lib/format";
+import { buildActivityCsv } from "../lib/activityCsv";
 import type { MezoNetworkConfig } from "../config/chains";
 
 /** Each explicit history request covers this many blocks; older pages are fetched only on demand. */
@@ -27,6 +29,7 @@ interface TransferCoverage {
   fromBlock: number;
   toBlock: number;
   snapshotBlock: number;
+  retrievedAt: string;
 }
 
 async function readTokenTransfers(options: {
@@ -143,7 +146,7 @@ export function Activity() {
         });
         if (!cancelled && generation === historyGeneration.current) {
           setTransfers(items);
-          setTransferCoverage({ fromBlock, toBlock: snapshotBlock, snapshotBlock });
+          setTransferCoverage({ fromBlock, toBlock: snapshotBlock, snapshotBlock, retrievedAt: new Date().toISOString() });
         }
       } catch (err) {
         if (!cancelled && generation === historyGeneration.current) {
@@ -174,7 +177,7 @@ export function Activity() {
       if (generation === historyGeneration.current) {
         setTransfers((current) => [...(current ?? []), ...older].sort((a, b) => b.log.blockNumber - a.log.blockNumber));
         setTransferCoverage((current) =>
-          current && current.fromBlock === currentFromBlock ? { ...current, fromBlock } : current,
+          current && current.fromBlock === currentFromBlock ? { ...current, fromBlock, retrievedAt: new Date().toISOString() } : current,
         );
       }
     } catch (err) {
@@ -184,6 +187,18 @@ export function Activity() {
     } finally {
       if (generation === historyGeneration.current) setLoadingOlder(false);
     }
+  }
+
+  function exportLoadedTransfers() {
+    if (!transfers || !transferCoverage) return;
+    const csv = buildActivityCsv(transfers, transferCoverage);
+    const file = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(file);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `mezovault-iq-transfers-${transferCoverage.fromBlock}-${transferCoverage.toBlock}.csv`;
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   const explorer = network.explorerUrl.replace(/\/?$/, "/");
@@ -241,6 +256,15 @@ export function Activity() {
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">MUSD and MEZO token transfers</h2>
+            {!loadingTransfers && !transferError && transfers && transferCoverage && (
+              <CoverageMap
+                fromBlock={transferCoverage.fromBlock}
+                toBlock={transferCoverage.toBlock}
+                snapshotBlock={transferCoverage.snapshotBlock}
+                tokens={mezoDecimals === null ? ["MUSD"] : ["MUSD", "MEZO"]}
+                count={transfers.length}
+              />
+            )}
             <Card className="space-y-3">
               {loadingTransfers && <p className="text-sm text-mist-400" role="status">Reading the latest {PAGE_BLOCKS.toLocaleString()} blocks of token transfers from {network.label}…</p>}
               {!loadingTransfers && transferError && (
@@ -282,13 +306,18 @@ export function Activity() {
                     Loaded token-log range: blocks {transferCoverage.fromBlock.toLocaleString()}–{transferCoverage.toBlock.toLocaleString()} (snapshot at block {transferCoverage.snapshotBlock.toLocaleString()}). This covers only standard Transfer events for the configured MUSD and, when verified, MEZO contracts; it excludes native BTC transfers and other wallet or contract activity.
                   </p>
                   {olderError && <p className="text-sm text-risk-high">Could not load the older page: {olderError}</p>}
-                  {transferCoverage.fromBlock > 0 ? (
-                    <Button variant="secondary" onClick={loadOlderTransfers} disabled={loadingOlder} className="min-h-11">
-                      {loadingOlder ? "Loading older transfers…" : `Load older transfers (${Math.max(0, transferCoverage.fromBlock - PAGE_BLOCKS).toLocaleString()}–${(transferCoverage.fromBlock - 1).toLocaleString()})`}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {transferCoverage.fromBlock > 0 ? (
+                      <Button variant="secondary" onClick={loadOlderTransfers} disabled={loadingOlder} className="min-h-11">
+                        {loadingOlder ? "Loading older transfers…" : `Load older transfers (${Math.max(0, transferCoverage.fromBlock - PAGE_BLOCKS).toLocaleString()}–${(transferCoverage.fromBlock - 1).toLocaleString()})`}
+                      </Button>
+                    ) : (
+                      <p className="text-xs text-mist-500">Reached block 0 for these token logs; this still is not a complete wallet history.</p>
+                    )}
+                    <Button variant="secondary" onClick={exportLoadedTransfers} className="min-h-11">
+                      <Download className="h-4 w-4" aria-hidden="true" /> Export loaded rows CSV
                     </Button>
-                  ) : (
-                    <p className="text-xs text-mist-500">Reached block 0 for these token logs; this still is not a complete wallet history.</p>
-                  )}
+                  </div>
                 </div>
               )}
             </Card>

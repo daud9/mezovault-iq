@@ -39,30 +39,31 @@ export function Overview() {
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Your Trove</p>
             <p className="text-sm leading-relaxed text-mist-400">
-              View current BTC collateral, MUSD debt and the informational collateral ratio. If no trove is active, a
-              preview is available; the only in-app wallet request is a fixed test limited to one approved wallet, not
-              general borrowing.
-              Trove management actions are disabled.
+              Read BTC collateral and MUSD debt. Use Trove Risk Lab for the live MCR comparison and hypothetical BTC price-drop scenarios. No general Trove management is enabled.
             </p>
             <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">
               Open Trove
             </Link>
           </Card>
           <Card className="space-y-3">
-            <p className="text-sm font-semibold text-mist-100">Smart Vaults</p>
-            <p className="text-sm leading-relaxed text-mist-400">See which vaults are verified on Mezo Testnet, and what is needed to activate the rest.</p>
-            <Link to="/app/smart-vaults" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Smart Vaults</Link>
+            <p className="text-sm font-semibold text-mist-100">Protocol Evidence</p>
+            <p className="text-sm leading-relaxed text-mist-400">Separate what is documented, deployed, source verified, and operationally tested. OpturaFi Range is only a candidate.</p>
+            <Link to="/app/protocol-evidence" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open evidence board</Link>
+          </Card>
+          <Card className="space-y-3">
+            <p className="text-sm font-semibold text-mist-100">Pool Watch</p>
+            <p className="text-sm leading-relaxed text-mist-400">Read official Testnet pool reserves and reserve-implied spot prices. Fee tiers and USD liquidity are not verified; no APY or pool recommendation is shown.</p>
+            <Link to="/app/pools" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Pool Watch</Link>
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Activity</p>
-            <p className="text-sm leading-relaxed text-mist-400">Review recent MUSD and MEZO transfers plus transactions sent from this app in this browser.</p>
+            <p className="text-sm leading-relaxed text-mist-400">Review bounded MUSD/MEZO transfer logs with a coverage map and CSV export, alongside transactions submitted from this browser.</p>
             <Link to="/app/activity" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Activity</Link>
           </Card>
           <Card className="space-y-3">
-            <p className="text-sm font-semibold text-mist-100">Swap MUSD and BTC</p>
-            <p className="text-sm leading-relaxed text-mist-400">
-              Swapping is not available in MezoVault IQ. The official Mezo swap guide is documented for mainnet, and no testnet swap link is verified, so none is shown here.
-            </p>
+            <p className="text-sm font-semibold text-mist-100">Trove Risk Lab</p>
+            <p className="text-sm leading-relaxed text-mist-400">Compare live collateral, debt, ratio, and MCR distance with 10%, 20%, and 30% hypothetical BTC price drops. Read-only; no automated action.</p>
+            <Link to="/app/trove-risk" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Risk Lab</Link>
           </Card>
         </div>
       </div>
@@ -88,7 +89,8 @@ export function Overview() {
             </p>
             <div className="flex flex-wrap gap-x-4">
               <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View Trove</Link>
-              <Link to="/app/vaults" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View verified positions</Link>
+              <Link to="/app/protocol-evidence" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View Protocol Evidence</Link>
+              <Link to="/app/pools" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View Pool Watch</Link>
             </div>
           </Card>
           <Card className="space-y-3">

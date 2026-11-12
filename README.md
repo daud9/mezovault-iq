@@ -22,13 +22,16 @@ Every balance and transaction shown in the app is read from the chain or from th
 | Payment-request links (asset, amount, recipient and network in the link; copy and share) | Implemented, tested on Mezo Testnet |
 | Payment page at `/app/pay` that validates a link and sends the payer to the review step. Nothing is sent from this page | Implemented |
 | Support card (review or enter amount manually for BTC, MUSD; MEZO when verified) | Implemented |
-| Activity page: app-sent transactions plus MUSD/MEZO Transfer logs, with older 5,000-block pages loaded on demand | Implemented, partial history |
+| Activity page: app-sent transactions plus bounded MUSD/MEZO Transfer logs, coverage map, CSV export, and older 5,000-block pages on demand | Implemented, partial history |
 | BTC-only wallet estimate from the fresh Mezo BTC/USD protocol oracle; MUSD and MEZO are not assigned a USD price | Partial, read-only |
 | Loan position read for a BTC-collateralised MUSD loan (collateral, debt, ratio from the official oracle price) | Read-only |
+| Trove Risk Lab: live MCR comparison and hypothetical 10%, 20%, and 30% BTC price drops | Read-only, withheld when live inputs are stale or incomplete |
 | Open-trove planner plus fixed test-only action (0.05 BTC / 3,000 MUSD, approved wallet only) | Fresh same-block protocol checks, `eth_call`, and gas estimation before explicit wallet confirmation; no transaction was sent during this change |
 | Liquidity-pool position read for the three official testnet basic pools | Read-only |
-| Verified contract directory with explorer links | Implemented |
-| IQ Strategy Engine, allocation planner and simulation calculator | Implemented, see scope below |
+| Pool Watch: official Testnet pool reserves and reserve-implied spot price | Read-only; fee tier and USD liquidity are not verified; no APY or recommendations |
+| Protocol Evidence board: documented, deployed, source-verified, and operationally-tested stages | Read-only; unknown and partial evidence is labelled explicitly |
+| Simulation Lab | Assumption-based preview only; not a live strategy or yield claim |
+| MUSD/MEZO dollar totals, vault-yield claims, and general Trove transactions | Not presented as working features until sources/contracts are verified |
 
 ### Tested on Mezo Testnet
 
@@ -37,15 +40,15 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **MEZO transfer, confirmed.** Sent 1 MEZO; the Activity page shows it as live from chain at block 16375491. Transaction `0xf8deebc206d05cfe4f8bf2b6ca6dc820fc4c01eff2823cb98f31686ececf2dff`. The same on-chain check that enables MEZO sending also read the wallet's MEZO balance (100 MEZO) on Mezo Testnet.
 - **Payment-request link.** A link generated in Mezo Pay opened the payment page with the recipient, token (BTC) and amount (0.0001) filled in, and the payer confirmed it in the review step.
 - **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
-- **Automated unit tests.** 275 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, and fail-closed preflight behavior. New oracle and history tests use fake JSON-RPC only.
+- **Automated unit tests.** 291 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, pool-market snapshots, protocol-evidence integrity, CSV escaping, and fail-closed preflight behavior. New oracle, pool, and history tests use fake JSON-RPC only.
 
 ### Still under development (not operational)
 
 - **Smart Vault deposits and withdrawals.** No testnet vault contract has been verified, so no vault can be used.
-- **Executable swaps.** The official testnet router and pools are verified and listed in the app, but no swap quote or swap transaction is implemented.
+- **Executable swaps.** Official pool addresses are documented and Pool Watch reads reserves; pool fee behavior and swap execution are not verified, so no swap quote or transaction is implemented.
 - **Verified live yield, TVL and strategy data.** The app shows these as unavailable. No APY, TVL or strategy is listed.
-- **Advanced allocation and automated investing.** The allocation planner works only from verified strategies, and none is verified yet, so it produces no live allocation.
-- **Autopilot and automated rebalancing.** Not implemented. The Autopilot page is a status and roadmap page only.
+- **Allocation and automated investing.** Allocation is hidden from primary navigation until verified strategy inputs exist; no allocation result or live return is generated.
+- **Autopilot and automated rebalancing.** Not implemented and hidden from primary navigation. The Trove Risk Lab is read-only and does not automate actions.
 - **General loan changes** (arbitrary open, adjust, repay, close). Only the fixed test action for the specifically approved wallet and parameters is available; planner inputs are never used to build a transaction. It re-reads live state and simulates the exact call before asking the wallet, and otherwise fails closed. All other loan changes must be made in the official Mezo borrow page.
 
 ### Pricing and history source limits
@@ -185,9 +188,9 @@ src/
   config/     network, token, contract and pool configuration
   lib/        RPC client, ABI helpers, balance, send, ledger and log readers
   hooks/      wallet and balance hooks
-  components/ UI components (wallet, balance, send, support, vaults)
-  pages/      routes: Overview, Mezo Pay, Pay, Activity, Smart Vaults, IQ Strategies,
-              Vault Intelligence, Allocation Lab, Simulation Lab, Autopilot
+  components/ UI components (wallet, balance, send, support, activity, evidence)
+  pages/      routes: Overview, Mezo Pay, Pay, Activity, Pool Watch, Trove Risk Lab,
+              Protocol Evidence, Simulation Lab
   engine/     strategy scoring, matching, simulation and allocation logic
 server/       optional local Deno static server
 ```

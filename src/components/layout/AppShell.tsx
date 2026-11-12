@@ -1,15 +1,12 @@
 import { NavLink, Outlet } from "react-router-dom";
 import {
   Activity as ActivityIcon,
-  Bot,
   FlaskRound,
   Gauge,
   LayoutDashboard,
-  Scale,
-  Sparkles,
   ShieldCheck,
-  Landmark,
   Send,
+  Waves,
 } from "lucide-react";
 import { DEFAULT_NETWORK } from "../../config/env";
 import { WalletButton } from "./WalletButton";
@@ -19,12 +16,10 @@ export const APP_NAV = [
   { to: "/app", label: "Overview", icon: LayoutDashboard, end: true },
   { to: "/app/trove", label: "Trove", icon: Gauge },
   { to: "/app/send", label: "Mezo Pay", icon: Send },
-  { to: "/app/smart-vaults", label: "Smart Vaults", icon: Landmark },
-  { to: "/app/strategies", label: "IQ Strategies", icon: Sparkles },
-  { to: "/app/vaults", label: "Vault Intelligence", icon: ShieldCheck },
-  { to: "/app/allocation", label: "Allocation Lab", icon: Scale },
+  { to: "/app/protocol-evidence", label: "Protocol Evidence", icon: ShieldCheck },
+  { to: "/app/pools", label: "Pool Watch", icon: Waves },
   { to: "/app/simulation", label: "Simulation Lab", icon: FlaskRound },
-  { to: "/app/autopilot", label: "Autopilot", icon: Bot },
+  { to: "/app/trove-risk", label: "Trove Risk Lab", icon: Gauge },
   { to: "/app/activity", label: "Activity", icon: ActivityIcon },
 ] as const;
 

@@ -4,16 +4,14 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { WalletProvider } from "./components/wallet/WalletProvider";
 import { Landing } from "./pages/Landing";
 import { Overview } from "./pages/Overview";
-import { IQStrategies } from "./pages/IQStrategies";
-import { VaultIntelligence } from "./pages/VaultIntelligence";
-import { AllocationLab } from "./pages/AllocationLab";
 import { SimulationLab } from "./pages/SimulationLab";
-import { Autopilot } from "./pages/Autopilot";
 import { Activity } from "./pages/Activity";
-import { SmartVaults } from "./pages/SmartVaults";
+import { ProtocolEvidence } from "./pages/ProtocolEvidence";
+import { PoolWatch } from "./pages/PoolWatch";
 import { Send } from "./pages/Send";
 import { Pay } from "./pages/Pay";
 import { Trove } from "./pages/Trove";
+import { TroveRiskLab } from "./pages/TroveRiskLab";
 
 export default function App() {
   return (
@@ -27,12 +25,15 @@ export default function App() {
             <Route path="send" element={<Send />} />
             <Route path="pay" element={<Pay />} />
             <Route path="trove" element={<Trove />} />
-            <Route path="smart-vaults" element={<SmartVaults />} />
-            <Route path="strategies" element={<IQStrategies />} />
-            <Route path="vaults" element={<VaultIntelligence />} />
-            <Route path="allocation" element={<AllocationLab />} />
+            <Route path="trove-risk" element={<TroveRiskLab />} />
+            <Route path="smart-vaults" element={<ProtocolEvidence />} />
+            <Route path="vaults" element={<ProtocolEvidence />} />
+            <Route path="protocol-evidence" element={<ProtocolEvidence />} />
+            <Route path="strategies" element={<PoolWatch />} />
+            <Route path="pools" element={<PoolWatch />} />
+            <Route path="allocation" element={<Navigate to="/app/pools" replace />} />
             <Route path="simulation" element={<SimulationLab />} />
-            <Route path="autopilot" element={<Autopilot />} />
+            <Route path="autopilot" element={<Navigate to="/app/trove-risk" replace />} />
             <Route path="activity" element={<Activity />} />
             <Route path="*" element={<Navigate to="/app" replace />} />
           </Route>
