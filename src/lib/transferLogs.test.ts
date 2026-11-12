@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { decodeTransferLog, logFilter, TRANSFER_TOPIC, readRecentTransfers } from "./transferLogs";
+import { decodeTransferLog, logFilter, TRANSFER_TOPIC, readRecentTransfers, readTransfersInRange } from "./transferLogs";
 import { createRpcClient } from "./rpc";
 import { fakeFetch, type Handler } from "./testHelpers";
 
@@ -79,5 +79,35 @@ describe("reading recent transfers", () => {
     };
     const rpc = createRpcClient({ url: "https://rpc.example", fetchImpl: fakeFetch(handler).fetchImpl });
     await assert.rejects(readRecentTransfers({ rpc, token: TOKEN, owner: OWNER, lookbackBlocks: 1000 }));
+  });
+
+  it("reads both directions for exactly the requested inclusive older-page range", async () => {
+    const handler: Handler = (method, params) => {
+      if (method !== "eth_getLogs") return new Error(`unexpected ${method}`);
+      const filter = params[0] as { fromBlock: string; toBlock: string; topics: (string | null)[] };
+      assert.equal(filter.fromBlock, "0x10");
+      assert.equal(filter.toBlock, "0x14");
+      const incoming = filter.topics[1] === null;
+      return [{
+        transactionHash: incoming ? "0xolder-in" : "0xolder-out",
+        blockNumber: incoming ? "0x11" : "0x13",
+        topics: incoming ? [TRANSFER_TOPIC, pad(OTHER), pad(OWNER)] : [TRANSFER_TOPIC, pad(OWNER), pad(OTHER)],
+        data: "0x01",
+      }];
+    };
+    const rpc = createRpcClient({ url: "https://rpc.example", fetchImpl: fakeFetch(handler).fetchImpl });
+    const out = await readTransfersInRange({ rpc, token: TOKEN, owner: OWNER, fromBlock: 16, toBlock: 20 });
+    assert.deepEqual(out.map((log) => log.txHash), ["0xolder-out", "0xolder-in"]);
+    assert.deepEqual(out.map((log) => log.direction), ["outgoing", "incoming"]);
+  });
+
+  it("rejects an invalid range before making any RPC request", async () => {
+    const fake = fakeFetch(() => new Error("should not call RPC"));
+    const rpc = createRpcClient({ url: "https://rpc.example", fetchImpl: fake.fetchImpl });
+    await assert.rejects(
+      readTransfersInRange({ rpc, token: TOKEN, owner: OWNER, fromBlock: 20, toBlock: 19 }),
+      /block range is invalid/,
+    );
+    assert.equal(fake.calls.length, 0);
   });
 });

@@ -22,7 +22,8 @@ Every balance and transaction shown in the app is read from the chain or from th
 | Payment-request links (asset, amount, recipient and network in the link; copy and share) | Implemented, tested on Mezo Testnet |
 | Payment page at `/app/pay` that validates a link and sends the payer to the review step. Nothing is sent from this page | Implemented |
 | Support card (review or enter amount manually for BTC, MUSD; MEZO when verified) | Implemented |
-| Activity page: transactions sent from the app (hash, status, block, explorer link) and MUSD/MEZO transfer logs from the last 5,000 blocks | Implemented |
+| Activity page: app-sent transactions plus MUSD/MEZO Transfer logs, with older 5,000-block pages loaded on demand | Implemented, partial history |
+| BTC-only wallet estimate from the fresh Mezo BTC/USD protocol oracle; MUSD and MEZO are not assigned a USD price | Partial, read-only |
 | Loan position read for a BTC-collateralised MUSD loan (collateral, debt, ratio from the official oracle price) | Read-only |
 | Open-trove planner plus fixed test-only action (0.05 BTC / 3,000 MUSD, approved wallet only) | Fresh same-block protocol checks, `eth_call`, and gas estimation before explicit wallet confirmation; no transaction was sent during this change |
 | Liquidity-pool position read for the three official testnet basic pools | Read-only |
@@ -35,8 +36,8 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **Second BTC transfer.** Sent 0.001 BTC; the Activity page shows it as live from chain at block 16368801. Transaction `0xb99ffa8e4c02c1b2f4128f1078e92f83a694c9944305ca7041d97c87aada1b96`.
 - **MEZO transfer, confirmed.** Sent 1 MEZO; the Activity page shows it as live from chain at block 16375491. Transaction `0xf8deebc206d05cfe4f8bf2b6ca6dc820fc4c01eff2823cb98f31686ececf2dff`. The same on-chain check that enables MEZO sending also read the wallet's MEZO balance (100 MEZO) on Mezo Testnet.
 - **Payment-request link.** A link generated in Mezo Pay opened the payment page with the recipient, token (BTC) and amount (0.0001) filled in, and the payer confirmed it in the review step.
-- **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link.
-- **Automated unit tests.** 267 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, and open-trove integer math, same-block reads, freshness checks, exact test parameters, and fail-closed preflight behavior. New preflight tests use fake JSON-RPC only.
+- **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
+- **Automated unit tests.** 275 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, and fail-closed preflight behavior. New oracle and history tests use fake JSON-RPC only.
 
 ### Still under development (not operational)
 
@@ -46,6 +47,12 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **Advanced allocation and automated investing.** The allocation planner works only from verified strategies, and none is verified yet, so it produces no live allocation.
 - **Autopilot and automated rebalancing.** Not implemented. The Autopilot page is a status and roadmap page only.
 - **General loan changes** (arbitrary open, adjust, repay, close). Only the fixed test action for the specifically approved wallet and parameters is available; planner inputs are never used to build a transaction. It re-reads live state and simulates the exact call before asking the wallet, and otherwise fails closed. All other loan changes must be made in the official Mezo borrow page.
+
+### Pricing and history source limits
+
+- BTC-only estimates use the configured on-chain Mezo `PriceFeed`; the app shows no estimate when the RPC read or one-hour freshness check fails. The [Mezo oracle guide](https://mezo.org/docs/developers/architecture/oracles/read-oracle/) also documents Pyth MUSD/USD and MEZO/USD feeds, but the tested Testnet calls reverted and Hermes returned HTTP 401, so neither token is assigned a dollar price.
+- The [Mezo node oracle REST endpoint](https://mezo.org/docs/developers/architecture/oracles/read-oracle/) returned a BTC price over HTTP during integration checks, while HTTPS failed. The HTTPS app does not call that HTTP endpoint.
+- Activity pages read standard MUSD and verified MEZO `Transfer` logs from JSON-RPC in 5,000-block ranges. The [Testnet explorer API docs](https://explorer.test.mezo.org/api-docs) were available, but the usual address-history API routes tested returned 404. [Goldsky lists Mezo support](https://docs.goldsky.com/chains/mezo), but a project-owned deployment is required. Until an indexed history source is available, native BTC transfers and other activity remain outside this view.
 
 ---
 
@@ -78,7 +85,8 @@ Values from `src/config/chains.ts`. Sources are listed beside each value.
 | MEZO token | `0x7B7c000000000000000000000000000000000001` | Mezo contracts reference. Testnet use confirmed by the 1 MEZO transfer and balance read recorded above. The app still shows MEZO only if its on-chain check passes. |
 | TroveManager (loan storage) | `0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0` | Mezo MUSD redemptions page. Explorer shows it verified. |
 | BorrowerOperations (proxy) | `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5` | Mezo MUSD redemptions page. Explorer shows it verified. |
-| BTC/USD oracle | `0x2880aB155794e7179c9eE2e38200202908C17B43` | Mezo oracle documentation |
+| Mezo Testnet PriceFeed proxy | `0x86bCF0841622a5dAC14A313a15f96A95421b9366` | Existing verified Testnet configuration; resolves to the BTC/USD oracle below |
+| BTC/USD PriceOracleCaller | `0x7b7c000000000000000000000000000000000015` | Mezo oracle documentation; `latestRoundData()` update time is checked |
 | Basic pool router | `0x9a1ff7FE3a0F69959A3fBa1F1e5ee18e1A9CD7E9` | Mezo Pools documentation. Explorer shows it verified. |
 | Basic pools | MUSD/BTC `0xd16A5Df82120ED8D626a1a15232bFcE2366d6AA9`, MUSD/mUSDC `0x525F049A4494dA0a6c87E3C4df55f9929765Dc3e`, MUSD/mUSDT `0x27414B76CF00E24ed087adb56E26bAeEEe93494e` | Mezo Pools documentation |
 
@@ -141,7 +149,7 @@ deno task start      # serves dist/ on http://localhost:8000
 - **Testnet assets have no real monetary value.** BTC, MUSD and MEZO on Mezo Testnet are for testing only.
 - **Hypothetical simulations are not actual yield.** The Simulation Lab calculates results from assumptions you enter. Its outputs are not forecasts, and the app does not present them as live rates.
 - **Transaction status is read from the chain.** A transaction is shown as confirmed only after its receipt reports success.
-- **Unverified data is marked as unavailable.** The app does not estimate APYs, TVL or prices.
+- **Price coverage is partial.** The BTC card may show a BTC-only estimate from Mezo's BTC/USD oracle after validating its update time; the displayed quote ages and expires after one hour. This is not a portfolio total; MUSD and MEZO remain unpriced, and testnet assets have no real monetary value. The app reads the oracle over the configured chain RPC and shows no value if that read fails or is stale. Mezo's documented REST oracle endpoint is HTTP-only, so the HTTPS client does not call it directly. The app does not estimate APYs or TVL.
 - **Public repository.** Nothing in the repository contains credentials. The only values in the code are public contract addresses and the project's public support address.
 
 This is an experimental interface. Nothing in it is financial or investment advice.

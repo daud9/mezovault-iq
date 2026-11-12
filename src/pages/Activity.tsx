@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, ArrowDownLeft, ArrowUpRight, RefreshCw } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { Button } from "../components/ui/Button";
@@ -7,14 +7,15 @@ import { DataStatus } from "../components/ui/DataStatus";
 import { useWallet } from "../components/wallet/WalletProvider";
 import { useMezoBalance } from "../hooks/useMezoBalance";
 import { resolveRpcUrl } from "../config/env";
-import { createRpcClient } from "../lib/rpc";
-import { readRecentTransfers, type TransferLog } from "../lib/transferLogs";
+import { createRpcClient, type RpcClient } from "../lib/rpc";
+import { readTransfersInRange, type TransferLog } from "../lib/transferLogs";
 import { browserStore, entriesFor, readLedger, updateEntry, type LedgerEntry } from "../lib/txLedger";
 import { formatTokenUnits } from "../lib/tokenAmount";
 import { formatTime, shortAddress } from "../lib/format";
+import type { MezoNetworkConfig } from "../config/chains";
 
-/** Number of recent blocks searched for token transfers. Shown on the page, so the window is never hidden. */
-const LOOKBACK_BLOCKS = 5000;
+/** Each explicit history request covers this many blocks; older pages are fetched only on demand. */
+const PAGE_BLOCKS = 5_000;
 
 interface ChainTransfer {
   token: "MUSD" | "MEZO";
@@ -22,14 +23,59 @@ interface ChainTransfer {
   decimals: number;
 }
 
+interface TransferCoverage {
+  fromBlock: number;
+  toBlock: number;
+  snapshotBlock: number;
+}
+
+async function readTokenTransfers(options: {
+  rpc: RpcClient;
+  network: MezoNetworkConfig;
+  owner: `0x${string}`;
+  fromBlock: number;
+  toBlock: number;
+  mezoDecimals: number | null;
+}): Promise<ChainTransfer[]> {
+  const { rpc, network, owner, fromBlock, toBlock, mezoDecimals } = options;
+  if (!network.musd) throw new Error(`MUSD is not configured for ${network.label}.`);
+
+  const musdRequest = readTransfersInRange({
+    rpc,
+    token: network.musd.address,
+    owner,
+    fromBlock,
+    toBlock,
+  });
+  const mezoRequest = network.mezo && mezoDecimals !== null
+    ? readTransfersInRange({ rpc, token: network.mezo.address, owner, fromBlock, toBlock })
+    : Promise.resolve([] as TransferLog[]);
+  const [musdLogs, mezoLogs] = await Promise.all([musdRequest, mezoRequest]);
+  return [
+    ...musdLogs.map((log) => ({ token: "MUSD" as const, log, decimals: 18 })),
+    ...mezoLogs.map((log) => ({ token: "MEZO" as const, log, decimals: mezoDecimals! })),
+  ].sort((a, b) => b.log.blockNumber - a.log.blockNumber);
+}
+
+function blockNumberFromHex(value: string): number {
+  if (!/^0x[0-9a-fA-F]+$/.test(value)) throw new Error("The RPC returned an invalid block number.");
+  const block = BigInt(value);
+  if (block > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("The RPC returned an unsafe block number.");
+  return Number(block);
+}
+
 export function Activity() {
   const { state, network, isSupportedNetwork } = useWallet();
   const mezo = useMezoBalance();
   const [ledger, setLedger] = useState<LedgerEntry[]>([]);
   const [transfers, setTransfers] = useState<ChainTransfer[] | null>(null);
+  const [transferCoverage, setTransferCoverage] = useState<TransferCoverage | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
+  const [olderError, setOlderError] = useState<string | null>(null);
   const [loadingTransfers, setLoadingTransfers] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [tick, setTick] = useState(0);
+  const historyGeneration = useRef(0);
 
   const address = state.address;
   const ready = state.status === "connected" && address !== null && isSupportedNetwork;
@@ -40,21 +86,26 @@ export function Activity() {
     [ledger, address, network.chainId],
   );
 
-  // Load the ledger, then re-check any pending transactions against their receipts.
+  // Load the local ledger, then re-check any pending transactions against their receipts.
   useEffect(() => {
     if (!ready || !address) return;
     const store = browserStore();
     const rpc = createRpcClient({ url: resolveRpcUrl(network) });
     const pending = readLedger(store).filter(
-      (e) => e.status === "pending" && e.from.toLowerCase() === address.toLowerCase() && e.chainId === network.chainId,
+      (entry) => entry.status === "pending" && entry.from.toLowerCase() === address.toLowerCase() && entry.chainId === network.chainId,
     );
     setLedger(readLedger(store));
     let cancelled = false;
     (async () => {
-      for (const e of pending) {
+      for (const entry of pending) {
         try {
-          const r = await rpc.call<{ status: string; blockNumber: string } | null>("eth_getTransactionReceipt", [e.hash]);
-          if (r) updateEntry(store, e.hash, { status: r.status === "0x1" ? "success" : "reverted", blockNumber: Number(BigInt(r.blockNumber)) });
+          const receipt = await rpc.call<{ status: string; blockNumber: string } | null>("eth_getTransactionReceipt", [entry.hash]);
+          if (receipt) {
+            updateEntry(store, entry.hash, {
+              status: receipt.status === "0x1" ? "success" : "reverted",
+              blockNumber: Number(BigInt(receipt.blockNumber)),
+            });
+          }
         } catch {
           // Keep it pending. It is rechecked on the next visit.
         }
@@ -66,36 +117,74 @@ export function Activity() {
     };
   }, [ready, address, network, tick]);
 
-  // Incoming and outgoing token transfers from the chain, for the tokens whose contracts are verified.
+  // Read the latest page of standard ERC-20 Transfer logs, limited to verified token contracts.
   useEffect(() => {
     if (!ready || !address || !network.musd) return;
+    const generation = ++historyGeneration.current;
     let cancelled = false;
     setLoadingTransfers(true);
+    setLoadingOlder(false);
+    setTransfers(null);
+    setTransferCoverage(null);
     setTransferError(null);
+    setOlderError(null);
     const rpc = createRpcClient({ url: resolveRpcUrl(network) });
     (async () => {
       try {
-        const musd = await readRecentTransfers({ rpc, token: network.musd!.address, owner: address, lookbackBlocks: LOOKBACK_BLOCKS });
-        const items: ChainTransfer[] = musd.map((log) => ({ token: "MUSD", log, decimals: 18 }));
-        if (network.mezo && mezoDecimals !== null) {
-          const mezoLogs = await readRecentTransfers({ rpc, token: network.mezo.address, owner: address, lookbackBlocks: LOOKBACK_BLOCKS });
-          items.push(...mezoLogs.map((log) => ({ token: "MEZO" as const, log, decimals: mezoDecimals })));
+        const snapshotBlock = blockNumberFromHex(await rpc.call<string>("eth_blockNumber"));
+        const fromBlock = Math.max(0, snapshotBlock - PAGE_BLOCKS + 1);
+        const items = await readTokenTransfers({
+          rpc,
+          network,
+          owner: address,
+          fromBlock,
+          toBlock: snapshotBlock,
+          mezoDecimals,
+        });
+        if (!cancelled && generation === historyGeneration.current) {
+          setTransfers(items);
+          setTransferCoverage({ fromBlock, toBlock: snapshotBlock, snapshotBlock });
         }
-        items.sort((a, b) => b.log.blockNumber - a.log.blockNumber);
-        if (!cancelled) setTransfers(items);
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && generation === historyGeneration.current) {
           setTransfers(null);
-          setTransferError(err instanceof Error ? err.message : "Transfers could not be read.");
+          setTransferError(err instanceof Error ? err.message : "Token transfer logs could not be read.");
         }
       } finally {
-        if (!cancelled) setLoadingTransfers(false);
+        if (!cancelled && generation === historyGeneration.current) setLoadingTransfers(false);
       }
     })();
     return () => {
       cancelled = true;
+      if (historyGeneration.current === generation) historyGeneration.current += 1;
     };
   }, [ready, address, network, mezoDecimals, tick]);
+
+  async function loadOlderTransfers() {
+    if (!ready || !address || !network.musd || !transferCoverage || transferCoverage.fromBlock <= 0 || loadingOlder) return;
+    const currentFromBlock = transferCoverage.fromBlock;
+    const toBlock = currentFromBlock - 1;
+    const fromBlock = Math.max(0, toBlock - PAGE_BLOCKS + 1);
+    const generation = historyGeneration.current;
+    const rpc = createRpcClient({ url: resolveRpcUrl(network) });
+    setLoadingOlder(true);
+    setOlderError(null);
+    try {
+      const older = await readTokenTransfers({ rpc, network, owner: address, fromBlock, toBlock, mezoDecimals });
+      if (generation === historyGeneration.current) {
+        setTransfers((current) => [...(current ?? []), ...older].sort((a, b) => b.log.blockNumber - a.log.blockNumber));
+        setTransferCoverage((current) =>
+          current && current.fromBlock === currentFromBlock ? { ...current, fromBlock } : current,
+        );
+      }
+    } catch (err) {
+      if (generation === historyGeneration.current) {
+        setOlderError(err instanceof Error ? err.message : "Older token transfer logs could not be read.");
+      }
+    } finally {
+      if (generation === historyGeneration.current) setLoadingOlder(false);
+    }
+  }
 
   const explorer = network.explorerUrl.replace(/\/?$/, "/");
 
@@ -104,10 +193,10 @@ export function Activity() {
       <SectionHeader
         eyebrow="Activity"
         title="Your transactions"
-        description="Outgoing transactions sent from this app, and incoming and outgoing MUSD or MEZO transfers read from the chain. Balances are not included here."
+        description="Outgoing transactions sent from this app, and MUSD or MEZO Transfer events read from the chain. Older token-log pages load on demand; these are not a complete wallet history."
         actions={
           ready ? (
-            <Button variant="ghost" onClick={() => setTick((t) => t + 1)} className="min-h-11 px-2">
+            <Button variant="ghost" onClick={() => setTick((value) => value + 1)} className="min-h-11 px-2">
               <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
             </Button>
           ) : undefined
@@ -131,15 +220,15 @@ export function Activity() {
                 <p className="text-sm text-mist-400">No transactions have been sent from this app on {network.label} from this browser.</p>
               ) : (
                 <ul className="divide-y divide-line">
-                  {mine.map((e) => (
-                    <li key={e.hash} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  {mine.map((entry) => (
+                    <li key={entry.hash} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm text-mist-100"><ArrowUpRight className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" />Sent {e.amount} {e.token} to {shortAddress(e.to)}</p>
-                        <p className="text-xs text-mist-500">{formatTime(e.createdAt)} · {shortAddress(e.hash)}</p>
+                        <p className="text-sm text-mist-100"><ArrowUpRight className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" />Sent {entry.amount} {entry.token} to {shortAddress(entry.to)}</p>
+                        <p className="text-xs text-mist-500">{formatTime(entry.createdAt)} · {shortAddress(entry.hash)}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-3">
-                        <DataStatus state={e.status === "success" ? "live" : e.status === "pending" || e.status === "unconfirmed" ? "unverified" : "unavailable"} detail={e.status === "success" ? `block ${e.blockNumber}` : e.status} />
-                        <a href={`${explorer}tx/${e.hash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-gold-300 hover:underline">
+                        <DataStatus state={entry.status === "success" ? "live" : entry.status === "pending" || entry.status === "unconfirmed" ? "unverified" : "unavailable"} detail={entry.status === "success" ? `block ${entry.blockNumber}` : entry.status} />
+                        <a href={`${explorer}tx/${entry.hash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-gold-300 hover:underline">
                           Explorer <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                         </a>
                       </div>
@@ -151,40 +240,56 @@ export function Activity() {
           </section>
 
           <section className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">MUSD and MEZO transfers (last {LOOKBACK_BLOCKS} blocks)</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">MUSD and MEZO token transfers</h2>
             <Card className="space-y-3">
-              {loadingTransfers && <p className="text-sm text-mist-400" role="status">Reading transfers from {network.label}…</p>}
+              {loadingTransfers && <p className="text-sm text-mist-400" role="status">Reading the latest {PAGE_BLOCKS.toLocaleString()} blocks of token transfers from {network.label}…</p>}
               {!loadingTransfers && transferError && (
                 <div className="space-y-2">
                   <DataStatus state="unavailable" />
-                  <p className="text-sm text-mist-400">{transferError} The RPC may limit how far back it can search.</p>
+                  <p className="text-sm text-mist-400">{transferError} The RPC may be unavailable or may limit log queries.</p>
                 </div>
               )}
-              {!loadingTransfers && !transferError && transfers && transfers.length === 0 && (
-                <p className="text-sm text-mist-400">No MUSD or MEZO transfers involving this wallet in the last {LOOKBACK_BLOCKS} blocks.</p>
+              {!loadingTransfers && !transferError && transfers && transfers.length === 0 && transferCoverage && (
+                <p className="text-sm text-mist-400">No MUSD or MEZO transfer events in blocks {transferCoverage.fromBlock.toLocaleString()}–{transferCoverage.toBlock.toLocaleString()}.</p>
               )}
               {!loadingTransfers && !transferError && transfers && transfers.length > 0 && (
                 <ul className="divide-y divide-line">
-                  {transfers.map((t) => {
-                    const amount = formatTokenUnits(t.log.valueRaw, t.decimals, Math.min(6, t.decimals));
-                    const incoming = t.log.direction === "incoming";
-                    const counterpart = incoming ? t.log.from : t.log.to;
+                  {transfers.map((transfer) => {
+                    const amount = formatTokenUnits(transfer.log.valueRaw, transfer.decimals, Math.min(6, transfer.decimals));
+                    const incoming = transfer.log.direction === "incoming";
+                    const counterpart = incoming ? transfer.log.from : transfer.log.to;
                     return (
-                      <li key={`${t.log.txHash}-${t.log.direction}-${t.token}`} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <li key={`${transfer.log.txHash}-${transfer.log.direction}-${transfer.token}`} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="min-w-0">
                           <p className="text-sm text-mist-100">
                             {incoming ? <ArrowDownLeft className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" /> : <ArrowUpRight className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" />}
-                            {incoming ? "Received" : "Sent"} {amount} {t.token} {incoming ? "from" : "to"} {shortAddress(counterpart)}
+                            {incoming ? "Received" : "Sent"} {amount} {transfer.token} {incoming ? "from" : "to"} {shortAddress(counterpart)}
                           </p>
-                          <p className="text-xs text-mist-500">Block {t.log.blockNumber} · {shortAddress(t.log.txHash)}</p>
+                          <p className="text-xs text-mist-500">Block {transfer.log.blockNumber} · {shortAddress(transfer.log.txHash)}</p>
                         </div>
-                        <a href={`${explorer}tx/${t.log.txHash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-gold-300 hover:underline">
+                        <a href={`${explorer}tx/${transfer.log.txHash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-gold-300 hover:underline">
                           Explorer <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                         </a>
                       </li>
                     );
                   })}
                 </ul>
+              )}
+
+              {!loadingTransfers && !transferError && transferCoverage && (
+                <div className="space-y-3 border-t border-line pt-3">
+                  <p className="text-xs leading-relaxed text-mist-500">
+                    Loaded token-log range: blocks {transferCoverage.fromBlock.toLocaleString()}–{transferCoverage.toBlock.toLocaleString()} (snapshot at block {transferCoverage.snapshotBlock.toLocaleString()}). This covers only standard Transfer events for the configured MUSD and, when verified, MEZO contracts; it excludes native BTC transfers and other wallet or contract activity.
+                  </p>
+                  {olderError && <p className="text-sm text-risk-high">Could not load the older page: {olderError}</p>}
+                  {transferCoverage.fromBlock > 0 ? (
+                    <Button variant="secondary" onClick={loadOlderTransfers} disabled={loadingOlder} className="min-h-11">
+                      {loadingOlder ? "Loading older transfers…" : `Load older transfers (${Math.max(0, transferCoverage.fromBlock - PAGE_BLOCKS).toLocaleString()}–${(transferCoverage.fromBlock - 1).toLocaleString()})`}
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-mist-500">Reached block 0 for these token logs; this still is not a complete wallet history.</p>
+                  )}
+                </div>
               )}
             </Card>
           </section>
@@ -194,12 +299,12 @@ export function Activity() {
       <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
         <p className="font-medium text-mist-200">What this page does not show</p>
         <ul className="list-disc space-y-1.5 pl-5">
-          <li>Incoming BTC. Native BTC transfers emit no events, so they cannot be read this way.</li>
-          <li>Transactions sent from other apps or wallets, except MUSD and MEZO token transfers.</li>
-          <li>Anything older than the {LOOKBACK_BLOCKS}-block window. Use the explorer for full history.</li>
-          <li>Transaction timestamps for chain transfers, which show the block number instead.</li>
+          <li>Incoming or outgoing native BTC transfers, which are not ERC-20 Transfer events.</li>
+          <li>Transactions sent from other apps or wallets, except MUSD and MEZO token Transfer events in the block ranges loaded above.</li>
+          <li>Token transfers older than the pages you have loaded. Use “Load older transfers” to request another bounded range.</li>
+          <li>Transaction timestamps for token log rows; they show block numbers instead.</li>
         </ul>
-        <p className="text-xs text-mist-500">Sent-from-app records are stored only in this browser.</p>
+        <p className="text-xs text-mist-500">Transactions submitted from this app are stored only in this browser. The public explorer's usual address-history API routes were not available during integration checks, so this view does not claim comprehensive indexed history.</p>
       </Card>
     </div>
   );

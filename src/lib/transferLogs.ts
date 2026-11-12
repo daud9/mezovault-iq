@@ -56,22 +56,51 @@ export function decodeTransferLog(log: {
   };
 }
 
-/** Reads recent transfers in both directions, newest first. The RPC may refuse large ranges, so callers handle errors. */
+/** Reads one explicit, inclusive block range in both directions, newest first. */
+export async function readTransfersInRange(options: {
+  rpc: RpcClient;
+  token: `0x${string}`;
+  owner: `0x${string}`;
+  fromBlock: number;
+  toBlock: number;
+}): Promise<TransferLog[]> {
+  const { fromBlock, toBlock } = options;
+  if (
+    !Number.isSafeInteger(fromBlock) ||
+    !Number.isSafeInteger(toBlock) ||
+    fromBlock < 0 ||
+    toBlock < fromBlock
+  ) {
+    throw new Error("The transfer-log block range is invalid.");
+  }
+
+  const directions = ["incoming", "outgoing"] as const;
+  const logsByDirection = await Promise.all(
+    directions.map((direction) =>
+      options.rpc.call<{ transactionHash: string; blockNumber: string; topics: string[]; data: string }[]>(
+        "eth_getLogs",
+        [logFilter({ token: options.token, owner: options.owner, direction, fromBlock, toBlock })],
+      ),
+    ),
+  );
+  return logsByDirection
+    .flatMap((logs, index) => logs.map((log) => decodeTransferLog(log, directions[index])))
+    .sort((a, b) => b.blockNumber - a.blockNumber);
+}
+
+/** Reads a bounded recent range in both directions. The RPC may refuse the range, so callers handle errors. */
 export async function readRecentTransfers(options: {
   rpc: RpcClient;
   token: `0x${string}`;
   owner: `0x${string}`;
   lookbackBlocks: number;
 }): Promise<TransferLog[]> {
-  const latest = Number(BigInt(await options.rpc.call<string>("eth_blockNumber")));
-  const fromBlock = Math.max(0, latest - options.lookbackBlocks);
-  const out: TransferLog[] = [];
-  for (const direction of ["incoming", "outgoing"] as const) {
-    const logs = await options.rpc.call<{ transactionHash: string; blockNumber: string; topics: string[]; data: string }[]>(
-      "eth_getLogs",
-      [logFilter({ token: options.token, owner: options.owner, direction, fromBlock, toBlock: latest })],
-    );
-    for (const l of logs) out.push(decodeTransferLog(l, direction));
+  if (!Number.isSafeInteger(options.lookbackBlocks) || options.lookbackBlocks < 1) {
+    throw new Error("The transfer-log lookback must be a positive block count.");
   }
-  return out.sort((a, b) => b.blockNumber - a.blockNumber);
+  const latestBig = BigInt(await options.rpc.call<string>("eth_blockNumber"));
+  if (latestBig > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("The RPC returned an unsafe block number.");
+  const latest = Number(latestBig);
+  const fromBlock = Math.max(0, latest - options.lookbackBlocks + 1);
+  return readTransfersInRange({ ...options, fromBlock, toBlock: latest });
 }

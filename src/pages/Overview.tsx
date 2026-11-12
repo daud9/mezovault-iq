@@ -72,10 +72,11 @@ export function Overview() {
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Portfolio valuation</p>
-            <DataStatus state="unavailable" detail="incomplete price coverage" />
+            <DataStatus state="unverified" detail="BTC-only estimate" />
             <p className="text-sm leading-relaxed text-mist-400">
-              Mezo PriceFeed provides BTC/USD for the Trove ratio, but this app has no confirmed MUSD valuation source or
-              wallet-wide pricing calculation. A portfolio total is therefore not shown.
+              The BTC card shows a partial estimate for the native BTC balance when Mezo's BTC/USD oracle is fresh. This is
+              not a portfolio total: MUSD and MEZO are not assigned a USD price, and Trove, pool, and other DeFi positions
+              are excluded.
             </p>
           </Card>
           <Card className="space-y-3">
@@ -94,8 +95,9 @@ export function Overview() {
             <p className="text-sm font-semibold text-mist-100">Transaction history</p>
             <DataStatus state="unverified" detail="partial history" />
             <p className="text-sm leading-relaxed text-mist-400">
-              Activity reads MUSD/MEZO transfers within the last 5,000 blocks and local app submissions. Full history,
-              activity from other apps and native BTC transfers need an indexed history source.
+              Activity reads MUSD/MEZO Transfer events in the latest 5,000 blocks, with older 5,000-block pages available
+              on demand, plus local app submissions. Native BTC transfers and other non-token activity still need an
+              indexed history source.
             </p>
             <Link to="/app/activity" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Activity</Link>
           </Card>
