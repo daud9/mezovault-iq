@@ -69,9 +69,9 @@ export function Overview() {
             <Link to="/app/trove-risk" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Risk Lab</Link>
           </Card>
           <Card className="space-y-3">
-            <p className="text-sm font-semibold text-mist-100">Bridge Rescue Tracker</p>
+            <p className="text-sm font-semibold text-mist-100">Bridge Status Tracker</p>
             <p className="text-sm leading-relaxed text-mist-400">Check Wormholescan’s indexed status for recent Mezo Testnet MEZO NTT transfers. Read-only status only; no claim or rescue action is available.</p>
-            <Link to="/app/bridge-rescue" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Track a bridge transfer</Link>
+            <Link to="/app/bridge-status" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Bridge Status Tracker</Link>
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Gasless MUSD Pay Links</p>

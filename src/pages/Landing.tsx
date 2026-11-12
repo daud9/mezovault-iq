@@ -1,21 +1,18 @@
 import { Link } from "react-router-dom";
-import { ArrowRight, Compass, LineChart, ShieldCheck, SlidersHorizontal, Bot, Radar } from "lucide-react";
+import { ArrowRight, LineChart, ShieldCheck, Radar } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { ButtonLink } from "../components/ui/Button";
 import { WalletButton } from "../components/layout/WalletButton";
 
 const FEATURES = [
-  { icon: Compass, title: "IQ Strategies", body: "Lists only strategies backed by verified contracts. None is listed on Mezo Testnet yet." },
   { icon: ShieldCheck, title: "Vault Intelligence", body: "Verified contract addresses and explorer links, with unavailable metrics shown openly." },
   { icon: Radar, title: "MUSD / MEZO Chain Watch", body: "Check a public address across verified EVM token routes without connecting a wallet." },
-  { icon: SlidersHorizontal, title: "Allocation & Simulation", body: "Test allocations and outcome scenarios against your own assumptions." },
-  { icon: Bot, title: "Autopilot (planned)", body: "Future automation limited to permissions you explicitly grant and can revoke." },
+  { icon: LineChart, title: "Simulation Lab", body: "Explore hypothetical outcomes using your own assumptions. No strategy is executed or live yield implied." },
 ];
 
 const STEPS = [
-  { n: "01", title: "Understand", body: "See each strategy's mechanics, risks and the assets it touches." },
-  { n: "02", title: "Simulate", body: "Model allocations and compounding scenarios before committing anything." },
-  { n: "03", title: "Allocate", body: "Set target weights and review them against your risk tolerance." },
+  { n: "01", title: "Understand", body: "Review verified sources, mechanics and known limits before relying on a metric." },
+  { n: "02", title: "Simulate", body: "Test hypothetical scenarios with your assumptions, not live strategy or yield data." },
 ];
 
 export function Landing() {
@@ -66,8 +63,8 @@ export function Landing() {
             <ButtonLink to="/app" className="min-h-11 px-5 py-3">
               Open Dashboard <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </ButtonLink>
-            <ButtonLink to="/app/strategies" variant="secondary" className="min-h-11 px-5 py-3">
-              Explore IQ Strategies
+            <ButtonLink to="/app/simulation" variant="secondary" className="min-h-11 px-5 py-3">
+              Open Simulation Lab
             </ButtonLink>
             <ButtonLink to="/app/chain-watch" variant="secondary" className="min-h-11 px-5 py-3">
               Open Chain Watch <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -90,8 +87,8 @@ export function Landing() {
 
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-24 sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400">How it works</p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-mist-100 sm:text-3xl">Understand before you allocate.</h2>
-        <div className="mt-8 grid gap-4 md:grid-cols-3">
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-mist-100 sm:text-3xl">Understand before you decide.</h2>
+        <div className="mt-8 grid gap-4 md:grid-cols-2">
           {STEPS.map((step) => (
             <Card key={step.n}>
               <span className="text-xs font-semibold text-gold-500">{step.n}</span>

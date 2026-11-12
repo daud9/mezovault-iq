@@ -1,9 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { ExternalLink, Search, ShieldAlert } from "lucide-react";
-import { Link } from "react-router-dom";
 import { MEZO_TESTNET_NTT } from "../config/bridge";
 import { useWallet } from "../components/wallet/WalletProvider";
-import { Button, ButtonLink } from "../components/ui/Button";
+import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { DataStatus } from "../components/ui/DataStatus";
 import { FormErrors } from "../components/forms/FormErrors";
@@ -23,7 +22,7 @@ function stageDescription(result: BridgeLookupResult): { title: string; body: st
   }
 }
 
-export function BridgeRescue() {
+export function BridgeStatusTracker() {
   const { network } = useWallet();
   const testnetSelected = network.key === "testnet";
   const [transactionHash, setTransactionHash] = useState("");
@@ -63,8 +62,8 @@ export function BridgeRescue() {
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Read-only · Mezo Testnet"
-        title="Bridge Rescue Tracker"
-        description="Check Wormholescan’s indexed status for a MEZO NTT transfer that started on Mezo Testnet. This page never connects to a wallet, signs, submits, redeems, cancels, or rescues a transfer."
+        title="Bridge Status Tracker"
+        description="Check Wormholescan’s indexed status for a MEZO NTT transfer that started on Mezo Testnet. This page only reports status; no supported recovery, claim, refund, or transaction action is available."
       />
 
       <Card className="space-y-5">
@@ -132,7 +131,7 @@ export function BridgeRescue() {
         <div className="flex items-start gap-3">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-risk-medium" aria-hidden="true" />
           <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-mist-100">Status tracking is not rescue</h2>
+            <h2 className="text-sm font-semibold text-mist-100">Status tracking cannot recover a transfer</h2>
             <p className="text-sm leading-relaxed text-mist-400">Mezo’s Testnet bridge docs describe MEZO transfers through Wormhole NTT and tell users to wait for confirmation on both chains. They do not document a Testnet rescue, refund, or manual-claim action. A missing or pending index entry is not permission to retry the transfer.</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               <a href={MEZO_TESTNET_NTT.bridgeDocs} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Mezo Testnet bridge docs <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
@@ -150,11 +149,6 @@ export function BridgeRescue() {
           <a href="https://tbtcscan.com/deposits" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Open tBTCScan deposits <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
         </div>
       </Card>
-
-      <div className="flex flex-wrap gap-4 text-sm">
-        <ButtonLink to="/app/send" variant="secondary" className="min-h-11">Open standard Send</ButtonLink>
-        <Link to="/app/pay-links" className="inline-flex min-h-11 items-center text-gold-300 hover:underline">Gasless MUSD Pay Links</Link>
-      </div>
 
       <p className="text-xs leading-relaxed text-mist-500">Lookup source: <a href={MEZO_TESTNET_NTT.deploymentSource} target="_blank" rel="noopener noreferrer" className="text-gold-300 hover:underline">official Mezo Testnet NTT deployment manifest</a>. Wormholescan receives only the configured transceiver address; the pasted transaction hash is matched in the browser and is not included in the API request. Selected app network: {network.label}.</p>
     </div>

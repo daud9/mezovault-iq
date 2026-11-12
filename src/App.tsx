@@ -12,15 +12,13 @@ import { PoolWatch } from "./pages/PoolWatch";
 import { Send } from "./pages/Send";
 import { Pay } from "./pages/Pay";
 import { MusdPayLinks } from "./pages/MusdPayLinks";
-import { BridgeRescue } from "./pages/BridgeRescue";
 import { Trove } from "./pages/Trove";
 import { TroveRiskLab } from "./pages/TroveRiskLab";
 import { ChainWatch } from "./pages/ChainWatch";
 import { ClPositionMonitor } from "./pages/ClPositionMonitor";
 import { ClPlanner } from "./pages/ClPlanner";
-import { IQStrategies } from "./pages/IQStrategies";
-import { AllocationLab } from "./pages/AllocationLab";
-import { Autopilot } from "./pages/Autopilot";
+import { BridgeStatusTracker } from "./pages/BridgeStatusTracker";
+import { APP_ROUTE_REDIRECTS } from "./config/appNavigation";
 
 const X402Checkout = lazy(() => import("./pages/X402Checkout").then(({ X402Checkout }) => ({ default: X402Checkout })));
 
@@ -37,7 +35,10 @@ export default function App() {
               <Route path="send" element={<Send />} />
               <Route path="pay" element={<Pay />} />
               <Route path="pay-links" element={<MusdPayLinks />} />
-              <Route path="bridge-rescue" element={<BridgeRescue />} />
+              <Route path="bridge-status" element={<BridgeStatusTracker />} />
+              {APP_ROUTE_REDIRECTS.map(({ path, to }) => (
+                <Route key={path} path={path} element={<Navigate to={to} replace />} />
+              ))}
               <Route path="trove" element={<Trove />} />
               <Route path="trove-risk" element={<TroveRiskLab />} />
               <Route path="chain-watch" element={<ChainWatch />} />
@@ -46,11 +47,8 @@ export default function App() {
               <Route path="smart-vaults" element={<ProtocolEvidence />} />
               <Route path="vaults" element={<ProtocolEvidence />} />
               <Route path="protocol-evidence" element={<ProtocolEvidence />} />
-              <Route path="strategies" element={<IQStrategies />} />
               <Route path="pools" element={<PoolWatch />} />
-              <Route path="allocation" element={<AllocationLab />} />
               <Route path="simulation" element={<SimulationLab />} />
-              <Route path="autopilot" element={<Autopilot />} />
               <Route path="activity" element={<Activity />} />
               <Route path="*" element={<Navigate to="/app" replace />} />
             </Route>

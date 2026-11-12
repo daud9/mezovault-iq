@@ -1,8 +1,8 @@
 # Bridge Tracker and MUSD x402 Payment Links
 
-## Bridge Rescue Tracker
+## Bridge Status Tracker
 
-The app’s Bridge Rescue page is a **read-only tracker** for MEZO NTT transfers that originate on Mezo Testnet. It queries the documented Wormholescan Testnet `GET /api/v1/operations` endpoint using the official Mezo Testnet Wormhole transceiver address and `pageSize=100`, then compares the entered source transaction hash locally. The transaction hash is not sent to Wormholescan, and the lookup does not connect a wallet or submit a transaction.
+The app’s Bridge Status Tracker page is a **read-only tracker** for MEZO NTT transfers that originate on Mezo Testnet. It queries the documented Wormholescan Testnet `GET /api/v1/operations` endpoint using the official Mezo Testnet Wormhole transceiver address and `pageSize=100`, then compares the entered source transaction hash locally. The transaction hash is not sent to Wormholescan, and the lookup does not connect a wallet or submit a transaction.
 
 Status labels describe only what the index contains:
 
@@ -11,7 +11,7 @@ Status labels describe only what the index contains:
 - **Destination execution indexed:** a target-chain record is present; this is an index status, not a separate finality guarantee.
 - **Not found:** the source hash did not match the latest 100 indexed records. This is inconclusive: it may be an unrelated transaction, outside the recent page, or not indexed yet.
 
-Mezo’s Testnet bridge guide describes MEZO transfers through Wormhole NTT and says to wait for confirmation on both chains. It does not document a Testnet rescue, refund, or manual-claim action. The page therefore offers no rescue button and warns users not to retry just because a lookup is missing or pending.
+Mezo’s Testnet bridge guide describes MEZO transfers through Wormhole NTT and says to wait for confirmation on both chains. It does not document a Testnet rescue, refund, or manual-claim action. The page therefore presents no supported recovery action and warns users not to retry just because a lookup is missing or pending.
 
 This Testnet NTT tracker is separate from Mezo’s **Mainnet native-BTC bridge-in**. Mezo says native BTC deposits closed on October 13, 2026; deposits started before then can be checked through Mezo’s [tracking guide](https://mezo.org/docs/users/mainnet/track-your-native-bitcoin-deposit/) and the [tBTCScan deposits page](https://tbtcscan.com/deposits).
 
@@ -21,7 +21,7 @@ Sources: [Mezo Testnet MEZO Bridge](https://testnet.mezo.org/docs/de/docs/users/
 
 Mezo Testnet x402 uses CAIP-2 network `eip155:31611`, MUSD at `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` (18 decimals), and facilitator `https://facilitator.vativ.io`. The buyer signs an EIP-712 authorization in their own wallet; the facilitator verifies, submits and settles it, paying native BTC gas. This is a payment for a server-backed resource, not a general gasless ERC-20 transfer or ERC-4337 paymaster.
 
-The original hosting instructions served only `dist`, which could not issue and settle recipient-specific x402 requirements. The repository now declares a dynamic Deno Deploy runtime in `deno.json`, with `server/main.ts` as the entrypoint; Express serves the SPA and merchant API. Deno Deploy’s official runtime docs describe a standard Deno runtime with npm dependencies, and Deno’s Express guide and Deploy examples use `app.listen`. A `deploy` block in `deno.json` takes precedence over dashboard build/runtime settings, while the app directory remains a dashboard setting. No push or deployment was performed, so the hosted app remains unchanged.
+The original hosting instructions served only `dist`, which could not issue and settle recipient-specific x402 requirements. The repository now declares a dynamic Deno Deploy runtime in `deno.json`, with `server/main.ts` as the entrypoint; Express serves the SPA and merchant API. Deno Deploy’s official runtime docs describe a standard Deno runtime with npm dependencies, and Deno’s Express guide and Deploy examples use `app.listen`. A `deploy` block in `deno.json` takes precedence over dashboard build/runtime settings, while the app directory remains a dashboard setting.
 
 A seller creates a reusable 30-day link after signing an off-chain message binding their recipient wallet, fixed MUSD amount, Testnet, issue time and nonce. The server verifies that signature and limits the same nonce to one link creation during a 10-minute in-memory window per runtime isolate; the guard is best-effort and subject to eviction under high key diversity. It then returns a stateless HMAC token and does not durably store link/seller records, buyer identity or payment payloads. Amounts are exact decimal strings in the range 0.001–1,000 MUSD, and the server uses the SDK’s fixed Testnet MUSD asset rather than a browser-supplied token address. The share token is placed in the URL fragment, is not sent with the initial page request, and is passed to the merchant only in the checkout POST body.
 

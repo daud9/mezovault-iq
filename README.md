@@ -22,7 +22,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 | Send MEZO (same flow, only when the on-chain token check passes) | Implemented, tested on Mezo Testnet |
 | Legacy `/app/pay` request links | Still accepted as prefill-only standard transfers; link creation removed. MUSD payment requires BTC for gas; not gasless |
 | Gasless MUSD Pay Links | Implemented in code: signed recipient/amount links, buyer-side wallet authorization, and facilitator-settled Mezo Testnet MUSD; hosted activation requires `PAY_LINK_SECRET` |
-| Bridge Rescue Tracker at `/app/bridge-rescue` | Read-only Mezo Testnet MEZO NTT status from Wormholescan's latest 100 operations; no rescue, claim, refund, or signing action |
+| Bridge Status Tracker at `/app/bridge-status` (legacy `/app/bridge-rescue` redirects) | Read-only Mezo Testnet MEZO NTT status from Wormholescan's latest 100 operations; no supported recovery, claim, refund, or signing action |
 | Support card (review or enter amount manually for BTC, MUSD; MEZO when verified) | Implemented |
 | Activity page: app-sent transactions plus bounded MUSD/MEZO Transfer logs, coverage map, CSV export, and older 5,000-block pages on demand | Implemented, partial history |
 | BTC-only wallet estimate from the fresh Mezo BTC/USD protocol oracle; MUSD and MEZO are not assigned a USD price | Partial, read-only |
@@ -68,7 +68,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 - Official route documentation: [MUSD bridge](https://mezo.org/docs/users/borrow/musd-bridge/) and [MEZO bridge](https://mezo.org/docs/users/mezo/mezo-bridge). The app links to the guides only; it does not initiate a bridge.
 - Balances remain separate by network. No total USD value, token price, or cross-network fungibility is inferred.
 
-### Bridge Rescue Tracker
+### Bridge Status Tracker
 
 - The tracker is read-only and scoped to MEZO NTT transfers that start on Mezo Testnet. It checks the official Mezo Testnet Wormhole transceiver's latest 100 indexed operations from Wormholescan, then matches the entered Mezo transaction hash in the browser. The hash is not sent to Wormholescan.
 - The page distinguishes source indexed, VAA available, destination transaction indexed, and not found. A missing match is inconclusive: it may be outside the latest page, not indexed yet, or not be a bridge transaction. Destination indexing is not presented as an independent finality guarantee.
@@ -93,7 +93,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **Historical fixed open-trove test.** The owner-approved fixed test (0.05 BTC collateral / 3,000 MUSD debt) was successfully performed on Mezo Testnet. That hard-coded action was removed. The current feature uses editable planner values and enables only a fresh-preflight, wallet-confirmed opening action; no other Trove operation is enabled. No transaction was sent during this implementation.
 - **Legacy payment-request link.** The old request URL filled in a standard wallet transfer. The app no longer generates these links; legacy URLs are labelled as non-gasless and show the standard BTC network fee before wallet confirmation.
 - **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
-- **Automated unit tests.** 365 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, legacy payment-request links, wallet state and account/chain guards, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, fail-closed Trove status detection and same-block position/oracle/MCR reads, exact collateral-ratio and risk arithmetic, open-Trove planner precision/uint256 safety, exact preflight simulation and gas failures, and exact-transaction plus `TroveCreated` receipt verification, basic-pool snapshots, CL NFT ownership and gauge enumeration, CL planner price/tick alignment and token composition, CL mint/approval encoding, asymmetric-decimal raw-unit budget caps with upward fractional rounding and proportional scaling, mock preflights, read-only bridge tracker privacy/status/response-timeout behavior, and x402 seller, buyer, payment-terms, facilitator-receipt, settlement-failure, seller nonce-replay, expiry, configuration, and bounded rate-limiter checks. CL transaction tests use fake JSON-RPC and never broadcast; x402 integration tests mock the facilitator and never submit a transaction.
+- **Automated unit tests.** 381 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, legacy payment-request links, wallet state and account/chain guards, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, fail-closed Trove status detection and same-block position/oracle/MCR reads, exact collateral-ratio and risk arithmetic, open-Trove planner precision/uint256 safety, exact preflight simulation and gas failures, and exact-transaction plus `TroveCreated` receipt verification, basic-pool snapshots, CL NFT ownership and gauge enumeration, CL planner price/tick alignment and token composition, CL mint/approval encoding, asymmetric-decimal raw-unit budget caps with upward fractional rounding and proportional scaling, mock preflights, read-only bridge tracker privacy/status/response-timeout behavior, app navigation and retired-route redirects, and x402 seller, buyer, payment-terms, facilitator-receipt, settlement-failure, seller nonce-replay, expiry, configuration, and bounded rate-limiter checks. CL transaction tests use fake JSON-RPC and never broadcast; x402 integration tests mock the facilitator and never submit a transaction.
 
 
 ### Still under development (not operational)
@@ -101,8 +101,8 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **Smart Vault deposits and withdrawals.** No testnet vault contract has been verified, so no vault can be used.
 - **Executable swaps.** Official pool addresses are documented and Pool Watch reads reserves; pool fee behavior and swap execution are not verified, so no swap quote or transaction is implemented.
 - **Verified live yield, TVL and strategy data.** The app shows these as unavailable. No APY, TVL or strategy is listed.
-- **Allocation and automated investing.** Allocation is hidden from primary navigation until verified strategy inputs exist; no allocation result or live return is generated.
-- **Autopilot and automated rebalancing.** Not implemented and hidden from primary navigation. The Trove Risk Lab is read-only and does not automate actions.
+- **Strategy selection and allocation pages.** No verified live strategy inputs are available, so `/app/strategies` and `/app/allocation` are hidden and redirect to Overview. No allocation result or live return is generated.
+- **Autopilot and automated rebalancing.** Not implemented; `/app/autopilot` is hidden and redirects to Overview. The Trove Risk Lab is read-only and does not automate actions.
 - **Other Trove transactions.** Adding collateral, withdrawing, borrowing more, repaying, closing, and liquidation are not implemented. Only opening a new Trove on Testnet is supported, subject to the runtime checks described above.
 
 ### Pricing and history source limits
@@ -240,7 +240,7 @@ src/
   lib/        RPC client, ABI helpers, balance, send, ledger and log readers
   hooks/      wallet and balance hooks
   components/ UI components (wallet, balance, send, support, activity, evidence)
-  pages/      routes: Overview, Send, legacy Pay, MUSD Pay Links, Bridge Rescue,
+  pages/      routes: Overview, Send, legacy Pay, MUSD Pay Links, Bridge Status Tracker,
               Activity, Pool Watch, Chain Watch,
               CL Position Monitor, CL Range Planner, Trove Risk Lab, Protocol Evidence, Simulation Lab
   engine/     strategy scoring, matching, simulation and allocation logic
