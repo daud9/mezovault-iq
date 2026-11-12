@@ -16,6 +16,11 @@ describe("protocol evidence board", () => {
         assert.ok(record.source?.startsWith("https://"), `${record.id} address source`);
       }
     }
+    const borrowerOperations = PROTOCOL_EVIDENCE.find((record) => record.id === "borrower-operations");
+    assert.ok(borrowerOperations);
+    assert.match(borrowerOperations.sourceVerified.detail, /addColl\(address,address\)/);
+    assert.match(borrowerOperations.operationallyTested.detail, /openTrove and addColl/);
+    assert.match(borrowerOperations.notes, /only behind fresh runtime checks/);
   });
 
   it("keeps OpturaFi Range candidate-only until implementation, assets, and operation are validated", () => {

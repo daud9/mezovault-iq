@@ -42,7 +42,7 @@ export function Overview() {
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Your Trove</p>
             <p className="text-sm leading-relaxed text-mist-400">
-              Read BTC collateral and MUSD debt. Use Trove Risk Lab for the live MCR comparison and hypothetical BTC price-drop scenarios. Only opening a new Trove is enabled; other management actions are not.
+              Read BTC collateral and MUSD debt. Open a new Trove or add BTC to an active Trove after fresh checks and wallet approval. Use Trove Risk Lab for the live MCR comparison and hypothetical BTC price-drop scenarios; other management actions are not available.
             </p>
             <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">
               Open Trove

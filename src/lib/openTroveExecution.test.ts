@@ -259,12 +259,18 @@ describe("general Mezo Testnet openTrove preflight", () => {
     }
   });
 
-  it("requires a final displayed review to match the fresh repeated preflight", async () => {
+  it("allows an older review only when the fresh preflight still matches every material term", async () => {
     const { prepared: first, calls } = run();
     const a = await first;
     const { prepared: second } = run();
     const b = await second;
     assert.equal(sameOpenTroveReview(a, b), true);
+    assert.equal(sameOpenTroveReview({ ...a, reviewedAtMs: a.reviewedAtMs - 60_000 }, b), true);
+    assert.equal(sameOpenTroveReview({ ...a, gasEstimate: a.gasEstimate + 1n }, b), false);
+    assert.equal(
+      sameOpenTroveReview({ ...a, snapshot: { ...a.snapshot, systemDebtWei: a.snapshot.systemDebtWei + 1n } }, b),
+      false,
+    );
     const { prepared: differentAmounts } = run({}, { collateralBtc: "0.09", requestedMusd: "2500" });
     assert.equal(sameOpenTroveReview(a, await differentAmounts), false);
     assert.equal(calls.some((call) => call.method === "eth_sendTransaction"), false);

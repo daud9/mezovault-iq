@@ -1,19 +1,19 @@
 # MezoVault IQ — Mezo Contract Verification Pack
 
-**Status:** Historical evidence is retained where labeled. The current app supports an editable planner and one Testnet-only, wallet-confirmed `openTrove` path; no other Trove transaction is enabled.
+**Status:** Historical evidence is retained where labeled. The current app supports Testnet-only, wallet-confirmed `openTrove` and active-Trove `addColl` paths; other Trove transactions remain disabled.
 **Network:** Mezo Testnet
 **Chain ID:** 31611 (`0x7b7b`)
 **Last reviewed:** 2026-11-12
 
 ## Verification policy
 
-An official address, published deployment artifact, and proxy explorer verification are distinct evidence. For this open-only flow, the current Mezo `matsnet` artifact and `BorrowerOperations.sol` source establish the exact ABI and semantics; the Testnet explorer verifies the proxy contract source. The live EIP-1967 implementation slot was not independently re-resolved from this sandbox because `https://rpc.test.mezo.org` returned HTTP 403 (`error code: 1010`). Runtime use therefore still requires the app’s fresh chain/code/read/simulation checks to pass. Do not infer ABI from Liquity or another Threshold fork.
+An official address, published deployment artifact, and proxy explorer verification are distinct evidence. For `openTrove` and `addColl`, the current Mezo `matsnet` artifact and `BorrowerOperations.sol` source establish the exact ABI and semantics; the Testnet explorer verifies the proxy contract source. The live EIP-1967 implementation slot was not independently re-resolved from this sandbox because `https://rpc.test.mezo.org` returned HTTP 403 (`error code: 1010`). Runtime use therefore still requires the app’s fresh chain/code/read/simulation checks to pass. Do not infer ABI from Liquity or another Threshold fork.
 
 ## Officially documented testnet addresses
 
 | Contract | Testnet address | Evidence | Status |
 |---|---|---|---|
-| BorrowerOperations proxy | `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5` | Mezo MUSD Redemptions docs and published `matsnet` deployment artifact | Address matches artifact; explorer verifies proxy source; current implementation slot not resolved from this sandbox |
+| BorrowerOperations proxy | `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5` | Mezo MUSD Redemptions docs and published `matsnet` deployment artifact | Artifact also lists implementation `0xc05Bf344BD5b58825784326dD3112fB6cC160dcC`; explorer verifies proxy source; current implementation slot not resolved from this sandbox |
 | TroveManager proxy | `0xE47c80e8c23f6B4A1aE41c34837a0599D5D16bb0` | Mezo MUSD Redemptions docs | Documented; implementation not yet verified |
 | PriceFeed proxy | `0x86bCF0841622a5dAC14A313a15f96A95421b9366` | Mezo MUSD Redemptions docs and owner-supplied explorer screenshot | Proxy ABI includes `fetchPrice()`, `oracle()`; screenshot shows `fetchPrice()` returning `77298157400000000000000` |
 | HintHelpers proxy | `0x4e4cBA3779d56386ED43631b4dCD6d8EacEcBCF6` | Mezo MUSD Redemptions docs | Documented; implementation not yet verified |
@@ -24,7 +24,7 @@ The TroveManager, BorrowerOperations, PriceFeed, HintHelpers, and SortedTroves r
 
 ## Function evidence from official Mezo documentation
 
-The table separates documentation from the current published Testnet deployment artifact. The app implements only `openTrove`; other functions remain out of scope even where their ABI appears in the same artifact.
+The table separates documentation from the current published Testnet deployment artifact. The app implements `openTrove` and the narrower `addColl` collateral-only call; other functions remain out of scope even where their ABI appears in the same artifact.
 
 | Contract | Documented function | Signature / behavior | Next verification |
 |---|---|---|---|
@@ -33,8 +33,9 @@ The table separates documentation from the current published Testnet deployment 
 | TroveManager | `getTroveColl` | `getTroveColl(address)` is referenced by current app | Confirm present in current implementation ABI and test against proxy |
 | TroveManager | `getTroveDebt` | `getTroveDebt(address)` is referenced by current app | Confirm present in current implementation ABI and test against proxy |
 | BorrowerOperations | `openTrove` | `openTrove(uint256,address,address)`; payable; `_debtAmount`, upper/lower hints; BTC collateral is `msg.value` | Current published `matsnet` ABI and source; selector recomputed as `0x2f3a6d98`; implemented only for opening a new Trove |
+| BorrowerOperations | `addColl` | `addColl(address,address)`; payable; upper/lower hints; BTC collateral is `msg.value` | Current published `matsnet` ABI and source; selector recomputed as `0x68647db1`; implemented only as an active-Trove BTC addition |
 | BorrowerOperations | `TroveCreated` event | `TroveCreated(address indexed _borrower,uint256 arrayIndex)` | Current published artifact; success receipt requires matching event from the BorrowerOperations proxy and reviewed wallet |
-| BorrowerOperations | Other user operations | `addColl`, `adjustTrove`, `repayMUSD`, `withdrawColl`, `withdrawMUSD`, `closeTrove` appear in the artifact | Not implemented here; operation-specific review and separate authorization remain required |
+| BorrowerOperations | Other user operations | `adjustTrove`, `repayMUSD`, `withdrawColl`, `withdrawMUSD`, `closeTrove` appear in the artifact | Not implemented here; operation-specific review and separate authorization remain required |
 | PriceFeed | `fetchPrice()` | Official redemption guide and explorer evidence; current read layer calls through the proxy | Used for BTC/USD reads; runtime code/return checks apply; current implementation slot is not independently resolved here |
 
 
@@ -99,7 +100,7 @@ The openTrove ABI and address were rechecked against Mezo's [published Testnet B
 ### Outstanding evidence for future operations
 
 - [ ] Re-resolve the live EIP-1967 implementation slot and implementation bytecode/code hash when the public RPC is accessible.
-- [ ] Review operation-specific validation, hints, and wallet flows before enabling add-collateral, adjust, repay, withdraw, close, or any other action.
+- [ ] Review operation-specific validation, hints, and wallet flows before enabling adjust, repay, withdraw, close, or any other action.
 - [ ] Independently verify related proxy implementations (TroveManager, PriceFeed, SortedTroves, HintHelpers, and StabilityPool) before relying on broader transaction behavior.
 - [ ] No transaction was signed or sent during this implementation; tests use fake JSON-RPC and never call `eth_sendTransaction`.
 
@@ -111,10 +112,10 @@ The older mocked `src/lib/loan.test.ts` cases validate local decoding and contro
 
 ## Evidence checklist for future operations
 
-The checklist below applies to unsupported Trove writes and other contracts, not to the already documented `openTrove` interface. A future action must independently resolve proxy implementation/source, validate selectors and mutability, read its required parameters at a coherent block, and test both success and fail-closed behavior before any action is added.
+The checklist below applies to unsupported Trove writes and other contracts, not to the `openTrove` and `addColl` interfaces documented here. A future action must independently resolve proxy implementation/source, validate selectors and mutability, read its required parameters at a coherent block, and test both success and fail-closed behavior before any action is added.
 
 - [ ] Re-resolve the live EIP-1967 implementation slot and implementation bytecode/code hash when the Testnet RPC is accessible.
-- [ ] Review operation-specific validation, hints, and wallet flows before enabling add-collateral, adjust, repay, withdraw, close, or any other action.
+- [ ] Review operation-specific validation, hints, and wallet flows before enabling adjust, repay, withdraw, close, or any other action.
 - [ ] Independently verify related proxy implementations (TroveManager, PriceFeed, SortedTroves, HintHelpers, and StabilityPool) before relying on broader transaction behavior.
 - [ ] Keep tests on fake JSON-RPC and assert they never invoke `eth_sendTransaction`; do not send a live transaction as part of implementation/testing.
 
@@ -136,17 +137,17 @@ The checklist below applies to unsupported Trove writes and other contracts, not
 - 2026-10-31: Cross-checked documented addresses and function signatures against current official Mezo docs and `mezo-org/musd` documentation. Corrected repayment signature to `repayMUSD(uint256,address,address)`. These remain documentation-confirmed, not implementation-ABI- or live-RPC-verified. Live RPC verification could not be completed from this execution environment because outbound DNS/network access to `rpc.test.mezo.org` failed; do not treat this as evidence that the endpoint itself is down.
 
 - 2026-10-31: Owner supplied TroveManager and PriceFeed explorer screenshots plus the PriceOracleCaller ABI. Recorded the three TroveManager read selectors, PriceFeed `fetchPrice()` / `oracle()` selectors, 18-digit price units, and the observed oracle pointer. Updated the app read path to match this evidence; live RPC verification remains pending.
-- 2026-10-31: Owner supplied the explorer ABI for the exact-match-verified BorrowerOperations implementation. Recorded implementation address, compiler metadata, exact user-operation signatures, mutability, and explorer selectors. This upgrades BorrowerOperations from documentation-only to explorer/implementation-ABI evidence; live RPC behavior and independent selector recomputation remain pending.
+- 2026-10-31: Owner supplied the explorer ABI for the exact-match-verified BorrowerOperations implementation. Recorded implementation address, compiler metadata, exact user-operation signatures, mutability, and explorer selectors. This upgraded BorrowerOperations from documentation-only to explorer/implementation-ABI evidence. At that time live RPC behavior and independent selector recomputation were pending; later 2026-11-12 sections recompute `openTrove` and `addColl` from official source signatures, while live implementation-slot verification remains pending.
 
 ## Application selector registry update (2026-10-31)
 
 The application now centralizes the explorer-transcribed selectors in `src/lib/mezoAbi.ts` rather than duplicating read selectors inside `src/lib/loan.ts`. The registry separates TroveManager, PriceFeed, PriceOracleCaller, and BorrowerOperations selectors. It includes the owner-supplied BorrowerOperations user-operation selectors for future transaction integration.
 
-At the time this selector registry was added, it was interface-only. The later open-only flow uses just `openTrove`; `addColl`, `repayMUSD`, `adjustTrove`, `withdrawColl`, and `closeTrove` remain disabled and require independent operation-specific verification before any future integration.
+At the time this selector registry was added, it was interface-only. The later `openTrove` and `addColl` flows use only their separately reviewed selectors; `repayMUSD`, `adjustTrove`, `withdrawColl`, and `closeTrove` remain disabled and require independent operation-specific verification before any future integration.
 
 ## Open-Trove planner and wallet-confirmed open-only flow (2026-11-12)
 
-The Trove page now exposes editable BTC collateral and requested MUSD values when the connected wallet has no active position. A read-only planner computes a preview from the current protocol snapshot. A separate action supports only opening a new Trove on Mezo Testnet chain `31611`; adding collateral, borrowing more, repaying, withdrawing, closing, and liquidation are not exposed.
+The Trove page exposes editable BTC collateral and requested MUSD values when the connected wallet has no active position. A read-only planner computes a preview from the current protocol snapshot. A separate action supports opening a new Trove on Mezo Testnet chain `31611`; active-Trove collateral addition is covered by the later addColl section. Borrowing more, repaying, withdrawing, closing, and liquidation are not exposed.
 
 ### Source and ABI evidence
 
@@ -166,6 +167,18 @@ The proxy explorer page verifies the proxy source and shows a constructor implem
 4. Receipt checking is a separate explicit read. It verifies receipt hash, sender, contract, transaction calldata, native BTC value, gas limit, block, and status against the reviewed transaction. A successful receipt must also contain the BorrowerOperations `TroveCreated(address,uint256)` event from the expected proxy with the reviewed wallet as indexed borrower. Pending or mismatched data is never presented as success.
 
 The calculator, execution preflight, and receipt checks are covered by fake-RPC unit tests. The tests assert same-block reads, variable planner calldata/value, invalid/unsafe input rejection, stale state and RPC chain failures, active Trove rejection, simulation/gas failures, review mismatch, exact receipt matching including gas and `TroveCreated`, and that preparation never invokes `eth_sendTransaction`. No transaction was sent during this implementation; the historical fixed 0.05 BTC / 3,000 MUSD test described earlier in the repository is not a current fixed action or default.
+
+## Existing-Trove add-collateral flow (2026-11-12)
+
+The active-position Trove view now offers a separate BTC-only `addColl` action. The official [matsnet BorrowerOperations artifact](https://github.com/mezo-org/musd/blob/main/solidity/artifacts/deployments/matsnet/BorrowerOperations.json) records the configured Testnet BorrowerOperations address `0xCdF7028ceAB81fA0C6971208e83fa7872994beE5` and the payable ABI entry `addColl(address,address)`. The canonical selector is `0x68647db1`; `src/lib/mezoAbi.test.ts` recomputes it from the canonical signature using `viem`. The [published `IBorrowerOperations` interface](https://github.com/mezo-org/musd/blob/main/solidity/contracts/interfaces/IBorrowerOperations.sol) and [BorrowerOperations source](https://github.com/mezo-org/musd/blob/main/solidity/contracts/BorrowerOperations.sol) confirm the two arguments are upper/lower sorted-Trove hints, not an amount. `addColl` forwards the caller as borrower, and the entered BTC amount is attached as native `msg.value`.
+
+The source routes `addColl` through `_adjustTrove` with zero withdrawal and zero debt change. `_getCollChange` treats nonzero `msg.value` as collateral increase; a zero-value request fails the nonzero-adjustment check. The operation requires an active Trove and public caller/borrower match. Normal Mode enforces the updated ICR and system TCR checks; Mezo source allows a pure collateral increase in Recovery Mode. The app therefore reads status, collateral, and debt for the connected account at one pinned block, requires active status `1` and nonzero collateral/debt, verifies BorrowerOperations code at that block, and then runs `eth_estimateGas` plus `eth_call` with the exact `addColl` calldata/value. It repeats the full read and simulation on the separate final-click path and opens the wallet only if the reviewed amount, existing position, and gas remain the same.
+
+The call uses zero/zero hints. Mezo's [SortedTroves source](https://github.com/mezo-org/musd/blob/main/solidity/contracts/SortedTroves.sol) confirms `reInsert` falls through to `_findInsertPosition`; when no valid hints are supplied it searches down from the list head. That fallback can scale with list length, so the live gas estimate and exact simulation are mandatory and fail closed. The successful receipt must match the exact sender, proxy, calldata, BTC value and gas limit, and contain a `TroveUpdated` log indexed to the same borrower with `BorrowerOperation.adjustTrove` operation value `2`.
+
+The [BorrowerOperations source](https://github.com/mezo-org/musd/blob/main/solidity/contracts/BorrowerOperations.sol) emits `TroveUpdated` inside `_adjustTrove`; the [IBorrowerOperations interface](https://github.com/mezo-org/musd/blob/main/solidity/contracts/interfaces/IBorrowerOperations.sol) defines the matching event signature. The successful receipt is therefore required to contain that event from the BorrowerOperations proxy (not merely any same-signature event), indexed to the reviewed wallet, with `BorrowerOperation.adjustTrove` value `2`.
+
+The Testnet RPC returned HTTP 403 (`error code: 1010`) from this sandbox. The published artifact and Solidity source verify the call shape and semantics, but this environment could not independently re-resolve the live EIP-1967 implementation slot or the connected wallet's current Trove. No wallet session was opened and no transaction was signed, sent, or simulated against a live wallet here. The app requires the fresh runtime checks above before any wallet request; automated tests use fake JSON-RPC and assert no `eth_sendTransaction` call.
 
 
 ## Read-only Mezo Testnet CL position monitor (2026-11-12)

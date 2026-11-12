@@ -3,8 +3,10 @@
  * Testnet ABIs and the official Mezo MUSD matsnet deployment ABI artifacts.
  *
  * These constants identify interfaces only; they do not authorize execution.
- * Only the separate wallet-reviewed openTrove flow uses a write selector; the
- * planner stays read-only and all other borrower operations remain disabled.
+ * Only the separate wallet-reviewed openTrove and addColl flows use write
+ * selectors; their planners remain read-only and all other borrower operations
+ * remain disabled. addColl is checked against the official matsnet artifact and
+ * BorrowerOperations.sol source.
  */
 export const MEZO_TESTNET_SELECTORS = {
   troveManager: {

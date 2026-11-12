@@ -26,10 +26,7 @@ export const APP_NAV = [
   { to: "/app/activity", label: "Activity", icon: ActivityIcon },
 ] as const;
 
-/** Old or unavailable pages return users to Overview rather than showing a placeholder. */
+/** Keep only the bridge route alias; unknown app paths use the generic Overview fallback. */
 export const APP_ROUTE_REDIRECTS = [
-  { path: "strategies", to: "/app" },
-  { path: "allocation", to: "/app" },
-  { path: "autopilot", to: "/app" },
   { path: "bridge-rescue", to: "/app/bridge-status" },
 ] as const;

@@ -62,12 +62,12 @@ export const PROTOCOL_CANDIDATES: ProtocolCandidate[] = [
   {
     id: "borrower-operations",
     name: "BorrowerOperations",
-    purpose: "Opens and manages BTC-collateralised loans that mint MUSD; this app enables only new-Trove opening.",
+    purpose: "Opens and manages BTC-collateralised loans that mint MUSD; this app enables new-Trove opening and active-Trove BTC addition only.",
     evidence: "official-address",
     testnetAddress: "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5",
     addressSource: OFFICIAL_SOURCES.musdRedemptions,
     capabilities: { ...NOT_VERIFIED, borrow: "verified" },
-    notes: "Only openTrove on Mezo Testnet is implemented: live preflight and simulation, followed by the user's own wallet confirmation. Add-collateral, repay, withdraw, borrow-more, and close are not enabled.",
+    notes: "Only openTrove and payable addColl on Mezo Testnet are implemented, each with live preflight and simulation followed by the user's own wallet confirmation. Repay, withdraw, borrow-more, close, and liquidation are not enabled.",
     usedByApp: true,
   },
   {

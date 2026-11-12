@@ -1,5 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { toFunctionSelector } from "viem";
 import { MEZO_TESTNET_SELECTORS } from "./mezoAbi";
 
 describe("Mezo Testnet verified ABI selector registry", () => {
@@ -41,6 +42,7 @@ describe("Mezo Testnet verified ABI selector registry", () => {
 
   it("contains the BorrowerOperations user-action selectors and keeps payable actions distinct", () => {
     assert.equal(MEZO_TESTNET_SELECTORS.borrowerOperations.addColl, "0x68647db1");
+    assert.equal(toFunctionSelector("addColl(address,address)"), MEZO_TESTNET_SELECTORS.borrowerOperations.addColl);
     assert.equal(MEZO_TESTNET_SELECTORS.borrowerOperations.adjustTrove, "0x45c842e6");
     assert.equal(MEZO_TESTNET_SELECTORS.borrowerOperations.repayMUSD, "0xdc283bb3");
     assert.equal(MEZO_TESTNET_SELECTORS.borrowerOperations.openTrove, "0x2f3a6d98");

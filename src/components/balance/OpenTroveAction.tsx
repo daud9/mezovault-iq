@@ -31,8 +31,6 @@ interface Submission {
   prepared: PreparedOpenTrove;
 }
 
-const REVIEW_MAX_AGE_MS = 20_000;
-
 export function OpenTroveAction({
   collateralBtc,
   requestedMusd,
@@ -115,9 +113,9 @@ export function OpenTroveAction({
         setNotice("The planner values or connected wallet changed during the final checks. No wallet request was made; prepare a new review.");
         return;
       }
-      if (Date.now() - review.reviewedAtMs > REVIEW_MAX_AGE_MS || !sameOpenTroveReview(review, fresh)) {
+      if (!sameOpenTroveReview(review, fresh)) {
         setReviewBundle({ key: reviewKey, prepared: fresh });
-        setNotice("Live conditions or the review age changed. The preview has been refreshed, and no wallet request was made. Check the updated values and click again if they are still what you want.");
+        setNotice("Live protocol terms or the exact gas result changed. The review has been refreshed, and no wallet request was made. Check the updated values and click again if they are still what you want.");
         return;
       }
       setNotice("The exact request still matches the displayed review. Your injected wallet will now show the transaction for your approval; the app will not sign or submit on its own.");
@@ -180,12 +178,12 @@ export function OpenTroveAction({
       {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200" role="alert">{error}</p>}
       {notice && <p className="rounded-lg border border-line bg-ink-800/60 p-3 text-sm text-mist-300" role="status">{notice}</p>}
 
-      {eligible && !submission && (
+      {eligible && !submission && !review && (
         <div className="space-y-3">
           <Button onClick={() => void prepareReview()} disabled={busy || !eligible} className="min-h-11 w-full">
-            {busy ? "Checking fresh Testnet conditions…" : review ? "Refresh exact open-Trove review" : "Prepare fresh open-Trove review"}
+            {busy ? "Checking fresh Testnet conditions…" : "Prepare fresh open-Trove review"}
           </Button>
-          <p className="text-xs leading-relaxed text-mist-500">Preparation is read-only. It checks that this wallet has no Trove, calculates live fees and ratios, estimates gas, and simulates the exact request at one block.</p>
+          <p className="text-xs leading-relaxed text-mist-500">This first step is read-only and does not open your wallet. After it shows the exact request, review the amounts and gas, then use the separate button to repeat the checks and open your wallet for approval.</p>
         </div>
       )}
 

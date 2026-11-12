@@ -5,6 +5,7 @@ import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { OpenTrovePlanner } from "./OpenTrovePlanner";
 import { OpenTroveAction } from "./OpenTroveAction";
+import { AddCollateralAction } from "./AddCollateralAction";
 import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
@@ -12,7 +13,7 @@ import { formatTime } from "../../lib/format";
 import { isLoanPriceFresh, isLoanReadFresh, loanReadAgeMs } from "../../lib/loan";
 import { calculateCollateralRatioBps, formatPercentBps } from "../../lib/troveRisk";
 
-/** Read-only loan view plus the separately wallet-confirmed open-only action. */
+/** Read-only loan view plus the separately wallet-confirmed open/add-collateral actions. */
 export function LoanCard() {
   const { state, network, isSupportedNetwork } = useWallet();
   const { view, refresh } = useLoan();
@@ -124,12 +125,12 @@ export function LoanCard() {
             <div>
               <h3 id="trove-management-title" className="text-sm font-semibold text-mist-100">Manage this trove</h3>
               <p className="mt-1 text-xs leading-relaxed text-mist-400">
-                No operation-specific management transaction is approved in this code. Nothing is prepared or sent. Each
-                needs a separately reviewed contract call, verified preflight and simulation, and owner approval before it can be enabled.
+                Add BTC is available below after a fresh active-Trove check and exact-call simulation. Other operations remain unavailable.
               </p>
             </div>
+            <AddCollateralAction onConfirmed={refresh} />
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {["Add collateral", "Withdraw collateral", "Repay MUSD", "Borrow more", "Close trove"].map((operation) => (
+              {["Withdraw collateral", "Repay MUSD", "Borrow more", "Close trove"].map((operation) => (
                 <button
                   key={operation}
                   type="button"
@@ -174,8 +175,8 @@ export function LoanCard() {
       </div>
       {body}
       <p className="border-t border-line pt-4 text-xs leading-relaxed text-mist-500">
-        Only opening a new Trove is enabled, on Mezo Testnet (chain 31611), after fresh same-block preflight and your own wallet approval.
-        Adding collateral, withdrawing, repaying, borrowing more, closing and liquidating are not available in this app.
+        Opening a new Trove and adding BTC to an existing Trove are available only on Mezo Testnet (chain 31611), after fresh same-block preflight and your own wallet approval.
+        Withdrawing, repaying, borrowing more, closing and liquidating are not available in this app.
       </p>
     </Card>
   );

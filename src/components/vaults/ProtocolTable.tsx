@@ -30,12 +30,13 @@ export function ProtocolTable() {
     <Card className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-mist-100">Protocol availability on Mezo Testnet</h2>
-        <DataStatus state="unverified" detail={anyVerified ? "open-Trove borrowing only; runtime preflight required" : "no capability verified"} />
+        <DataStatus state="unverified" detail={anyVerified ? "open Trove / add BTC only; runtime preflight required" : "no capability verified"} />
       </div>
       <p className="text-sm leading-relaxed text-mist-400">
         A candidate is listed as verified only when an official Mezo source supports the capability. Borrowing here
-        means only opening a new Trove on Testnet after live preflight and wallet approval. Other borrowing/management,
-        deposits, withdrawals and yield remain unavailable; this board itself does not submit transactions.
+        means only opening a new Trove on Testnet after live preflight and wallet approval. Adding BTC to an active Trove
+        is a separate wallet-confirmed action after its own live preflight. Other Trove management, deposits, withdrawals
+        and yield remain unavailable; this board itself does not submit transactions.
       </p>
 
       <div className="overflow-x-auto">

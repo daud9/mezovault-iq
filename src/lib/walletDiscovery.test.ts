@@ -69,8 +69,8 @@ describe("mobile support", () => {
 
   it("builds a wallet deep link that keeps the path and query", () => {
     assert.equal(
-      buildMobileWalletLink("https://mezovault-iq.example.deno.net/app/strategies?x=1"),
-      "https://metamask.app.link/dapp/mezovault-iq.example.deno.net/app/strategies?x=1",
+      buildMobileWalletLink("https://mezovault-iq.example.deno.net/app/simulation?x=1"),
+      "https://metamask.app.link/dapp/mezovault-iq.example.deno.net/app/simulation?x=1",
     );
   });
 

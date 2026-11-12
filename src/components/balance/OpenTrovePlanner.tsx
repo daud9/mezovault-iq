@@ -144,7 +144,7 @@ export function OpenTrovePlanner({
           ? `Mezo Testnet · block ${live.blockNumber} · snapshot ${snapshotAgeSeconds === null ? "time unavailable" : `${snapshotAgeSeconds}s old`} · oracle updated ${new Date(live.priceUpdatedAt * 1_000).toLocaleString()} · ${live.feeExempt ? "fee-exempt account" : "standard fee status"}`
           : "Live Mezo Testnet parameters and a fresh oracle price are required; hard-coded fallback values are not used."}
       </p>
-      <p className="text-xs leading-relaxed text-mist-500">Only opening a new Trove is available here. Adding collateral, borrowing more, repaying, withdrawing, closing, and liquidation actions are not implemented. No action runs without your explicit click and your own wallet approval.</p>
+      <p className="text-xs leading-relaxed text-mist-500">This planner is for opening a new Trove only. To add BTC to an existing Trove, use the separate collateral section below. Borrowing more, repaying, withdrawing, closing, and liquidation actions are not available here. No transaction runs without your explicit click and your own wallet approval.</p>
     </section>
   );
 }

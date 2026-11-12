@@ -20,8 +20,7 @@ export function Trove() {
           The position is read from Mezo Testnet contracts. When no Trove is active, the planner can prepare a fresh review for opening a new Trove on Testnet.
         </p>
         <p>
-          Only opening a new Trove is available: fresh same-block checks and simulation run before the wallet opens, and your own wallet must approve the transaction. Adding collateral,
-          withdrawing, repaying, borrowing more, closing and liquidation are not available in this app.
+          Opening a new Trove and adding BTC to an active Trove are available only after fresh same-block checks and simulation, and your own wallet must approve each transaction. Withdrawing, repaying, borrowing more, closing and liquidation are not available in this app.
         </p>
         <div className="flex flex-wrap gap-4">
           <Link to="/app/trove-risk" className="inline-flex min-h-11 items-center font-medium text-gold-300 hover:underline">Open Trove Risk Lab</Link>

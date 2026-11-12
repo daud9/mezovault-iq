@@ -53,8 +53,12 @@ describe("protocol investigation", () => {
     assert.equal(borrowerOperations.capabilities.yield, "not-verified");
   });
 
-  it("marks the MUSD balance read and limited open-Trove protocol as used by the app", () => {
+  it("marks the MUSD balance read and open/add-collateral paths as used by the app", () => {
     assert.deepEqual(PROTOCOL_CANDIDATES.filter((p) => p.usedByApp).map((p) => p.id), ["musd-token", "borrower-operations"]);
+    const borrowerOperations = PROTOCOL_CANDIDATES.find((p) => p.id === "borrower-operations");
+    assert.ok(borrowerOperations);
+    assert.match(borrowerOperations.notes, /openTrove and payable addColl/);
+    assert.match(borrowerOperations.notes, /Repay, withdraw, borrow-more, close, and liquidation are not enabled/);
   });
 
   it("records a testnet address only where an official source is named", () => {
