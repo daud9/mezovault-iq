@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  assertWalletContext,
   describeWalletError,
   INITIAL_WALLET_STATE,
   NO_WALLET_MESSAGE,
@@ -39,6 +40,22 @@ describe("requestAccount", () => {
   it("fails when the wallet returns a non-address", async () => {
     const { p } = provider(() => ["not-an-address"]);
     await assert.rejects(requestAccount(p), (e: unknown) => e instanceof WalletError);
+  });
+});
+
+describe("assertWalletContext", () => {
+  it("confirms the selected account and chain using read-only provider methods", async () => {
+    const { p, calls } = provider((method) => method === "eth_accounts" ? [ADDR] : "0x7b7b");
+    await assertWalletContext(p, { account: ADDR, chainId: 31611 });
+    assert.deepEqual(calls, ["eth_accounts", "eth_chainId"]);
+  });
+
+  it("blocks a changed account or chain before a transaction request", async () => {
+    const changedAccount = provider((method) => method === "eth_accounts" ? ["0x2222222222222222222222222222222222222222"] : "0x7b7b");
+    await assert.rejects(assertWalletContext(changedAccount.p, { account: ADDR, chainId: 31611 }), (e: unknown) => e instanceof WalletError && e.code === "no-account");
+    const changedChain = provider((method) => method === "eth_accounts" ? [ADDR] : "0x1");
+    await assert.rejects(assertWalletContext(changedChain.p, { account: ADDR, chainId: 31611 }), (e: unknown) => e instanceof WalletError && e.code === "unsupported");
+    assert.equal([...changedAccount.calls, ...changedChain.calls].includes("eth_sendTransaction"), false);
   });
 });
 

@@ -4,6 +4,7 @@ import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { OpenTrovePlanner } from "./OpenTrovePlanner";
+import { OpenTroveTestAction } from "./OpenTroveTestAction";
 import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
@@ -12,7 +13,7 @@ import { formatTime } from "../../lib/format";
 const BORROW_URL = "https://mezo.org/feature/borrow";
 const STALE_AFTER_SECONDS = 3600;
 
-/** Read-only view of the connected wallet's MUSD loan. All changes happen in the official interface. */
+/** Read-only loan view plus one fixed owner-approved test action; no general loan controls are exposed. */
 export function LoanCard() {
   const { state, network, isSupportedNetwork } = useWallet();
   const { view, refresh } = useLoan();
@@ -59,6 +60,7 @@ export function LoanCard() {
             onCollateralBtcChange={setPlannerCollateralBtc}
             onRequestedMusdChange={setPlannerRequestedMusd}
           />
+          <OpenTroveTestAction />
         </div>
       );
     } else if (r.status === "ok") {

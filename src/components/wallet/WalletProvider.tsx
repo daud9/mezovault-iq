@@ -7,6 +7,7 @@ import { discoverProviders, selectWallet } from "../../lib/walletDiscovery";
 import { isTxHash } from "../../lib/transfer";
 import {
   describeWalletError,
+  assertWalletContext,
   INITIAL_WALLET_STATE,
   NO_WALLET_MESSAGE,
   readChainId,
@@ -14,6 +15,7 @@ import {
   switchToNetwork,
   walletReducer,
   type Eip1193Provider,
+  type WalletExpectation,
   type WalletState,
 } from "../../lib/wallet";
 
@@ -25,7 +27,7 @@ interface WalletContextValue {
   disconnect: () => void;
   switchNetwork: () => Promise<void>;
   /** Asks the connected wallet to sign and send. Resolves to the transaction hash, not to a confirmation. */
-  sendTransaction: (tx: Record<string, string | undefined>) => Promise<string>;
+  sendTransaction: (tx: Record<string, string | undefined>, expected?: WalletExpectation) => Promise<string>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -119,14 +121,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [network, resolveProvider]);
 
   const sendTransaction = useCallback(
-    async (tx: Record<string, string | undefined>): Promise<string> => {
+    async (tx: Record<string, string | undefined>, expected?: WalletExpectation): Promise<string> => {
       const provider = providerRef.current ?? (await resolveProvider());
       if (!provider) throw new Error(NO_WALLET_MESSAGE);
+      if (expected) {
+        if (expected.chainId !== network.chainId) {
+          throw new Error("The approved transaction does not match the app's selected network.");
+        }
+        if (typeof tx.from !== "string" || tx.from.toLowerCase() !== expected.account.toLowerCase()) {
+          throw new Error("The transaction sender does not match the approved test wallet.");
+        }
+        await assertWalletContext(provider, expected);
+      }
       const hash = await provider.request({ method: "eth_sendTransaction", params: [tx] });
       if (!isTxHash(hash)) throw new Error("The wallet did not return a transaction hash.");
       return hash;
     },
-    [resolveProvider],
+    [network, resolveProvider],
   );
 
   const disconnect = useCallback(() => dispatch({ type: "disconnect" }), []);

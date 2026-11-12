@@ -86,7 +86,7 @@ export function OpenTrovePlanner({
       <div>
         <p className="text-xs font-medium uppercase tracking-wider text-mist-500">MUSD borrowing</p>
         <h2 id="open-trove-planner-title" className="mt-1 text-lg font-semibold">Open-trove planner</h2>
-        <p className="mt-1 text-sm text-mist-400">Planning preview only. Calculations use live protocol reads; no transaction is built, signed, or sent.</p>
+        <p className="mt-1 text-sm text-mist-400">These editable values are preview-only. They are never used by a transaction. The only wallet path is the separate fixed owner-approved test below.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -146,12 +146,12 @@ export function OpenTrovePlanner({
         type="button"
         disabled
         aria-disabled="true"
-        title="Live open-trove testing has not been explicitly approved."
+        title="Generic open-trove actions remain disabled; only the fixed approved test path below can request wallet confirmation."
         className="min-h-11 w-full cursor-not-allowed rounded-lg bg-mist-700 px-4 font-semibold text-mist-300 opacity-60"
       >
-        Open trove — disabled
+        Generic open-trove action — disabled
       </button>
-      <p className="text-xs text-mist-500">Live opening and transaction submission remain disabled pending separate explicit approval for a live test.</p>
+      <p className="text-xs text-mist-500">The only enabled path is the fixed owner-approved test shown below, after fresh live checks and your explicit wallet approval.</p>
     </section>
   );
 }

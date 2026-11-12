@@ -1,7 +1,7 @@
 /**
  * EIP-1193 wallet integration with no third-party dependency.
- * The app only requests account addresses and chain switches. It never asks for
- * seed phrases or private keys, and it never signs or sends a transaction.
+ * The app never asks for seed phrases or private keys and never signs locally.
+ * Explicitly requested sends are handed to the wallet for the user's review.
  */
 import type { MezoNetworkConfig } from "../config/chains";
 import { isAddress } from "./abi";
@@ -83,6 +83,26 @@ export class WalletError extends Error {
     super(message);
     this.name = "WalletError";
     this.code = code;
+  }
+}
+
+export interface WalletExpectation {
+  account: `0x${string}`;
+  chainId: number;
+}
+
+/** Re-checks the currently selected account and chain without opening a wallet prompt. */
+export async function assertWalletContext(provider: Eip1193Provider, expected: WalletExpectation): Promise<void> {
+  const [accounts, rawChainId] = await Promise.all([
+    provider.request({ method: "eth_accounts" }),
+    provider.request({ method: "eth_chainId" }),
+  ]);
+  if (parseChainId(rawChainId) !== expected.chainId) {
+    throw new WalletError("unsupported", "The connected wallet network changed. Switch back to Mezo Testnet before continuing.");
+  }
+  const selected = Array.isArray(accounts) ? accounts[0] : undefined;
+  if (!isAddress(selected) || selected.toLowerCase() !== expected.account.toLowerCase()) {
+    throw new WalletError("no-account", "The connected wallet account changed and no longer matches the approved test wallet.");
   }
 }
 
