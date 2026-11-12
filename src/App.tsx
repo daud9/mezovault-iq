@@ -14,6 +14,7 @@ import { Trove } from "./pages/Trove";
 import { TroveRiskLab } from "./pages/TroveRiskLab";
 import { ChainWatch } from "./pages/ChainWatch";
 import { ClPositionMonitor } from "./pages/ClPositionMonitor";
+import { ClPlanner } from "./pages/ClPlanner";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="trove-risk" element={<TroveRiskLab />} />
             <Route path="chain-watch" element={<ChainWatch />} />
             <Route path="cl-positions" element={<ClPositionMonitor />} />
+            <Route path="cl-planner" element={<ClPlanner />} />
             <Route path="smart-vaults" element={<ProtocolEvidence />} />
             <Route path="vaults" element={<ProtocolEvidence />} />
             <Route path="protocol-evidence" element={<ProtocolEvidence />} />
