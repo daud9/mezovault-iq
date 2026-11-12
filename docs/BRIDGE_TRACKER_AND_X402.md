@@ -1,0 +1,34 @@
+# Bridge Tracker and MUSD x402 Payment Links
+
+## Bridge Rescue Tracker
+
+The app’s Bridge Rescue page is a **read-only tracker** for MEZO NTT transfers that originate on Mezo Testnet. It queries the documented Wormholescan Testnet `GET /api/v1/operations` endpoint using the official Mezo Testnet Wormhole transceiver address and `pageSize=100`, then compares the entered source transaction hash locally. The transaction hash is not sent to Wormholescan, and the lookup does not connect a wallet or submit a transaction.
+
+Status labels describe only what the index contains:
+
+- **Source operation indexed:** a source record is present.
+- **Attestation available; destination not indexed:** Wormholescan reports a VAA but no destination transaction record.
+- **Destination execution indexed:** a target-chain record is present; this is an index status, not a separate finality guarantee.
+- **Not found:** the source hash did not match the latest 100 indexed records. This is inconclusive: it may be an unrelated transaction, outside the recent page, or not indexed yet.
+
+Mezo’s Testnet bridge guide describes MEZO transfers through Wormhole NTT and says to wait for confirmation on both chains. It does not document a Testnet rescue, refund, or manual-claim action. The page therefore offers no rescue button and warns users not to retry just because a lookup is missing or pending.
+
+This Testnet NTT tracker is separate from Mezo’s **Mainnet native-BTC bridge-in**. Mezo says native BTC deposits closed on October 13, 2026; deposits started before then can be checked through Mezo’s [tracking guide](https://mezo.org/docs/users/mainnet/track-your-native-bitcoin-deposit/) and the [tBTCScan deposits page](https://tbtcscan.com/deposits).
+
+Sources: [Mezo Testnet MEZO Bridge](https://testnet.mezo.org/docs/de/docs/users/mezo/mezo-bridge/), [official Mezo Testnet NTT deployment manifest](https://github.com/mezo-org/ntt-bridge-mezo-testnet/blob/main/deployment.json), and [Wormholescan API guide](https://wormhole.com/docs/products/messaging/guides/wormholescan-api/).
+
+## Gasless MUSD Pay Links
+
+Mezo Testnet x402 uses CAIP-2 network `eip155:31611`, MUSD at `0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503` (18 decimals), and facilitator `https://facilitator.vativ.io`. The buyer signs an EIP-712 authorization in their own wallet; the facilitator verifies, submits and settles it, paying native BTC gas. This is a payment for a server-backed resource, not a general gasless ERC-20 transfer or ERC-4337 paymaster.
+
+The original hosting instructions served only `dist`, which could not issue and settle recipient-specific x402 requirements. The repository now declares a dynamic Deno Deploy runtime in `deno.json`, with `server/main.ts` as the entrypoint; Express serves the SPA and merchant API. Deno Deploy’s official runtime docs describe a standard Deno runtime with npm dependencies, and Deno’s Express guide and Deploy examples use `app.listen`. A `deploy` block in `deno.json` takes precedence over dashboard build/runtime settings, while the app directory remains a dashboard setting. No push or deployment was performed, so the hosted app remains unchanged.
+
+A seller creates a reusable 30-day link after signing an off-chain message binding their recipient wallet, fixed MUSD amount, Testnet, issue time and nonce. The server verifies that signature and limits the same nonce to one link creation during a 10-minute in-memory window per runtime isolate; the guard is best-effort and subject to eviction under high key diversity. It then returns a stateless HMAC token and does not durably store link/seller records, buyer identity or payment payloads. Amounts are exact decimal strings in the range 0.001–1,000 MUSD, and the server uses the SDK’s fixed Testnet MUSD asset rather than a browser-supplied token address. The share token is placed in the URL fragment, is not sent with the initial page request, and is passed to the merchant only in the checkout POST body.
+
+The browser fetches the resource’s HTTP 402 requirement and validates its exact scheme, network, MUSD contract, recipient, amount, resource URL, and maximum 300-second authorization lifetime before presenting the wallet action. The buyer signs through the connected wallet; the app exposes typed-data signing and read-only contract calls to the x402 client, not transaction sending. The server checks the verified payment terms again and returns paid access only after a successful facilitator receipt matches Testnet, the expected amount when present, and a valid transaction hash. Failed settlement remains HTTP 402; a mismatched receipt fails closed. No private keys or buyer authorizations are held or signed by the server.
+
+Before enabling pay links in a deployment, set `PAY_LINK_SECRET` as a server-side secret in each environment that should allow link creation. It must contain at least 32 random bytes; do not expose it as a `VITE_` variable or commit it. The bounded in-memory limiter holds transient IP, recipient, and per-link keys, caps the map at 5,000 entries, and may evict active windows under high key diversity. Limits are per runtime isolate, are not shared across Deno Deploy instances, and reset on restart, so they are best-effort rather than distributed. The feature status endpoint reports links unavailable when the secret is missing; no payment request bodies or buyer/seller records are durably stored.
+
+The Mezo quickstart pins x402 2.16.0 for its demo, while Mezo’s reference lists Testnet support from `@x402/evm` 2.10.0. This implementation pins the updated 2.30.0 `@x402/core` and `@x402/evm` packages, which retain the Mezo MUSD Testnet registry. It avoids the universal browser paywall bundle and Express x402 adapter; the browser uses the official framework-neutral client and the server uses the x402 core HTTP resource server. Integration tests mock the wallet signer and facilitator. They make no live facilitator request and submit no chain transaction.
+
+Sources: [Mezo MUSD x402 overview and SDK support matrix](https://mezo.org/docs/developers/getting-started/musd-payments-x402/), [Mezo x402 Testnet quickstart](https://mezo.org/docs/developers/getting-started/musd-payments-x402/x402-quickstart/), [x402 client/server flow](https://docs.x402.org/core-concepts/client-server), [x402 buyer quickstart](https://docs.x402.org/getting-started/quickstart-for-buyers), [Deno Deploy build/runtime configuration](https://docs.deno.com/deploy/reference/builds/), [Deno Deploy runtime](https://docs.deno.com/deploy/reference/runtime/), [official Express with Deno guide](https://docs.deno.com/examples/express_tutorial/), [Node.js built-ins on Deno Deploy](https://deno.com/blog/node-builtins-on-deploy), and [Deno Deploy environment variables](https://docs.deno.com/deploy/getting_started/).

@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { PaymentRequestCard } from "../components/send/PaymentRequestCard";
 import { parsePaymentParams } from "../lib/paymentRequest";
 import { addEntry, browserStore, updateEntry, type LedgerStatus } from "../lib/txLedger";
 import { Card } from "../components/ui/Card";
@@ -177,9 +176,9 @@ export function Send() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Mezo Pay"
-        title="Mezo Pay — Send & Request"
-        description="You review every transaction and approve it in your wallet. The app never holds your keys. A send is final once confirmed on-chain."
+        eyebrow="Standard wallet transfer"
+        title="Send BTC, MUSD or MEZO"
+        description="Review every direct transfer and approve it in your wallet. Direct on-chain transfers require BTC for network fees; gasless x402 MUSD links are a separate feature and require a configured merchant server."
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -293,11 +292,9 @@ export function Send() {
             </Card>
           )}
 
-          {from && <PaymentRequestCard />}
-
           <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
             <p className="font-medium text-mist-200">How this works</p>
-            <p>BTC is sent as the native gas token. MUSD and MEZO are sent with the standard token transfer function. Each transaction is shown for review, then signed in your wallet.</p>
+            <p>BTC is sent as the native gas token. MUSD and MEZO are standard token transfers. Each transaction is shown for review, then sent from your wallet; MUSD and MEZO transfers need BTC available for network fees.</p>
             <p>Success is shown only when the network receipt reports success. Until then the transaction is shown as waiting.</p>
           </Card>
         </div>

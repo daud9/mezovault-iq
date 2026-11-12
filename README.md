@@ -20,8 +20,9 @@ Every balance and transaction shown in the app is read from the chain or from th
 | MUSD / MEZO Chain Watch: manually entered public address with per-network code, symbol, and decimal checks | Implemented, read-only |
 | Send BTC or MUSD: review screen, wallet confirmation, receipt-verified status | Implemented |
 | Send MEZO (same flow, only when the on-chain token check passes) | Implemented, tested on Mezo Testnet |
-| Payment-request links (asset, amount, recipient and network in the link; copy and share) | Implemented, tested on Mezo Testnet |
-| Payment page at `/app/pay` that validates a link and sends the payer to the review step. Nothing is sent from this page | Implemented |
+| Legacy `/app/pay` request links | Still accepted as prefill-only standard transfers; link creation removed. MUSD payment requires BTC for gas; not gasless |
+| Gasless MUSD Pay Links | Implemented in code: signed recipient/amount links, buyer-side wallet authorization, and facilitator-settled Mezo Testnet MUSD; hosted activation requires `PAY_LINK_SECRET` |
+| Bridge Rescue Tracker at `/app/bridge-rescue` | Read-only Mezo Testnet MEZO NTT status from Wormholescan's latest 100 operations; no rescue, claim, refund, or signing action |
 | Support card (review or enter amount manually for BTC, MUSD; MEZO when verified) | Implemented |
 | Activity page: app-sent transactions plus bounded MUSD/MEZO Transfer logs, coverage map, CSV export, and older 5,000-block pages on demand | Implemented, partial history |
 | BTC-only wallet estimate from the fresh Mezo BTC/USD protocol oracle; MUSD and MEZO are not assigned a USD price | Partial, read-only |
@@ -59,14 +60,31 @@ Every balance and transaction shown in the app is read from the chain or from th
 - Official route documentation: [MUSD bridge](https://mezo.org/docs/users/borrow/musd-bridge/) and [MEZO bridge](https://mezo.org/docs/users/mezo/mezo-bridge). The app links to the guides only; it does not initiate a bridge.
 - Balances remain separate by network. No total USD value, token price, or cross-network fungibility is inferred.
 
+### Bridge Rescue Tracker
+
+- The tracker is read-only and scoped to MEZO NTT transfers that start on Mezo Testnet. It checks the official Mezo Testnet Wormhole transceiver's latest 100 indexed operations from Wormholescan, then matches the entered Mezo transaction hash in the browser. The hash is not sent to Wormholescan.
+- The page distinguishes source indexed, VAA available, destination transaction indexed, and not found. A missing match is inconclusive: it may be outside the latest page, not indexed yet, or not be a bridge transaction. Destination indexing is not presented as an independent finality guarantee.
+- No Testnet rescue, refund, or manual claim action is documented by Mezo, so the app offers no such action and warns against retrying a transfer based only on a missing lookup.
+- This is not Mezo's Mainnet native-BTC deposit tracker. Mezo says native BTC bridge-in closed October 13, 2026; pre-closure deposits are checked using [Mezo's tracking guide](https://mezo.org/docs/users/mainnet/track-your-native-bitcoin-deposit/) and [tBTCScan](https://tbtcscan.com/deposits).
+- Implementation notes and source links: [Bridge tracker and x402 notes](docs/BRIDGE_TRACKER_AND_X402.md).
+
+### Gasless MUSD Pay Links
+
+- A seller creates a reusable 30-day link in `/app/pay-links`; the connected recipient wallet signs an off-chain ownership message, and the server binds the exact recipient, amount, and Mezo Testnet network. Supported amount: 0.001–1,000 MUSD.
+- The public `/pay#link=…` checkout displays the recipient and amount before the buyer clicks Pay. The token stays in the URL fragment during page load and is sent only in the subsequent request body. The buyer's own wallet signs the EIP-712 authorization; the facilitator at `https://facilitator.vativ.io` verifies and settles MUSD and pays native BTC gas.
+- The server returns paid access only after checking the x402 payment terms and a successful Testnet settlement receipt. Failed or mismatched settlement does not produce a paid confirmation. This is not a general gasless ERC-20 transfer or ERC-4337 paymaster; the checkout is currently Testnet-only.
+- **Hosted activation is not done.** `deno.json` now declares a Deno Deploy dynamic runtime and `server/main.ts` entrypoint. Set a server-only `PAY_LINK_SECRET` (at least 32 random bytes) in the deployment environment and deploy this source configuration before link creation is enabled. No push or deployment was made as part of this change. Per-isolate throttles use a bounded 5,000-key in-memory map that may evict active windows under high key diversity; they are best-effort, not a shared global rate limiter.
+- Direct MUSD transfers remain available on the Send page and require BTC for network fees. Older payment-request URLs only prefill that standard send flow.
+- Sources: [Mezo x402 overview](https://mezo.org/docs/developers/getting-started/musd-payments-x402/) and [Mezo x402 quickstart](https://mezo.org/docs/developers/getting-started/musd-payments-x402/x402-quickstart/).
+
 ### Tested on Mezo Testnet
 
 - **BTC transfer, confirmed on-chain.** Sent 0.0001 BTC from the app's review screen to a second address. Transaction `0x350755cfcb66c7c1fdd25c56b29ecc26f335cb5498c850f3f5d71e530a41dde3`, confirmed in block 16376406. The app showed the status as confirmed only after the receipt reported success.
 - **Second BTC transfer.** Sent 0.001 BTC; the Activity page shows it as live from chain at block 16368801. Transaction `0xb99ffa8e4c02c1b2f4128f1078e92f83a694c9944305ca7041d97c87aada1b96`.
 - **MEZO transfer, confirmed.** Sent 1 MEZO; the Activity page shows it as live from chain at block 16375491. Transaction `0xf8deebc206d05cfe4f8bf2b6ca6dc820fc4c01eff2823cb98f31686ececf2dff`. The same on-chain check that enables MEZO sending also read the wallet's MEZO balance (100 MEZO) on Mezo Testnet.
-- **Payment-request link.** A link generated in Mezo Pay opened the payment page with the recipient, token (BTC) and amount (0.0001) filled in, and the payer confirmed it in the review step.
+- **Legacy payment-request link.** The old request URL filled in a standard wallet transfer. The app no longer generates these links; legacy URLs are labelled as non-gasless and show the standard BTC network fee before wallet confirmation.
 - **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
-- **Automated unit tests.** 324 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, basic-pool snapshots, CL NFT ownership and gauge enumeration, CL planner price/tick alignment and token composition, CL mint/approval encoding, asymmetric-decimal raw-unit budget caps with upward fractional rounding and proportional scaling, and mock preflights. It also covers protocol-evidence integrity, CSV escaping, Chain Watch route/contract checks, and fail-closed preflight behavior. CL transaction tests use fake JSON-RPC and never broadcast.
+- **Automated unit tests.** 348 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, legacy payment-request links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, basic-pool snapshots, CL NFT ownership and gauge enumeration, CL planner price/tick alignment and token composition, CL mint/approval encoding, asymmetric-decimal raw-unit budget caps with upward fractional rounding and proportional scaling, mock preflights, read-only bridge tracker privacy/status/response-timeout behavior, and x402 seller, buyer, payment-terms, facilitator-receipt, settlement-failure, seller nonce-replay, expiry, configuration, and bounded rate-limiter checks. CL transaction tests use fake JSON-RPC and never broadcast; x402 integration tests mock the facilitator and never submit a transaction.
 
 
 ### Still under development (not operational)
@@ -94,8 +112,8 @@ Taken from `package.json` and the source tree.
 - **Build:** Vite 6 with `@vitejs/plugin-react`, Tailwind CSS 4 via `@tailwindcss/vite`
 - **Blockchain access:** no wallet SDK. The app calls the injected EIP-1193 provider directly (`window.ethereum`, with EIP-6963 discovery). Chain reads use JSON-RPC over `fetch`. ABI encoding and Keccak-derived selectors are implemented in `src/lib/`.
 - **Tests:** Node's built-in test runner through `tsx`
-- **Hosting:** Deno Deploy, serving the static build from `dist/`
-- **Local static server (optional):** `server/main.ts`, using `@std/http` from JSR. It is used only with `deno task start` and is not used by the production static deployment.
+- **Hosting:** Deno Deploy dynamic runtime; Express serves the React build and x402 merchant endpoints from `server/main.ts`
+- **Local server:** `deno task start` runs the same dynamic server after `npm run build`; `npm start` runs it under Node via `tsx`
 
 ---
 
@@ -153,21 +171,17 @@ Note: the production build step (`npm run build`) does not run on Android (Termu
 
 ## Deployment (Deno Deploy)
 
-The live app is a static site served from `dist/`.
+The repository now declares a **dynamic Deno Deploy runtime** in `deno.json`: install with `npm install`, build with `npm run build`, and run `server/main.ts`. That Express entrypoint serves the SPA from `dist/` and exposes the x402 API routes. Deno Deploy documents that a source `deploy` block takes precedence over dashboard build/runtime settings; the app directory remains a dashboard setting. Deno’s official runtime examples support Express and `app.listen`.
 
-Deno Deploy app settings:
+Before enabling pay links in any deployment, configure `PAY_LINK_SECRET` as a server-side secret in that environment. Use at least 32 random bytes; do not use a `VITE_` name or commit the value. Set it in Production and in any preview/development environment where links should be enabled. The status route reports the feature as unavailable when the secret is missing. In-memory throttles are per runtime isolate, so they are best-effort and are not a shared/global rate limiter.
 
-- **Install command:** `npm install`
-- **Build command:** `npx vite build`
-- **Static directory:** `dist`
-- **Single page app:** Enabled (required so routes such as `/app/pay` load on refresh)
+No push or deployment was made during this change. The hosted app remains on its existing version until the repository source configuration is deployed and the secret is set.
 
-Deploys run from the `main` branch on each push.
-
-To run the optional Deno server locally after `npm run build`:
+To run the dynamic server locally after `npm run build`:
 
 ```bash
-deno task start      # serves dist/ on http://localhost:8000
+deno task start      # serves the SPA and API on http://localhost:8000
+npm start             # Node/tsx equivalent
 ```
 
 ---
@@ -175,7 +189,7 @@ deno task start      # serves dist/ on http://localhost:8000
 ## Security and transparency
 
 - **You authorise every transaction in your own wallet.** The app never has access to private keys or seed phrases. The only open-trove path is limited to the approved account, 0.05 BTC, 3,000 MUSD, and the verified testnet proxy; the app rechecks live protocol conditions and performs block-pinned call/gas simulations before its explicit wallet request. The app does not sign or auto-submit.
-- **Payment links move no funds.** A link only fills in the payment form. The payer must review and confirm it in their own wallet.
+- **Payment requests and x402.** Legacy request links only prefill a standard transfer, which the payer reviews and confirms in their own wallet and which requires BTC network fees. Gasless MUSD links use the merchant endpoint and facilitator: the buyer signs the authorization in their wallet, and the server never signs buyer payments or receives private keys. Only Testnet MUSD is supported; the hosted feature is not enabled until `PAY_LINK_SECRET` is configured and the dynamic server is deployed. Payment succeeds only after the facilitator receipt is validated.
 - **Chain Watch is public-address only.** It queries only the address manually entered and submitted on that page. The relevant public RPC providers receive that address in balance calls and may log requests; the app does not connect a wallet or persist the address.
 - **Testnet assets have no real monetary value.** BTC, MUSD and MEZO on Mezo Testnet are for testing only.
 - **Hypothetical simulations are not actual yield.** The Simulation Lab calculates results from assumptions you enter. Its outputs are not forecasts, and the app does not present them as live rates.
@@ -192,7 +206,7 @@ This is an experimental interface. Nothing in it is financial or investment advi
 **1. Payment and wallet foundation (implemented)**
 - Wallet connection, network checks and balance reads
 - Send with review and receipt-verified status
-- Payment-request links, payment page and support card
+- Legacy payment-request URLs (prefill only), gasless Testnet MUSD x402 pay links, public checkout and support card
 - Activity history from the app and from token transfer logs
 
 **2. Evidence-based DeFi intelligence (in progress)**
@@ -217,10 +231,11 @@ src/
   lib/        RPC client, ABI helpers, balance, send, ledger and log readers
   hooks/      wallet and balance hooks
   components/ UI components (wallet, balance, send, support, activity, evidence)
-  pages/      routes: Overview, Mezo Pay, Pay, Activity, Pool Watch, Chain Watch,
+  pages/      routes: Overview, Send, legacy Pay, MUSD Pay Links, Bridge Rescue,
+              Activity, Pool Watch, Chain Watch,
               CL Position Monitor, CL Range Planner, Trove Risk Lab, Protocol Evidence, Simulation Lab
   engine/     strategy scoring, matching, simulation and allocation logic
-server/       optional local Deno static server
+server/       dynamic Express merchant/API server and signed pay-link token handling
 ```
 
 ---

@@ -1,31 +1,16 @@
 /**
- * Static server for the Vite build, intended for Deno Deploy.
- * Serves ./dist and falls back to index.html so client-side routes work on refresh.
- * Holds no secrets and makes no outbound calls.
+ * Dynamic Deno Deploy entrypoint: x402 merchant/resource endpoints plus the Vite SPA.
+ * The server fails closed for pay links until PAY_LINK_SECRET is configured as a
+ * server-side secret. Buyer payment authorizations are verified and settled by the
+ * official Mezo facilitator; this app never holds keys or sends buyer transactions.
  */
-import { serveDir, serveFile } from "@std/http/file-server";
+import process from "node:process";
+import { createMerchantApp } from "./app.ts";
 
-const DIST = "./dist";
+const port = Number(process.env.PORT ?? "8000");
+if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("PORT must be a valid TCP port.");
 
-Deno.serve(async (req: Request) => {
-  if (req.method !== "GET" && req.method !== "HEAD") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
-
-  const response = await serveDir(req, {
-    fsRoot: DIST,
-    quiet: true,
-    showDirListing: false,
-    enableCors: false,
-  });
-
-  if (response.status !== 404) return response;
-
-  // Client-side route (no file extension): hand off to the SPA shell.
-  const { pathname } = new URL(req.url);
-  if (!pathname.split("/").pop()?.includes(".")) {
-    return serveFile(req, `${DIST}/index.html`);
-  }
-
-  return response;
+const app = createMerchantApp({ payLinkSecret: process.env.PAY_LINK_SECRET });
+app.listen(port, "0.0.0.0", () => {
+  console.log(`MezoVault IQ dynamic server listening on port ${port}.`);
 });

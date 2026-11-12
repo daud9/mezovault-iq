@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
 import type { MezoNetworkConfig } from "../../config/chains";
 import { DEFAULT_NETWORK } from "../../config/env";
+import type { ClientEvmSigner } from "@x402/evm";
+import { MEZO_NETWORKS } from "../../config/chains";
 import { isAddress } from "../../lib/abi";
 import { parseChainId } from "../../lib/network";
 import { discoverProviders, selectWallet } from "../../lib/walletDiscovery";
@@ -26,8 +28,12 @@ interface WalletContextValue {
   connect: () => Promise<void>;
   disconnect: () => void;
   switchNetwork: () => Promise<void>;
+  switchToTestnet: () => Promise<void>;
+  createX402Signer: (expected: WalletExpectation) => Promise<ClientEvmSigner>;
   /** Asks the connected wallet to sign and send. Resolves to the transaction hash, not to a confirmation. */
   sendTransaction: (tx: Record<string, string | undefined>, expected?: WalletExpectation) => Promise<string>;
+  /** Requests an off-chain personal_sign message; no transaction is sent. */
+  signMessage: (message: string, expected: WalletExpectation) => Promise<`0x${string}`>;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -120,6 +126,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [network, resolveProvider]);
 
+  const switchToTestnet = useCallback(async () => {
+    const provider = providerRef.current ?? (await resolveProvider());
+    if (!provider) {
+      dispatch({ type: "error", message: NO_WALLET_MESSAGE });
+      return;
+    }
+    try {
+      await switchToNetwork(provider, MEZO_NETWORKS.testnet);
+      const chainId = await readChainId(provider);
+      dispatch({ type: "chain-changed", chainId });
+    } catch (err) {
+      dispatch({ type: "error", message: describeWalletError(err).message });
+    }
+  }, [resolveProvider]);
+
   const sendTransaction = useCallback(
     async (tx: Record<string, string | undefined>, expected?: WalletExpectation): Promise<string> => {
       const provider = providerRef.current ?? (await resolveProvider());
@@ -140,6 +161,35 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [network, resolveProvider],
   );
 
+  const signMessage = useCallback(async (message: string, expected: WalletExpectation): Promise<`0x${string}`> => {
+    if (expected.chainId !== MEZO_NETWORKS.testnet.chainId) {
+      throw new Error("Link authorization signing is restricted to Mezo Testnet.");
+    }
+    const provider = providerRef.current ?? (await resolveProvider());
+    if (!provider) throw new Error(NO_WALLET_MESSAGE);
+    await assertWalletContext(provider, expected);
+    const signature = await provider.request({
+      method: "personal_sign",
+      params: [message, expected.account],
+    });
+    if (typeof signature !== "string" || !/^0x[0-9a-fA-F]{130}$/.test(signature)) {
+      throw new Error("The wallet did not return a valid message signature.");
+    }
+    await assertWalletContext(provider, expected);
+    return signature as `0x${string}`;
+  }, [resolveProvider]);
+
+  const createX402Signer = useCallback(async (expected: WalletExpectation): Promise<ClientEvmSigner> => {
+    if (expected.chainId !== MEZO_NETWORKS.testnet.chainId) {
+      throw new Error("x402 payment signing is restricted to Mezo Testnet.");
+    }
+    const provider = providerRef.current ?? (await resolveProvider());
+    if (!provider) throw new Error(NO_WALLET_MESSAGE);
+    await assertWalletContext(provider, expected);
+    const { createInjectedMezoTestnetSigner } = await import("../../lib/x402Buyer");
+    return createInjectedMezoTestnetSigner(provider, expected.account);
+  }, [resolveProvider]);
+
   const disconnect = useCallback(() => dispatch({ type: "disconnect" }), []);
 
   const value = useMemo<WalletContextValue>(
@@ -150,9 +200,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       connect,
       disconnect,
       switchNetwork,
+      switchToTestnet,
+      createX402Signer,
       sendTransaction,
+      signMessage,
     }),
-    [state, network, connect, disconnect, switchNetwork, sendTransaction],
+    [state, network, connect, disconnect, switchNetwork, switchToTestnet, createX402Signer, sendTransaction, signMessage],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

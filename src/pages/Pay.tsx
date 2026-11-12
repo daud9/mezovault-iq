@@ -17,9 +17,9 @@ export function Pay() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Mezo Pay"
-        title="Payment request"
-        description="Review the details below. Nothing is sent from this page. Authorizing happens in your own wallet on the next screen."
+        eyebrow="Legacy payment request"
+        title="Standard payment request"
+        description="Older request links only prefill a standard wallet transfer. They are not gasless x402 checkouts; MUSD transfers require BTC for network fees. Nothing is sent from this page."
       />
 
       {parsed.error && (
@@ -33,7 +33,7 @@ export function Pay() {
       {!parsed.error && !parsed.request && (
         <Card className="space-y-3">
           <p className="text-sm text-mist-300">This link does not contain a payment request.</p>
-          <Link to="/app/send" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Mezo Pay</Link>
+          <Link to="/app/send" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open standard Send</Link>
         </Card>
       )}
 
@@ -50,7 +50,7 @@ export function Pay() {
             <div><dt className="text-xs text-mist-500">Network</dt><dd className="text-mist-200">{network.label} (chain {network.chainId})</dd></div>
           </dl>
           <p className="text-xs leading-relaxed text-mist-500">
-            Confirm the recipient and amount carefully. A confirmed payment cannot be reversed. Network fees are added on the next screen.
+            Confirm the recipient and amount carefully. A confirmed payment cannot be reversed. This legacy link uses a normal wallet transaction; the next screen estimates BTC network fees before you decide whether to continue.
           </p>
 
           {state.status !== "connected" ? (

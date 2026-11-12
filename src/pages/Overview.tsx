@@ -65,6 +65,16 @@ export function Overview() {
             <p className="text-sm leading-relaxed text-mist-400">Compare live collateral, debt, ratio, and MCR distance with 10%, 20%, and 30% hypothetical BTC price drops. Read-only; no automated action.</p>
             <Link to="/app/trove-risk" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Risk Lab</Link>
           </Card>
+          <Card className="space-y-3">
+            <p className="text-sm font-semibold text-mist-100">Bridge Rescue Tracker</p>
+            <p className="text-sm leading-relaxed text-mist-400">Check Wormholescan’s indexed status for recent Mezo Testnet MEZO NTT transfers. Read-only status only; no claim or rescue action is available.</p>
+            <Link to="/app/bridge-rescue" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Track a bridge transfer</Link>
+          </Card>
+          <Card className="space-y-3">
+            <p className="text-sm font-semibold text-mist-100">Gasless MUSD Pay Links</p>
+            <p className="text-sm leading-relaxed text-mist-400">Create a recipient-bound MUSD link for Mezo Testnet. Buyers sign in their own wallet; the x402 facilitator verifies and settles payment, paying BTC gas. Check merchant readiness before creating a link.</p>
+            <Link to="/app/pay-links" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open MUSD Pay Links</Link>
+          </Card>
         </div>
       </div>
 
