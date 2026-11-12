@@ -91,7 +91,7 @@ export function TroveRiskLab() {
         <Card className="space-y-3">
           <DataStatus state="unverified" detail={`no active Trove · block ${loan.blockNumber}`} />
           <h2 className="text-base font-semibold text-mist-100">No active Trove was read</h2>
-          <p className="text-sm leading-relaxed text-mist-400">There is no current collateral/debt position to stress-test for this wallet. The separate fixed test path remains on the Trove page; this lab does not open or change positions.</p>
+          <p className="text-sm leading-relaxed text-mist-400">There is no current collateral/debt position to stress-test for this wallet. This lab is read-only and does not open or change positions.</p>
         </Card>
       ) : !isFresh ? (
         <Card className="space-y-3">

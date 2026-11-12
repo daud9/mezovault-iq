@@ -4,7 +4,6 @@ import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { OpenTrovePlanner } from "./OpenTrovePlanner";
-import { OpenTroveTestAction } from "./OpenTroveTestAction";
 import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
@@ -12,7 +11,7 @@ import { formatTime } from "../../lib/format";
 
 const STALE_AFTER_SECONDS = 3600;
 
-/** Read-only loan view plus one fixed owner-approved test action; no general loan controls are exposed. */
+/** Read-only loan view and preview-only opening planner; no Trove transaction controls are exposed. */
 export function LoanCard() {
   const { state, network, isSupportedNetwork } = useWallet();
   const { view, refresh } = useLoan();
@@ -48,8 +47,8 @@ export function LoanCard() {
         <div className="space-y-3">
           <p className="text-sm font-semibold text-mist-100">No active Trove</p>
           <p className="text-sm text-mist-400">
-            No active trove was read for this wallet on {network.label}. The planner below is preview-only; the separate
-            wallet action is limited to the exact owner-approved test, and is not a general borrowing flow.
+            No active trove was read for this wallet on {network.label}. The planner below is a read-only estimate; it
+            does not prepare or submit a borrowing transaction.
           </p>
           <OpenTrovePlanner
             live={plannerSnapshot}
@@ -60,7 +59,6 @@ export function LoanCard() {
             onCollateralBtcChange={setPlannerCollateralBtc}
             onRequestedMusdChange={setPlannerRequestedMusd}
           />
-          <OpenTroveTestAction />
         </div>
       );
     } else if (r.status === "ok") {
@@ -145,8 +143,8 @@ export function LoanCard() {
       </div>
       {body}
       <p className="border-t border-line pt-4 text-xs leading-relaxed text-mist-500">
-        Generic borrow and Trove-management transactions are not available in this app. The no-active-trove test action,
-        when eligible, is limited to its disclosed fixed wallet, amounts and Mezo Testnet transaction.
+        Trove transactions are not available in this app. Planner inputs are informational only and are never used to
+        build a wallet request.
       </p>
     </Card>
   );

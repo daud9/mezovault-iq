@@ -28,7 +28,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 | BTC-only wallet estimate from the fresh Mezo BTC/USD protocol oracle; MUSD and MEZO are not assigned a USD price | Partial, read-only |
 | Loan position read for a BTC-collateralised MUSD loan (collateral, debt, ratio from the official oracle price) | Read-only |
 | Trove Risk Lab: live MCR comparison and hypothetical 10%, 20%, and 30% BTC price drops | Read-only, withheld when live inputs are stale or incomplete |
-| Open-trove planner plus fixed test-only action (0.05 BTC / 3,000 MUSD, approved wallet only) | Fresh same-block protocol checks, `eth_call`, and gas estimation before explicit wallet confirmation; no transaction was sent during this change |
+| Open-trove planner | Read-only preview from fresh same-block protocol data; planner inputs are never used to prepare a transaction |
 | Liquidity-pool position read for the three official testnet basic pools | Read-only |
 | CL Position Monitor at `/app/cl-positions` | Mezo Testnet only; reads wallet-held and gauge-staked NFTs, live tick/range, simulated collect estimates, and gauge schedule data where available; read-only |
 | CL Range Planner at `/app/cl-planner` | Mezo Testnet only; its planner stays read-only; a separate deposit panel builds a live-reviewed mint with separate exact approvals and wallet-confirmed receipt status; no APY/returns/USD values |
@@ -82,6 +82,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **BTC transfer, confirmed on-chain.** Sent 0.0001 BTC from the app's review screen to a second address. Transaction `0x350755cfcb66c7c1fdd25c56b29ecc26f335cb5498c850f3f5d71e530a41dde3`, confirmed in block 16376406. The app showed the status as confirmed only after the receipt reported success.
 - **Second BTC transfer.** Sent 0.001 BTC; the Activity page shows it as live from chain at block 16368801. Transaction `0xb99ffa8e4c02c1b2f4128f1078e92f83a694c9944305ca7041d97c87aada1b96`.
 - **MEZO transfer, confirmed.** Sent 1 MEZO; the Activity page shows it as live from chain at block 16375491. Transaction `0xf8deebc206d05cfe4f8bf2b6ca6dc820fc4c01eff2823cb98f31686ececf2dff`. The same on-chain check that enables MEZO sending also read the wallet's MEZO balance (100 MEZO) on Mezo Testnet.
+- **One-off open-trove test, completed.** The owner-approved fixed test (0.05 BTC collateral / 3,000 MUSD debt) was successfully performed on Mezo Testnet. Its dashboard action has since been removed; no general Trove transaction flow is enabled.
 - **Legacy payment-request link.** The old request URL filled in a standard wallet transfer. The app no longer generates these links; legacy URLs are labelled as non-gasless and show the standard BTC network fee before wallet confirmation.
 - **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
 - **Automated unit tests.** 348 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, legacy payment-request links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, basic-pool snapshots, CL NFT ownership and gauge enumeration, CL planner price/tick alignment and token composition, CL mint/approval encoding, asymmetric-decimal raw-unit budget caps with upward fractional rounding and proportional scaling, mock preflights, read-only bridge tracker privacy/status/response-timeout behavior, and x402 seller, buyer, payment-terms, facilitator-receipt, settlement-failure, seller nonce-replay, expiry, configuration, and bounded rate-limiter checks. CL transaction tests use fake JSON-RPC and never broadcast; x402 integration tests mock the facilitator and never submit a transaction.
@@ -94,7 +95,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **Verified live yield, TVL and strategy data.** The app shows these as unavailable. No APY, TVL or strategy is listed.
 - **Allocation and automated investing.** Allocation is hidden from primary navigation until verified strategy inputs exist; no allocation result or live return is generated.
 - **Autopilot and automated rebalancing.** Not implemented and hidden from primary navigation. The Trove Risk Lab is read-only and does not automate actions.
-- **General loan changes** (arbitrary open, adjust, repay, close). Only the fixed test action for the specifically approved wallet and parameters is available; planner inputs are never used to build a transaction. It re-reads live state and simulates the exact call before asking the wallet, and otherwise fails closed. All other loan changes must be made in the official Mezo borrow page.
+- **Trove transactions** (open, adjust, repay, or close). The planner is read-only; no Trove transaction action is available in this app. Use Mezo's official borrow page for live position changes.
 
 ### Pricing and history source limits
 
@@ -188,7 +189,7 @@ npm start             # Node/tsx equivalent
 
 ## Security and transparency
 
-- **You authorise every transaction in your own wallet.** The app never has access to private keys or seed phrases. The only open-trove path is limited to the approved account, 0.05 BTC, 3,000 MUSD, and the verified testnet proxy; the app rechecks live protocol conditions and performs block-pinned call/gas simulations before its explicit wallet request. The app does not sign or auto-submit.
+- **You authorise every transaction in your own wallet.** The app never has access to private keys or seed phrases. No Trove transaction path is currently enabled; the open-trove planner is read-only, and its inputs are never used to prepare a wallet request.
 - **Payment requests and x402.** Legacy request links only prefill a standard transfer, which the payer reviews and confirms in their own wallet and which requires BTC network fees. Gasless MUSD links use the merchant endpoint and facilitator: the buyer signs the authorization in their wallet, and the server never signs buyer payments or receives private keys. Only Testnet MUSD is supported; the hosted feature is not enabled until `PAY_LINK_SECRET` is configured and the dynamic server is deployed. Payment succeeds only after the facilitator receipt is validated.
 - **Chain Watch is public-address only.** It queries only the address manually entered and submitted on that page. The relevant public RPC providers receive that address in balance calls and may log requests; the app does not connect a wallet or persist the address.
 - **Testnet assets have no real monetary value.** BTC, MUSD and MEZO on Mezo Testnet are for testing only.
@@ -214,8 +215,8 @@ This is an experimental interface. Nothing in it is financial or investment advi
 - Read-only loan and pool positions
 - Clear labelling of metrics that cannot be verified
 
-**3. Verified DeFi protocol integrations (one restricted test path; broader work planned)**
-- One fixed Mezo Testnet open-trove test action for the specifically approved wallet and parameters; general loan operations remain disabled
+**3. Verified DeFi protocol integrations (broader work planned)**
+- Trove transaction flows only after operation-specific contract review, safety testing, and separate owner authorization
 - Swaps through the verified testnet router, after the function signatures are confirmed on-chain and tested
 - Smart Vault deposits and withdrawals, after a testnet vault is verified
 - Live yield, liquidity and TVL data from verified sources only

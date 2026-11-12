@@ -44,7 +44,7 @@ export const PROTOCOL_EVIDENCE: ProtocolEvidenceRecord[] = [
   {
     id: "borrower-operations",
     name: "BorrowerOperations proxy",
-    purpose: "Read-only source of live Trove parameters; the fixed test path remains separately constrained.",
+    purpose: "Read-only source of live Trove parameters; no Trove transaction flow is enabled.",
     address: "0xCdF7028ceAB81fA0C6971208e83fa7872994beE5",
     source: OFFICIAL_SOURCES.musdRedemptions,
     documented: confirmed("Official Mezo Testnet contract address is recorded."),
