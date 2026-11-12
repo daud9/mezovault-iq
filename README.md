@@ -30,7 +30,7 @@ Every balance and transaction shown in the app is read from the chain or from th
 | Open-trove planner plus fixed test-only action (0.05 BTC / 3,000 MUSD, approved wallet only) | Fresh same-block protocol checks, `eth_call`, and gas estimation before explicit wallet confirmation; no transaction was sent during this change |
 | Liquidity-pool position read for the three official testnet basic pools | Read-only |
 | CL Position Monitor at `/app/cl-positions` | Mezo Testnet only; reads wallet-held and gauge-staked NFTs, live tick/range, simulated collect estimates, and gauge schedule data where available; read-only |
-| CL Range Planner at `/app/cl-planner` | Mezo Testnet only; enumerates active factory pools and previews a tick-aligned token split from live pool state; read-only, no APY/returns/USD values or transaction controls |
+| CL Range Planner at `/app/cl-planner` | Mezo Testnet only; its planner stays read-only; a separate deposit panel builds a live-reviewed mint with separate exact approvals and wallet-confirmed receipt status; no APY/returns/USD values |
 | Pool Watch: official Testnet pool reserves and reserve-implied spot price | Read-only; fee tier and USD liquidity are not verified; no APY or recommendations |
 | Protocol Evidence board: documented, deployed, source-verified, and operationally-tested stages | Read-only; unknown and partial evidence is labelled explicitly |
 | Simulation Lab | Assumption-based preview only; not a live strategy or yield claim |
@@ -41,8 +41,14 @@ Every balance and transaction shown in the app is read from the chain or from th
 - The planner reads factory-listed Slipstream pools from the official Mezo Testnet CL deployment at chain 31611, at one checked block. It does not use a hardcoded/demo pool list and does not need a connected wallet.
 - A pool is selectable only when its contract is present, its live `liquidity()` is nonzero, and both token decimals are readable on-chain. Zero-current-liquidity pools and pools with missing/unsupported decimals are excluded. Pool-wide active liquidity includes staked liquidity and is not a promise of liquidity available to a user-selected range.
 - Enter the lower and upper price as token1 per token0 and the total budget in token1. The bounds round outward to that pool's tick spacing. The estimated composition uses live `sqrtPriceX96`, token decimals and standard CL formulas; the range status uses the live tick, lower-inclusive and upper-exclusive.
-- Reads refresh every 60 seconds and on demand. A failed read or snapshot older than two minutes withholds calculations. Amounts are approximate, exclude fees/slippage/gas/exact raw-unit rounding, and are not a quote. No APY, returns, USD valuation or transaction actions are present.
+- Reads refresh every 60 seconds and on demand. A failed read or snapshot older than two minutes withholds calculations. Planner amounts are approximate, exclude fees/slippage/gas/exact raw-unit rounding, and are not a quote. The planner card itself remains read-only; a separate panel performs the deposit review.
 - Implementation and test details: [CL Testnet Planner notes](docs/CL_TESTNET_PLANNER.md).
+
+### CL Testnet deposit flow
+
+- The separate panel is locked to chain 31611 and the verified Testnet Slipstream Position Manager. Before a wallet prompt it shows the exact pool, dynamic fee, tick spacing and range, exact desired/minimum token amounts, recipient, deadline, contract call and calldata.
+- Approvals are separate, limited to the exact desired raw-unit amount, and simulated before the wallet is opened. The mint is simulated again against fresh pool, fee, balance and allowance state. Connecting, loading or refreshing never submits a transaction.
+- Status remains pending until a transaction receipt is read; success is shown only for receipt status `0x1`. No live mint or approval was sent during development. ABI, safety checks and fake-RPC tests are documented in [CL Testnet deposit notes](docs/CL_TESTNET_DEPOSIT.md).
 
 ### MUSD / MEZO Chain Watch
 
@@ -60,7 +66,8 @@ Every balance and transaction shown in the app is read from the chain or from th
 - **MEZO transfer, confirmed.** Sent 1 MEZO; the Activity page shows it as live from chain at block 16375491. Transaction `0xf8deebc206d05cfe4f8bf2b6ca6dc820fc4c01eff2823cb98f31686ececf2dff`. The same on-chain check that enables MEZO sending also read the wallet's MEZO balance (100 MEZO) on Mezo Testnet.
 - **Payment-request link.** A link generated in Mezo Pay opened the payment page with the recipient, token (BTC) and amount (0.0001) filled in, and the payer confirmed it in the review step.
 - **Activity page.** Lists app-sent transactions with hash, timestamp, status, block number and explorer link. It reads MUSD/MEZO Transfer events in 5,000-block pages, initially the latest page; older pages load only when requested. It does not show native BTC transfers or claim complete wallet history.
-- **Automated unit tests.** 314 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, basic-pool snapshots, CL NFT ownership and gauge enumeration, CL planner price/tick alignment and token composition, protocol-evidence integrity, CSV escaping, Chain Watch route/contract checks, and fail-closed preflight behavior. Chain Watch unit tests use fake JSON-RPC; public endpoint checks used chain IDs and token metadata without querying an account address.
+- **Automated unit tests.** 324 pass (`npm test`). Coverage includes amount parsing, transfers, receipt handling, payment links, wallet state, RPC errors, token formatting, same-block reads, BTC/USD freshness and valuation, bounded transfer-history ranges, Trove risk arithmetic, basic-pool snapshots, CL NFT ownership and gauge enumeration, CL planner price/tick alignment and token composition, CL mint/approval encoding, asymmetric-decimal raw-unit budget caps with upward fractional rounding and proportional scaling, and mock preflights. It also covers protocol-evidence integrity, CSV escaping, Chain Watch route/contract checks, and fail-closed preflight behavior. CL transaction tests use fake JSON-RPC and never broadcast.
+
 
 ### Still under development (not operational)
 

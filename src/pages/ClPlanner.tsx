@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, RefreshCw } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
+import { ClDepositPanel } from "../components/cl/ClDepositPanel";
 import { DataStatus } from "../components/ui/DataStatus";
 import { ErrorState, LoadingState } from "../components/ui/StateViews";
 import { SectionHeader } from "../components/ui/SectionHeader";
@@ -172,10 +173,20 @@ export function ClPlanner() {
             )}
           </Card>
 
+          <ClDepositPanel
+            pool={pool}
+            lowerPrice={lowerPrice}
+            upperPrice={upperPrice}
+            budgetToken1={budget}
+            plannerBlockNumber={snapshot.blockNumber}
+            enabled={fresh && calculation.result !== null}
+            network={network}
+          />
+
           <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
-            <h2 className="font-medium text-mist-200">Read-only safety and data notes</h2>
-            <p>This page reads public pool state from the official Mezo Testnet CL Factory at chain 31611 and uses token symbols/decimals returned on-chain. Snapshot block and age are shown above; if the read is unavailable or older than two minutes, calculations are withheld. A pool is selectable only when its factory listing, contract code, live liquidity and both token decimals are readable. Range status means the current tick is inside the hypothetical bounds; pool-wide active liquidity is not a promise of liquidity available to this exact range.</p>
-            <p>No APY, returns, fees earned, USD valuation, transaction, signing, approval, mint, deposit, stake or collection control is present. Connecting a wallet is not required.</p>
+            <h2 className="font-medium text-mist-200">Read-only planner safety and data notes</h2>
+            <p>The planner card reads public pool state from the official Mezo Testnet CL Factory at chain 31611 and uses token symbols/decimals returned on-chain. Snapshot block and age are shown above; if the read is unavailable or older than two minutes, planner calculations are withheld. A pool is selectable only when its factory listing, contract code, live liquidity and both token decimals are readable. Range status means the current tick is inside the hypothetical bounds; pool-wide active liquidity is not a promise of liquidity available to this exact range.</p>
+            <p>The planner card itself remains read-only and does not calculate APY, returns, fees earned or USD valuation. The separate deposit panel above requires its own current review and explicit wallet actions; it is Testnet-only and does not add collection, stake or reward controls.</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
               <a href={OFFICIAL_SOURCES.mezoPools} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">Mezo Pools docs <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
               <a href={OFFICIAL_SOURCES.contractsReference} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">Official contract reference <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
