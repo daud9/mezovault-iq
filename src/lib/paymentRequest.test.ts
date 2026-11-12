@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { buildSendQuery, parsePaymentParams } from "./paymentRequest";
-import { SUPPORT_ADDRESS } from "../config/support";
 
 const TO = "0x55039a1999313f5ff80c788cc676bf58fbb40bde" as const;
 
@@ -43,9 +42,9 @@ describe("payment request links", () => {
     assert.equal(parsePaymentParams(new URLSearchParams(`to=${TO}&token=BTC&amount=0.000000000000000001`)).error, null);
   });
 
-  it("accepts the configured support address", () => {
-    const p = parsePaymentParams(new URLSearchParams(`to=${SUPPORT_ADDRESS}&token=BTC&amount=0.001`));
+  it("accepts a valid recipient in a BTC payment link", () => {
+    const p = parsePaymentParams(new URLSearchParams(`to=${TO}&token=BTC&amount=0.001`));
     assert.equal(p.error, null);
-    assert.equal(p.request?.to, SUPPORT_ADDRESS);
+    assert.equal(p.request?.to, TO);
   });
 });

@@ -6,7 +6,6 @@ import { MusdBalanceCard } from "../components/balance/MusdBalanceCard";
 import { BtcBalanceCard } from "../components/balance/BtcBalanceCard";
 import { MezoBalanceCard } from "../components/balance/MezoBalanceCard";
 import { TrovePositionCard } from "../components/balance/TrovePositionCard";
-import { SupportCard } from "../components/support/SupportCard";
 import { Link } from "react-router-dom";
 import { useWallet } from "../components/wallet/WalletProvider";
 
@@ -34,8 +33,6 @@ export function Overview() {
 
       <TrovePositionCard />
 
-      <SupportCard />
-
       <div className="space-y-4">
         <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Explore MezoVault IQ</h2>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -47,11 +44,6 @@ export function Overview() {
             <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">
               Open Trove
             </Link>
-          </Card>
-          <Card className="space-y-3">
-            <p className="text-sm font-semibold text-mist-100">Protocol Evidence</p>
-            <p className="text-sm leading-relaxed text-mist-400">Separate what is documented, deployed, source verified, and operationally tested. OpturaFi Range is only a candidate.</p>
-            <Link to="/app/protocol-evidence" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open evidence board</Link>
           </Card>
           <Card className="space-y-3">
             <p className="text-sm font-semibold text-mist-100">Pool Watch</p>
@@ -102,7 +94,6 @@ export function Overview() {
             </p>
             <div className="flex flex-wrap gap-x-4">
               <Link to="/app/trove" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View Trove</Link>
-              <Link to="/app/protocol-evidence" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View Protocol Evidence</Link>
               <Link to="/app/pools" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View Pool Watch</Link>
             </div>
           </Card>

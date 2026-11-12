@@ -7,7 +7,6 @@ import { Landing } from "./pages/Landing";
 import { Overview } from "./pages/Overview";
 import { SimulationLab } from "./pages/SimulationLab";
 import { Activity } from "./pages/Activity";
-import { ProtocolEvidence } from "./pages/ProtocolEvidence";
 import { PoolWatch } from "./pages/PoolWatch";
 import { Send } from "./pages/Send";
 import { Pay } from "./pages/Pay";
@@ -44,9 +43,6 @@ export default function App() {
               <Route path="chain-watch" element={<ChainWatch />} />
               <Route path="cl-positions" element={<ClPositionMonitor />} />
               <Route path="cl-planner" element={<ClPlanner />} />
-              <Route path="smart-vaults" element={<ProtocolEvidence />} />
-              <Route path="vaults" element={<ProtocolEvidence />} />
-              <Route path="protocol-evidence" element={<ProtocolEvidence />} />
               <Route path="pools" element={<PoolWatch />} />
               <Route path="simulation" element={<SimulationLab />} />
               <Route path="activity" element={<Activity />} />
