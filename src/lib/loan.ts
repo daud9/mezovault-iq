@@ -9,6 +9,7 @@ import { RpcError, type RpcClient } from "./rpc";
 import { parseChainId } from "./network";
 import { formatTokenUnits } from "./tokenAmount";
 import { MEZO_TESTNET_SELECTORS } from "./mezoAbi";
+import { readClosedTroveHistory, type ClosedTroveHistory } from "./closedTroveHistory";
 
 /** Read selectors shared with the verified Mezo Testnet ABI registry. */
 export const LOAN_SELECTORS = {
@@ -29,6 +30,9 @@ export type LoanResult =
   | {
       status: "ok";
       hasLoan: boolean;
+      troveStatus: 0 | 1 | 2 | 3 | 4;
+      /** Present only when the protocol status is closed by redemption (status 4). */
+      closedHistory: ClosedTroveHistory | null;
       collateralRaw: bigint;
       debtRaw: bigint;
       collateralBtc: string;
@@ -172,6 +176,10 @@ export async function readLoan(options: {
       throw new LoanReadError("invalid-response", "TroveManager returned an unknown Trove status.");
     }
     const hasLoan = troveStatus === 1n;
+    let closedHistory: ClosedTroveHistory | null = null;
+    if (troveStatus === 4n) {
+      closedHistory = await readClosedTroveHistory({ network, owner, blockNumber, blockTag, rpc });
+    }
     if (hasLoan && (collateralRaw <= 0n || debtRaw <= 0n)) {
       throw new LoanReadError("invalid-response", "TroveManager marked this Trove active but returned zero collateral or debt.");
     }
@@ -247,6 +255,8 @@ export async function readLoan(options: {
     return {
       status: "ok",
       hasLoan,
+      troveStatus: Number(troveStatus) as 0 | 1 | 2 | 3 | 4,
+      closedHistory,
       collateralRaw,
       debtRaw,
       collateralBtc,

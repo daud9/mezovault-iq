@@ -5,6 +5,7 @@ import { ErrorBoundary } from "./components/ErrorBoundary";
 import { WalletProvider } from "./components/wallet/WalletProvider";
 import { Landing } from "./pages/Landing";
 import { Overview } from "./pages/Overview";
+import { MusdSwap } from "./pages/MusdSwap";
 import { SimulationLab } from "./pages/SimulationLab";
 import { Activity } from "./pages/Activity";
 import { PoolWatch } from "./pages/PoolWatch";
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/app" element={<AppShell />}>
               <Route index element={<Overview />} />
               <Route path="send" element={<Send />} />
+              <Route path="swap" element={<MusdSwap />} />
               <Route path="pay" element={<Pay />} />
               <Route path="pay-links" element={<MusdPayLinks />} />
               <Route path="bridge-status" element={<BridgeStatusTracker />} />

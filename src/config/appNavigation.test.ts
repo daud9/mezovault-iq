@@ -7,6 +7,11 @@ describe("app navigation and legacy route alias", () => {
     assert.ok(APP_NAV.some((item) => item.to === "/app/simulation" && item.label === "Simulation Lab"));
   });
 
+  it("adds the MUSD Swap screen to primary navigation", () => {
+    assert.equal(APP_NAV[1]?.to, "/app/swap");
+    assert.equal(APP_NAV[1]?.label, "MUSD Swap");
+  });
+
   it("uses the accurate bridge tracker label and canonical route", () => {
     assert.ok(APP_NAV.some((item) => item.to === "/app/bridge-status" && item.label === "Bridge Status Tracker"));
   });

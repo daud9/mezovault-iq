@@ -14,6 +14,7 @@ import { formatTime } from "../../lib/format";
 import { calculateMinimumOpenTroveAmounts, type OpenTroveLiveSnapshot } from "../../lib/openTrovePlanner";
 import { isLoanPriceFresh, isLoanReadFresh, loanReadAgeMs } from "../../lib/loan";
 import { calculateCollateralRatioBps, formatPercentBps } from "../../lib/troveRisk";
+import type { ClosedTroveHistory } from "../../lib/closedTroveHistory";
 
 /** Read-only Trove summary and separate wallet-confirmed Testnet actions. */
 export function LoanCard() {
@@ -134,6 +135,7 @@ export function LoanCard() {
           <DataStatus state="live" detail={`no active Trove · block ${result.blockNumber}`} />
           <p className="text-base font-semibold text-mist-100">No active Trove was found for this wallet.</p>
           <p className="text-sm text-mist-400">The pinned read at block {result.blockNumber.toLocaleString()} found no active Trove for <span className="break-all font-mono text-mist-300">{state.address}</span> on {network.label}. If you expected an existing Trove, confirm this is its owner account or refresh before choosing the open-only action below.</p>
+          {result.troveStatus === 4 && result.closedHistory && <ClosedRedemptionHistory history={result.closedHistory} explorerUrl={network.explorerUrl} />}
           <details
             className="rounded-lg border border-line bg-ink-800/40 px-3"
             onToggle={(event) => setPlannerExpanded(event.currentTarget.open)}
@@ -236,5 +238,36 @@ function Metric({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-mist-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-mist-100">{value}</p>
     </div>
+  );
+}
+
+function ClosedRedemptionHistory({ history, explorerUrl }: { history: ClosedTroveHistory; explorerUrl: string }) {
+  const transactionUrl = history.closure
+    ? `${explorerUrl.replace(/\/$/, "")}/tx/${history.closure.transactionHash}`
+    : null;
+  return (
+    <section aria-labelledby="closed-trove-history-title" className="space-y-3 rounded-xl border border-gold-500/30 bg-ink-800/60 p-4">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">Closed Trove history</p>
+        <h3 id="closed-trove-history-title" className="mt-1 text-base font-semibold text-mist-100">Closed by redemption</h3>
+      </div>
+      {history.closure ? (
+        <div className="space-y-2 text-sm text-mist-300">
+          <p>Closed at block <span className="font-semibold text-mist-100">{history.closure.blockNumber.toLocaleString()}</span>.</p>
+          <p className="break-all font-mono text-xs text-mist-300">{history.closure.transactionHash}</p>
+          {transactionUrl && <a href={transactionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center font-medium text-gold-300 hover:underline">Open redemption transaction</a>}
+        </div>
+      ) : (
+        <p className="text-sm text-amber-200">The TroveManager reports closed by redemption, but its exact transaction and block could not be verified in the recent log window. {history.closureUnavailableReason ?? "Refresh the read or verify the network."}</p>
+      )}
+      {history.claimableSurplusRaw === null ? (
+        <p className="text-sm text-mist-400">Claimable BTC collateral surplus: unavailable. {history.surplusUnavailableReason ?? "No verified value is shown."}</p>
+      ) : history.claimableSurplusRaw > 0n ? (
+        <p className="text-sm text-mist-300">Claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}: <span className="font-semibold text-mist-100">{history.claimableSurplusBtc} BTC</span>.</p>
+      ) : (
+        <p className="text-sm text-mist-300">No claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}.</p>
+      )}
+      <p className="text-xs leading-relaxed text-mist-500">Final pre-redemption collateral ratio: unavailable; no current risk ratio is shown for a closed Trove. This history view does not provide a surplus-claim action.</p>
+    </section>
   );
 }
