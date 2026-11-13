@@ -6,6 +6,7 @@
 import type { MezoNetworkConfig } from "../config/chains";
 import { isAddress } from "./abi";
 import { parseChainId } from "./network";
+import { isTxHash } from "./transfer";
 
 export interface Eip1193Provider {
   request(args: { method: string; params?: unknown }): Promise<unknown>;
@@ -106,6 +107,27 @@ export async function assertWalletContext(provider: Eip1193Provider, expected: W
   }
 }
 
+/** Rechecks the reviewed account/network, then hands the exact transaction to the injected wallet. */
+export async function requestWalletTransaction(
+  provider: Eip1193Provider,
+  tx: Record<string, string | undefined>,
+  expected: WalletExpectation | undefined,
+  configuredChainId: number,
+): Promise<string> {
+  if (expected) {
+    if (expected.chainId !== configuredChainId) {
+      throw new Error("The approved transaction does not match the app's selected network.");
+    }
+    if (typeof tx.from !== "string" || tx.from.toLowerCase() !== expected.account.toLowerCase()) {
+      throw new Error("The transaction sender does not match the reviewed wallet account.");
+    }
+    await assertWalletContext(provider, expected);
+  }
+  const hash = await provider.request({ method: "eth_sendTransaction", params: [tx] });
+  if (!isTxHash(hash)) throw new Error("The wallet did not return a transaction hash.");
+  return hash;
+}
+
 /** Turns an EIP-1193 or EIP-1474 error into a message that tells the user what to do. */
 export function describeWalletError(err: unknown): { code: WalletErrorCode; message: string } {
   if (err instanceof WalletError) return { code: err.code, message: err.message };
@@ -116,7 +138,13 @@ export function describeWalletError(err: unknown): { code: WalletErrorCode; mess
   if (isWalletCode(err, 4200) || isWalletCode(err, 4902)) {
     return { code: "unsupported", message: "Your wallet does not support this request. Switch network manually in your wallet." };
   }
-  return { code: "unknown", message: "The wallet request failed. Try again, or check your wallet." };
+  const detail = err instanceof Error ? err.message.replace(/\s+/g, " ").trim().slice(0, 180) : "";
+  return {
+    code: "unknown",
+    message: detail
+      ? `The wallet request failed: ${detail}. Check your wallet and retry only if no request is already pending.`
+      : "The wallet request failed. Try again, or check your wallet.",
+  };
 }
 
 function isWalletCode(err: unknown, code: number): boolean {

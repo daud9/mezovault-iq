@@ -4,6 +4,8 @@ import { MEZO_NETWORKS } from "../config/chains";
 import { MEZO_TESTNET_SELECTORS as S } from "./mezoAbi";
 import { encodeUintResult, fakeFetch, type Handler } from "./testHelpers";
 import { createRpcClient } from "./rpc";
+import { confirmReviewedOpenTrove, formatOpenTroveActionError } from "./openTroveConfirmation";
+import { requestWalletTransaction, type Eip1193Provider } from "./wallet";
 import {
   OpenTrovePreflightError,
   prepareOpenTrove,
@@ -130,6 +132,7 @@ function run(
   const requestedMusd = amounts.requestedMusd ?? "2500";
   return {
     calls: mock.calls,
+    rpc,
     prepared: prepareOpenTrove({
       account: ACCOUNT,
       walletChainId: NETWORK.chainId,
@@ -237,18 +240,22 @@ describe("general Mezo Testnet openTrove preflight", () => {
   });
 
   it("blocks active, non-empty, or unrecognized Trove states before the open call simulation", async () => {
-    const ineligible = [
+    const existingPositions = [
       { activeTrove: true },
       { existingCollateral: 1n },
       { existingDebt: 1n },
-      { troveStatus: 5n },
     ];
-    for (const options of ineligible) {
+    for (const options of existingPositions) {
       const { prepared, calls } = run(options);
-      await assert.rejects(prepared, OpenTrovePreflightError);
+      await assert.rejects(prepared, (error: unknown) => error instanceof OpenTrovePreflightError && error.code === "existing-trove");
       assert.equal(calls.some((call) => call.method === "eth_estimateGas"), false);
       assert.equal(calls.some((call) => call.method === "eth_call" && (call.params[0] as { data?: string }).data?.startsWith(OPEN_TROVE_SELECTOR)), false);
     }
+
+    const unknownStatus = run({ troveStatus: 5n });
+    await assert.rejects(unknownStatus.prepared, (error: unknown) => error instanceof OpenTrovePreflightError && error.code === "preflight");
+    assert.equal(unknownStatus.calls.some((call) => call.method === "eth_estimateGas"), false);
+    assert.equal(unknownStatus.calls.some((call) => call.method === "eth_call" && (call.params[0] as { data?: string }).data?.startsWith(OPEN_TROVE_SELECTOR)), false);
   });
 
   it("blocks when exact gas estimation or exact-call simulation reverts", async () => {
@@ -274,5 +281,77 @@ describe("general Mezo Testnet openTrove preflight", () => {
     const { prepared: differentAmounts } = run({}, { collateralBtc: "0.09", requestedMusd: "2500" });
     assert.equal(sameOpenTroveReview(a, await differentAmounts), false);
     assert.equal(calls.some((call) => call.method === "eth_sendTransaction"), false);
+  });
+});
+
+describe("final open-Trove confirmation", () => {
+  it("rechecks all conditions and reaches the injected provider only after the explicit final confirmation path passes", async () => {
+    const { calls: rpcCalls, rpc, prepared } = run();
+    const review = await prepared;
+    const hash = `0x${"b".repeat(64)}`;
+    const providerCalls: string[] = [];
+    const provider: Eip1193Provider = {
+      request: async ({ method, params }) => {
+        providerCalls.push(method);
+        if (method === "eth_accounts") return [ACCOUNT];
+        if (method === "eth_chainId") return "0x7b7b";
+        if (method === "eth_sendTransaction") {
+          assert.deepEqual(params, [{ ...review.transaction }]);
+          return hash;
+        }
+        throw new Error(`unexpected provider method ${method}`);
+      },
+    };
+    const result = await confirmReviewedOpenTrove({
+      review,
+      recheck: () => prepareOpenTrove({
+        account: ACCOUNT,
+        walletChainId: NETWORK.chainId,
+        collateralBtc: "0.08",
+        requestedMusd: "2500",
+        rpc,
+        nowMs: NOW_MS,
+      }),
+      reviewIsCurrent: () => true,
+      sendTransaction: (tx, expected) => requestWalletTransaction(provider, tx, expected, NETWORK.chainId),
+      onWalletRequest: () => providerCalls.push("explicit-final-click-approved"),
+    });
+
+    assert.equal(result.status, "submitted");
+    if (result.status === "submitted") assert.equal(result.hash, hash);
+    assert.deepEqual(providerCalls, ["explicit-final-click-approved", "eth_accounts", "eth_chainId", "eth_sendTransaction"]);
+    assert.ok(rpcCalls.some((call) => call.method === "eth_estimateGas"));
+    assert.equal(rpcCalls.some((call) => call.method === "eth_sendTransaction"), false);
+  });
+
+  it("surfaces a failed fresh check and does not call the injected provider", async () => {
+    const { prepared } = run();
+    const review = await prepared;
+    const failure = new OpenTrovePreflightError("The current Testnet Trove could not be verified (RPC timeout). Refresh and retry; no wallet request was made.");
+    let walletCalls = 0;
+
+    await assert.rejects(confirmReviewedOpenTrove({
+      review,
+      recheck: async () => { throw failure; },
+      reviewIsCurrent: () => true,
+      sendTransaction: async () => { walletCalls += 1; return `0x${"b".repeat(64)}`; },
+    }), (caught: unknown) => caught === failure);
+    assert.equal(walletCalls, 0);
+    assert.equal(formatOpenTroveActionError(failure), failure.message);
+    assert.match(formatOpenTroveActionError(new Error("transport unavailable"), "preflight"), /transport unavailable.*No wallet request was made/i);
+  });
+
+  it("refreshes the review instead of opening the wallet when material terms change", async () => {
+    const { prepared } = run();
+    const review = await prepared;
+    let walletCalls = 0;
+    const result = await confirmReviewedOpenTrove({
+      review,
+      recheck: async () => ({ ...review, gasEstimate: review.gasEstimate + 1n }),
+      reviewIsCurrent: () => true,
+      sendTransaction: async () => { walletCalls += 1; return `0x${"b".repeat(64)}`; },
+    });
+    assert.equal(result.status, "changed");
+    assert.equal(walletCalls, 0);
   });
 });

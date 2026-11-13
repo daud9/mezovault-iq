@@ -4,13 +4,12 @@ import { MEZO_NETWORKS } from "../../config/chains";
 import {
   OpenTrovePreflightError,
   prepareOpenTrove,
-  sameOpenTroveReview,
   type PreparedOpenTrove,
 } from "../../lib/openTroveExecution";
+import { confirmReviewedOpenTrove, formatOpenTroveActionError } from "../../lib/openTroveConfirmation";
 import { formatBasisPoints, formatUnits18, MEZO_TESTNET_CHAIN_ID, OPEN_TROVE_SELECTOR } from "../../lib/openTrovePlanner";
 import { OpenTroveReceiptError, readOpenTroveReceipt } from "../../lib/openTroveReceipt";
 import { createRpcClient } from "../../lib/rpc";
-import { describeWalletError } from "../../lib/wallet";
 import { Button } from "../ui/Button";
 import { useWallet } from "../wallet/WalletProvider";
 
@@ -35,10 +34,12 @@ export function OpenTroveAction({
   collateralBtc,
   requestedMusd,
   onConfirmed,
+  onExistingTroveDetected,
 }: {
   collateralBtc: string;
   requestedMusd: string;
   onConfirmed(): void;
+  onExistingTroveDetected(): void;
 }) {
   const { state: walletState, network, sendTransaction } = useWallet();
   const connectedAccount = walletState.status === "connected" ? walletState.address : null;
@@ -63,6 +64,13 @@ export function OpenTroveAction({
     setNotice("");
   }, [reviewKey]);
 
+  function reportPreflightError(caught: unknown) {
+    setError(formatOpenTroveActionError(caught, "preflight"));
+    if (caught instanceof OpenTrovePreflightError && caught.code === "existing-trove") {
+      onExistingTroveDetected();
+    }
+  }
+
   async function prepareReview() {
     if (!eligible || !connectedAccount || busyRef.current || submission) return;
     busyRef.current = true;
@@ -86,7 +94,7 @@ export function OpenTroveAction({
       setReviewBundle({ key: reviewKey, prepared });
       setNotice("Fresh same-block protocol checks, exact-call simulation, and gas estimation passed. Review every value below; the wallet has not been opened.");
     } catch (caught) {
-      setError(preflightMessage(caught));
+      reportPreflightError(caught);
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -101,38 +109,39 @@ export function OpenTroveAction({
     setNotice("");
     try {
       const rpc = createRpcClient({ url: resolveRpcUrl(MEZO_NETWORKS.testnet) });
-      const fresh = await prepareOpenTrove({
-        account: connectedAccount,
-        walletChainId: walletState.chainId,
-        collateralBtc,
-        requestedMusd,
-        rpc,
+      const result = await confirmReviewedOpenTrove({
+        review,
+        recheck: () => prepareOpenTrove({
+          account: connectedAccount,
+          walletChainId: walletState.chainId,
+          collateralBtc,
+          requestedMusd,
+          rpc,
+        }),
+        reviewIsCurrent: () => currentReviewKeyRef.current === reviewKey,
+        sendTransaction,
+        onWalletRequest: () => setNotice("The exact request still matches the displayed review. Your injected wallet will now show the transaction for your approval; the app will not sign or submit on its own."),
       });
-      if (currentReviewKeyRef.current !== reviewKey) {
+      if (result.status === "stale") {
         setReviewBundle(null);
         setNotice("The planner values or connected wallet changed during the final checks. No wallet request was made; prepare a new review.");
         return;
       }
-      if (!sameOpenTroveReview(review, fresh)) {
-        setReviewBundle({ key: reviewKey, prepared: fresh });
+      if (result.status === "changed") {
+        setReviewBundle({ key: reviewKey, prepared: result.fresh });
         setNotice("Live protocol terms or the exact gas result changed. The review has been refreshed, and no wallet request was made. Check the updated values and click again if they are still what you want.");
         return;
       }
-      setNotice("The exact request still matches the displayed review. Your injected wallet will now show the transaction for your approval; the app will not sign or submit on its own.");
-      const hash = await sendTransaction(
-        { ...fresh.transaction },
-        { account: fresh.account, chainId: MEZO_TESTNET_CHAIN_ID },
-      );
-      setSubmission({ hash, prepared: fresh });
+      setSubmission({ hash: result.hash, prepared: result.fresh });
       setReceiptState({ status: "not-checked" });
       setReviewBundle(null);
       setNotice("");
     } catch (caught) {
       if (caught instanceof OpenTrovePreflightError) {
         setReviewBundle(null);
-        setError(caught.message);
+        reportPreflightError(caught);
       } else {
-        setError(`${describeWalletError(caught).message} No success is assumed; check the wallet and explorer before retrying.`);
+        setError(formatOpenTroveActionError(caught));
       }
     } finally {
       busyRef.current = false;
@@ -260,12 +269,6 @@ function Detail({ label, value }: { label: string; value: string }) {
       <dd className="mt-1 break-all text-xs leading-relaxed text-mist-200">{value}</dd>
     </div>
   );
-}
-
-function preflightMessage(error: unknown): string {
-  return error instanceof OpenTrovePreflightError
-    ? error.message
-    : "The fresh Testnet preflight failed. No wallet request was made; refresh the reads and review again.";
 }
 
 function receiptMessage(error: unknown): string {

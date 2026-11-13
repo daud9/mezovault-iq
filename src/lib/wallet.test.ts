@@ -6,6 +6,7 @@ import {
   INITIAL_WALLET_STATE,
   NO_WALLET_MESSAGE,
   requestAccount,
+  requestWalletTransaction,
   switchToNetwork,
   walletReducer,
   WalletError,
@@ -114,10 +115,12 @@ describe("describeWalletError", () => {
     assert.equal(describeWalletError(Object.assign(new Error("x"), { code: -32002 })).code, "pending");
   });
 
-  it("falls back to a generic message for unknown errors", () => {
+  it("preserves a bounded diagnostic for unknown errors", () => {
     const d = describeWalletError(new Error("boom"));
     assert.equal(d.code, "unknown");
-    assert.match(d.message, /try again/i);
+    assert.match(d.message, /boom/);
+    assert.match(d.message, /check your wallet/i);
+    assert.ok(d.message.length < 240);
   });
 
   it("never asks for a seed phrase or private key", () => {
@@ -200,5 +203,38 @@ describe("wallet state machine", () => {
     assert.equal(s.status, "disconnected");
     assert.equal(s.address, null);
     assert.equal(s.walletFound, true);
+  });
+});
+
+
+describe("requestWalletTransaction", () => {
+  it("hands the exact reviewed transaction to the injected provider after account and chain checks", async () => {
+    const hash = `0x${"a".repeat(64)}`;
+    let sent: unknown;
+    const { p, calls } = provider((method, params) => {
+      if (method === "eth_accounts") return [ADDR];
+      if (method === "eth_chainId") return "0x7b7b";
+      if (method === "eth_sendTransaction") {
+        sent = params;
+        return hash;
+      }
+      throw new Error(`unexpected ${method}`);
+    });
+    const tx = { from: ADDR, to: "0x2222222222222222222222222222222222222222", value: "0x100", data: "0x1234" };
+
+    assert.equal(await requestWalletTransaction(p, tx, { account: ADDR, chainId: 31_611 }, 31_611), hash);
+    assert.deepEqual(calls, ["eth_accounts", "eth_chainId", "eth_sendTransaction"]);
+    assert.deepEqual(sent, [tx]);
+  });
+
+  it("never invokes eth_sendTransaction when account or configured-chain checks fail", async () => {
+    const changedAccount = provider((method) => method === "eth_accounts" ? ["0x2222222222222222222222222222222222222222"] : "0x7b7b");
+    const tx = { from: ADDR, to: "0x2222222222222222222222222222222222222222", value: "0x100" };
+    await assert.rejects(requestWalletTransaction(changedAccount.p, tx, { account: ADDR, chainId: 31_611 }, 31_611));
+    assert.equal(changedAccount.calls.includes("eth_sendTransaction"), false);
+
+    const correctAccount = provider((method) => method === "eth_accounts" ? [ADDR] : "0x7b7b");
+    await assert.rejects(requestWalletTransaction(correctAccount.p, tx, { account: ADDR, chainId: 31_611 }, 1), /selected network/);
+    assert.deepEqual(correctAccount.calls, []);
   });
 });

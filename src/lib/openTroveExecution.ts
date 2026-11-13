@@ -12,7 +12,7 @@ import {
   type OpenTrovePlan,
 } from "./openTrovePlanner";
 import { readOpenTroveSnapshot } from "./openTroveRead";
-import type { RpcClient } from "./rpc";
+import { RpcError, type RpcClient } from "./rpc";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
 const NO_TROVE_STATUSES = [0n, 2n, 3n, 4n] as const;
@@ -37,8 +37,10 @@ export interface PreparedOpenTrove {
   reviewedAtMs: number;
 }
 
+export type OpenTrovePreflightCode = "preflight" | "existing-trove";
+
 export class OpenTrovePreflightError extends Error {
-  constructor(message: string) {
+  constructor(message: string, readonly code: OpenTrovePreflightCode = "preflight") {
     super(message);
     this.name = "OpenTrovePreflightError";
   }
@@ -128,11 +130,12 @@ export async function prepareOpenTrove(options: {
     troveStatus = decodeUint256(statusHex);
     existingCollateral = decodeUint256(collateralHex);
     existingDebt = decodeUint256(debtHex);
-  } catch {
-    throw new OpenTrovePreflightError("The wallet's Trove status, collateral, and debt could not be verified at the live snapshot block. No wallet request was made.");
+  } catch (error) {
+    const detail = error instanceof RpcError ? ` (${error.kind}: ${error.message})` : "";
+    throw new OpenTrovePreflightError(`The wallet's Trove status, collateral, and debt could not be verified at the live snapshot block${detail}. Refresh the Trove read and try again; no wallet request was made.`);
   }
   if (troveStatus === 1n || existingCollateral !== 0n || existingDebt !== 0n) {
-    throw new OpenTrovePreflightError("This wallet already has an active or non-empty Trove. A second Trove cannot be opened; no wallet request was made.");
+    throw new OpenTrovePreflightError("This wallet already has an active or non-empty Trove. A second Trove cannot be opened; refresh the Trove view to use the appropriate existing-position action. No wallet request was made.", "existing-trove");
   }
   if (!NO_TROVE_STATUSES.includes(troveStatus as (typeof NO_TROVE_STATUSES)[number])) {
     throw new OpenTrovePreflightError("The wallet's Trove status is not a recognized inactive state. No wallet request was made.");

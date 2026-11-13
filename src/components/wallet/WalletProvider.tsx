@@ -6,7 +6,6 @@ import { MEZO_NETWORKS } from "../../config/chains";
 import { isAddress } from "../../lib/abi";
 import { parseChainId } from "../../lib/network";
 import { discoverProviders, selectWallet } from "../../lib/walletDiscovery";
-import { isTxHash } from "../../lib/transfer";
 import {
   describeWalletError,
   assertWalletContext,
@@ -14,6 +13,7 @@ import {
   NO_WALLET_MESSAGE,
   readChainId,
   requestAccount,
+  requestWalletTransaction,
   switchToNetwork,
   walletReducer,
   type Eip1193Provider,
@@ -145,18 +145,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     async (tx: Record<string, string | undefined>, expected?: WalletExpectation): Promise<string> => {
       const provider = providerRef.current ?? (await resolveProvider());
       if (!provider) throw new Error(NO_WALLET_MESSAGE);
-      if (expected) {
-        if (expected.chainId !== network.chainId) {
-          throw new Error("The approved transaction does not match the app's selected network.");
-        }
-        if (typeof tx.from !== "string" || tx.from.toLowerCase() !== expected.account.toLowerCase()) {
-          throw new Error("The transaction sender does not match the reviewed wallet account.");
-        }
-        await assertWalletContext(provider, expected);
-      }
-      const hash = await provider.request({ method: "eth_sendTransaction", params: [tx] });
-      if (!isTxHash(hash)) throw new Error("The wallet did not return a transaction hash.");
-      return hash;
+      return requestWalletTransaction(provider, tx, expected, network.chainId);
     },
     [network, resolveProvider],
   );

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
@@ -20,10 +20,20 @@ export function LoanCard() {
   const { view, refresh } = useLoan();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [plannerExpanded, setPlannerExpanded] = useState(false);
+  const [openTroveConflictAccount, setOpenTroveConflictAccount] = useState<string | null>(null);
+  const accountKey = state.status === "connected" ? state.address?.toLowerCase() ?? "" : "";
+  const previousAccountKey = useRef(accountKey);
+  const openTroveConflict = Boolean(accountKey && openTroveConflictAccount === accountKey);
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 5_000);
     return () => clearInterval(timer);
   }, []);
+  useEffect(() => {
+    if (previousAccountKey.current !== accountKey) {
+      previousAccountKey.current = accountKey;
+      setOpenTroveConflictAccount(null);
+    }
+  }, [accountKey]);
 
   const loan = view.status === "done" && view.result.status === "ok" ? view.result : null;
   const readFresh = loan ? isLoanReadFresh(loan, nowMs) : false;
@@ -31,7 +41,7 @@ export function LoanCard() {
   const ratioBps = loan?.hasLoan && priceFresh && loan.btcUsdWei !== null
     ? calculateCollateralRatioBps({ collateralBtcWei: loan.collateralRaw, debtMusdWei: loan.debtRaw, btcUsdWei: loan.btcUsdWei })
     : null;
-  const plannerEnabled = loan !== null && readFresh && !loan.hasLoan && plannerExpanded;
+  const plannerEnabled = loan !== null && readFresh && !loan.hasLoan && plannerExpanded && !openTroveConflict;
   const { view: plannerView, refresh: refreshPlanner } = useOpenTroveSnapshot(plannerEnabled);
   const [plannerCollateralBtc, setPlannerCollateralBtc] = useState("");
   const [plannerRequestedMusd, setPlannerRequestedMusd] = useState("");
@@ -60,16 +70,22 @@ export function LoanCard() {
   } else {
     const result = view.result;
     if (result.status === "ok" && !result.hasLoan) {
-      body = !readFresh ? (
+      body = openTroveConflict ? (
+        <div className="space-y-3">
+          <DataStatus state="unavailable" detail="Trove reads disagree for this wallet" />
+          <p className="text-sm text-rose-200" role="alert">The open-Trove checks found an existing or non-empty Trove for this account, but the summary read says there is none. No open action is available until a fresh read resolves this mismatch. Refresh the Trove read or verify the selected account; no wallet request was made.</p>
+          <Button variant="secondary" onClick={() => { refresh(); refreshPlanner(); }} className="min-h-11">Refresh Trove read</Button>
+        </div>
+      ) : !readFresh ? (
         <div className="space-y-3">
           <DataStatus state="unverified" detail="the last read is out of date" />
           <p className="text-sm text-mist-400">The last read found no active Trove, but that may have changed. Refresh before acting.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          <DataStatus state="live" detail="no active Trove" />
+          <DataStatus state="live" detail={`no active Trove · block ${result.blockNumber}`} />
           <p className="text-base font-semibold text-mist-100">No active Trove was found for this wallet.</p>
-          <p className="text-sm text-mist-400">If you meant to add BTC to an existing Trove, this wallet does not currently have one on {network.label}.</p>
+          <p className="text-sm text-mist-400">The pinned read at block {result.blockNumber.toLocaleString()} found no active Trove for <span className="break-all font-mono text-mist-300">{state.address}</span> on {network.label}. If you expected an existing Trove, confirm this is its owner account or refresh before choosing the open-only action below.</p>
           <details
             className="rounded-lg border border-line bg-ink-800/40 px-3"
             onToggle={(event) => setPlannerExpanded(event.currentTarget.open)}
@@ -90,6 +106,11 @@ export function LoanCard() {
                 collateralBtc={plannerCollateralBtc}
                 requestedMusd={plannerRequestedMusd}
                 onConfirmed={() => { refresh(); refreshPlanner(); }}
+                onExistingTroveDetected={() => {
+                  if (state.address) setOpenTroveConflictAccount(state.address.toLowerCase());
+                  refresh();
+                  refreshPlanner();
+                }}
               />
             </div>
           </details>
