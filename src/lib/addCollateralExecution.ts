@@ -3,6 +3,7 @@ import { encodeAddressWord, isAddress } from "./abi";
 import { MEZO_TESTNET_SELECTORS } from "./mezoAbi";
 import { readLoan, type LoanResult } from "./loan";
 import { MEZO_TESTNET_CHAIN_ID, parseUnits18, UINT256_MAX } from "./openTrovePlanner";
+import { formatTokenUnits } from "./tokenAmount";
 import type { RpcClient } from "./rpc";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
@@ -21,6 +22,7 @@ export interface PreparedAddCollateral {
   account: `0x${string}`;
   collateralBtc: string;
   collateralWei: bigint;
+  walletBalanceWei: bigint;
   existingCollateralWei: bigint;
   existingDebtWei: bigint;
   blockNumber: number;
@@ -56,6 +58,14 @@ function assertContractCode(code: unknown): void {
   if (typeof code !== "string" || !/^0x(?:[0-9a-fA-F]{2})+$/.test(code)) {
     throw new AddCollateralPreflightError("BorrowerOperations has no valid contract code at the checked block. No wallet request was made.");
   }
+}
+
+function gasFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/insufficient funds|insufficient balance|balance too low|funds for gas|gas required exceeds allowance/i.test(message)) {
+    return "Your wallet does not have enough BTC for this amount plus network fees. Lower the amount or add BTC for gas, then try again. No wallet request was made.";
+  }
+  return "The exact add-collateral call reverted or its fresh gas estimate/simulation failed. No wallet request was made.";
 }
 
 /**
@@ -115,6 +125,20 @@ export async function prepareAddCollateral(options: {
     throw new AddCollateralPreflightError("The Trove state read is stale or has an invalid timestamp. Refresh and prepare a new review. No wallet request was made.");
   }
   const pinnedBlock = blockTag(position.blockNumber);
+  let walletBalanceWei: bigint;
+  try {
+    walletBalanceWei = quantity(
+      await rpc.call<string>("eth_getBalance", [account, pinnedBlock]),
+      "The wallet BTC balance",
+    );
+  } catch {
+    throw new AddCollateralPreflightError("Your BTC balance could not be checked at the Trove snapshot block. Refresh and try again. No wallet request was made.");
+  }
+  if (walletBalanceWei < collateralWei) {
+    throw new AddCollateralPreflightError(
+      `Your wallet has ${formatTokenUnits(walletBalanceWei, 18, 8)} BTC, less than the ${formatTokenUnits(collateralWei, 18, 8)} BTC amount entered. Lower the amount or add BTC first; you also need BTC for network fees. No wallet request was made.`,
+    );
+  }
   try {
     const code = await rpc.call<string>("eth_getCode", [network.borrowerOperations.address, pinnedBlock]);
     assertContractCode(code);
@@ -153,7 +177,7 @@ export async function prepareAddCollateral(options: {
     }
   } catch (error) {
     if (error instanceof AddCollateralPreflightError) throw error;
-    throw new AddCollateralPreflightError("The exact addColl call reverted or its fresh gas estimate/simulation failed. No wallet request was made.");
+    throw new AddCollateralPreflightError(gasFailureMessage(error));
   }
 
   return {
@@ -161,6 +185,7 @@ export async function prepareAddCollateral(options: {
     account: account as `0x${string}`,
     collateralBtc: collateralBtc.trim(),
     collateralWei,
+    walletBalanceWei,
     existingCollateralWei: position.collateralRaw,
     existingDebtWei: position.debtRaw,
     blockNumber: position.blockNumber,
@@ -175,6 +200,7 @@ export async function prepareAddCollateral(options: {
 export function sameAddCollateralReview(a: PreparedAddCollateral, b: PreparedAddCollateral): boolean {
   return a.account.toLowerCase() === b.account.toLowerCase()
     && a.collateralWei === b.collateralWei
+    && a.walletBalanceWei === b.walletBalanceWei
     && a.existingCollateralWei === b.existingCollateralWei
     && a.existingDebtWei === b.existingDebtWei
     && a.gasEstimate === b.gasEstimate

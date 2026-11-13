@@ -8,9 +8,10 @@ import {
   type PreparedAddCollateral,
 } from "../../lib/addCollateralExecution";
 import { AddCollateralReceiptError, readAddCollateralReceipt } from "../../lib/addCollateralReceipt";
-import { formatUnits18, MEZO_TESTNET_CHAIN_ID } from "../../lib/openTrovePlanner";
+import { formatUnits18, MEZO_TESTNET_CHAIN_ID, parseUnits18 } from "../../lib/openTrovePlanner";
 import { createRpcClient } from "../../lib/rpc";
 import { describeWalletError } from "../../lib/wallet";
+import { useNativeBalance } from "../../hooks/useNativeBalance";
 import { Button } from "../ui/Button";
 import { useWallet } from "../wallet/WalletProvider";
 
@@ -33,11 +34,19 @@ interface Submission {
 
 export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
   const { state: walletState, network, sendTransaction } = useWallet();
+  const { view: nativeBalanceView, refresh: refreshNativeBalance } = useNativeBalance();
   const connectedAccount = walletState.status === "connected" ? walletState.address : null;
   const networkMatches = network.key === "testnet" && network.chainId === MEZO_TESTNET_CHAIN_ID;
   const chainMatches = walletState.chainId === MEZO_TESTNET_CHAIN_ID;
   const eligible = Boolean(connectedAccount && networkMatches && chainMatches);
   const [collateralBtc, setCollateralBtc] = useState("");
+  const walletBalance = nativeBalanceView.status === "done" && nativeBalanceView.result.status === "ok"
+    && nativeBalanceView.result.chainId === MEZO_TESTNET_CHAIN_ID
+    ? nativeBalanceView.result
+    : null;
+  const requestedWei = parseUnits18(collateralBtc);
+  const amountExceedsBalance = walletBalance !== null && requestedWei !== null && requestedWei > walletBalance.balanceRaw;
+  const amountUsesAllBalance = walletBalance !== null && requestedWei !== null && requestedWei > 0n && requestedWei >= walletBalance.balanceRaw;
   const reviewKey = `${connectedAccount?.toLowerCase() ?? ""}|${walletState.chainId ?? ""}|${collateralBtc}`;
   const currentReviewKeyRef = useRef(reviewKey);
   currentReviewKeyRef.current = reviewKey;
@@ -63,6 +72,7 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
     setError("");
     setNotice("");
     setReviewBundle(null);
+    let openingWallet = false;
     try {
       const rpc = createRpcClient({ url: resolveRpcUrl(MEZO_NETWORKS.testnet) });
       const prepared = await prepareAddCollateral({
@@ -75,10 +85,35 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
         setNotice("The BTC amount or connected wallet changed during the read. No review was prepared; refresh the values and try again.");
         return;
       }
-      setReviewBundle({ key: reviewKey, prepared });
-      setNotice("Fresh same-block Trove checks, exact-call simulation, and gas estimation passed. Review every value below; the wallet has not been opened.");
+      const fresh = await prepareAddCollateral({
+        account: connectedAccount,
+        walletChainId: walletState.chainId,
+        collateralBtc,
+        rpc,
+      });
+      if (currentReviewKeyRef.current !== reviewKey) {
+        setNotice("The BTC amount or wallet changed while checking. Nothing was sent; check the amount again.");
+        return;
+      }
+      if (!sameAddCollateralReview(prepared, fresh)) {
+        setReviewBundle({ key: reviewKey, prepared: fresh });
+        setNotice("Your Trove, BTC balance, or network fee estimate changed. Review the updated summary before continuing.");
+        return;
+      }
+      setNotice("Fresh checks passed. Your wallet will ask you to approve this BTC addition.");
+      openingWallet = true;
+      const hash = await sendTransaction(
+        { ...fresh.transaction },
+        { account: fresh.account, chainId: MEZO_TESTNET_CHAIN_ID },
+      );
+      setSubmission({ hash, prepared: fresh });
+      setReceiptState({ status: "not-checked" });
+      setReviewBundle(null);
+      setNotice("");
     } catch (caught) {
-      setError(preflightMessage(caught));
+      setError(openingWallet
+        ? `${describeWalletError(caught).message} No success is assumed; check the wallet and explorer before retrying.`
+        : preflightMessage(caught));
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -101,15 +136,15 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
       });
       if (currentReviewKeyRef.current !== reviewKey) {
         setReviewBundle(null);
-        setNotice("The BTC amount or connected wallet changed during the final checks. No wallet request was made; prepare a new review.");
+        setNotice("The amount or wallet changed while checking. Nothing was sent; check the amount again.");
         return;
       }
       if (!sameAddCollateralReview(review, fresh)) {
         setReviewBundle({ key: reviewKey, prepared: fresh });
-        setNotice("The live Trove state or exact gas result changed. The review has been refreshed, and no wallet request was made. Check the updated values and click again if they are still what you want.");
+        setNotice("Your Trove, BTC balance, or network fee estimate changed. Review the updated summary and continue again if it still looks right.");
         return;
       }
-      setNotice("The exact request still matches the displayed review. Your wallet will now show the BTC addition for your approval; the app will not sign or submit on its own.");
+      setNotice("Final checks passed. Your wallet will ask you to approve this BTC addition.");
       const hash = await sendTransaction(
         { ...fresh.transaction },
         { account: fresh.account, chainId: MEZO_TESTNET_CHAIN_ID },
@@ -141,6 +176,7 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
       const result = await readAddCollateralReceipt({ rpc, hash: submission.hash, expected: submission.prepared.transaction });
       setReceiptState(result);
       if (result.status === "confirmed") onConfirmed();
+      if (result.status === "confirmed") refreshNativeBalance();
     } catch (caught) {
       setReceiptState({ status: "error", message: receiptMessage(caught) });
     } finally {
@@ -160,10 +196,28 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
   return (
     <section className="space-y-4 rounded-xl border border-gold-500/30 bg-gold-500/5 p-4 text-mist-100" aria-labelledby="add-collateral-action-title">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wider text-gold-300">Wallet-confirmed action · add collateral only</p>
-        <h3 id="add-collateral-action-title" className="mt-1 text-base font-semibold">Add BTC to this Trove</h3>
-        <p className="mt-1 text-sm leading-relaxed text-mist-400">Enter the BTC amount to add to your active Trove. The amount is sent as native transaction value; network gas is paid separately. The first review is read-only, and a second click repeats the live checks before your wallet opens.</p>
+        <h3 id="add-collateral-action-title" className="text-base font-semibold">Add BTC to your Trove</h3>
+        <p className="mt-1 text-sm text-mist-400">Enter how much BTC you want to add. Keep some BTC in your wallet to pay network fees.</p>
       </div>
+
+      {walletBalance && (
+        <div className="rounded-lg border border-line bg-ink-800/60 p-3">
+          <p className="text-xs text-mist-500">Wallet BTC balance</p>
+          <p className="mt-1 text-lg font-semibold text-mist-100">{formatUnits18(walletBalance.balanceRaw, 18)} BTC</p>
+          <p className="mt-1 text-xs text-mist-500">This BTC pays for both the amount you add and network fees.</p>
+        </div>
+      )}
+      {eligible && nativeBalanceView.status === "loading" && <p role="status" className="text-xs text-mist-400">Checking wallet BTC balance…</p>}
+      {amountExceedsBalance && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">
+          This is more BTC than the latest wallet balance. Lower the amount or add BTC first; you still need BTC for network fees.
+        </p>
+      )}
+      {amountUsesAllBalance && !amountExceedsBalance && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">
+          This uses all the BTC in your wallet. Keep some for network fees.
+        </p>
+      )}
 
       <label htmlFor="add-collateral-btc" className="block space-y-1 text-sm text-mist-300">
         <span>BTC to add</span>
@@ -187,42 +241,41 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
 
       {eligible && !submission && !review && (
         <div className="space-y-3">
-          <Button onClick={() => void prepareReview()} disabled={busy || !eligible} className="min-h-11 w-full">
-            {busy ? "Checking fresh Trove conditions…" : "Prepare fresh BTC-addition review"}
+          <Button onClick={() => void prepareReview()} disabled={busy} className="min-h-11 w-full">
+            {busy ? "Checking Trove and BTC…" : "Add BTC"}
           </Button>
-          <p className="text-xs leading-relaxed text-mist-500">This step only reads the active Trove, estimates gas, and simulates the exact call. It does not open the wallet or change the chain.</p>
+          <p className="text-xs leading-relaxed text-mist-500">The app checks your Trove and BTC twice first. Then your wallet asks you to approve the transaction; nothing is sent unless you approve.</p>
         </div>
       )}
 
       {review && !submission && (
         <div className="space-y-4 rounded-xl border border-line bg-ink-800/60 p-4">
           <div>
-            <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Fresh exact request review</p>
-            <p className="mt-1 text-sm font-semibold text-emerald-300">Simulation passed · block {review.blockNumber.toLocaleString()}</p>
-            <p className="mt-1 text-xs text-mist-500">Prepared {new Date(review.reviewedAtMs).toLocaleString()}. The final click re-reads the active Trove and simulates again; if the displayed position or gas changes, the wallet will not open.</p>
+            <p className="text-sm font-semibold text-emerald-300">Ready to add BTC</p>
+            <p className="mt-2 text-sm leading-relaxed text-mist-200">You will send <strong>{formatUnits18(review.collateralWei, 18)} BTC</strong> from this wallet to add to your Trove.</p>
+            <p className="mt-2 text-sm text-mist-400">Your Trove currently holds {formatUnits18(review.existingCollateralWei, 18)} BTC and has {formatUnits18(review.existingDebtWei, 18)} MUSD debt.</p>
+            <p className="mt-2 text-xs text-mist-500">Wallet BTC at the same check: {formatUnits18(review.walletBalanceWei, 18)} BTC. Keep some for network fees.</p>
           </div>
 
-          <dl className="grid gap-2 text-sm sm:grid-cols-2">
-            <Detail label="Connected wallet / Trove owner" value={review.account} />
-            <Detail label="Network" value={`Mezo Testnet · chain ${MEZO_TESTNET_CHAIN_ID}`} />
-            <Detail label="BTC to add as native transaction value" value={`${formatUnits18(review.collateralWei, 18)} BTC`} />
-            <Detail label="Existing Trove collateral at checked block" value={`${formatUnits18(review.existingCollateralWei, 18)} BTC`} />
-            <Detail label="Existing Trove debt at checked block" value={`${formatUnits18(review.existingDebtWei, 18)} MUSD`} />
-            <Detail label="BorrowerOperations contract" value={review.transaction.to} />
-            <Detail label="Call" value={`addColl(address,address) · payable · selector ${review.transaction.data.slice(0, 10)}`} />
-            <Detail label="Upper / lower hints" value="Zero / zero; Mezo's sorted-Trove contract performs its fallback position search." />
-            <Detail label="Gas estimate / wallet gas limit" value={`${review.gasEstimate.toLocaleString()} / ${review.gasLimit.toLocaleString()} (20% buffer)`} />
-            <Detail label="Native BTC value" value={`${formatUnits18(review.collateralWei, 18)} BTC · ${review.transaction.value}`} />
-          </dl>
-
-          <details>
-            <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">Show exact calldata</summary>
-            <p className="break-all font-mono text-[11px] leading-relaxed text-mist-400">{review.transaction.data}</p>
+          <details className="rounded-lg border border-line px-3">
+            <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-gold-300">Details</summary>
+            <dl className="grid gap-2 pb-3 text-sm sm:grid-cols-2">
+              <Detail label="Network" value={`Mezo Testnet · chain ${MEZO_TESTNET_CHAIN_ID}`} />
+              <Detail label="Wallet / Trove owner" value={review.account} />
+              <Detail label="BTC balance at checked block" value={`${formatUnits18(review.walletBalanceWei, 18)} BTC`} />
+              <Detail label="BorrowerOperations contract" value={review.transaction.to} />
+              <Detail label="Contract call" value={`addColl(address,address) · ${review.transaction.data.slice(0, 10)}`} />
+              <Detail label="Position hints" value="Zero hints; the contract searches for the correct position." />
+              <Detail label="Gas estimate / limit" value={`${review.gasEstimate.toLocaleString()} / ${review.gasLimit.toLocaleString()} (20% buffer)`} />
+              <Detail label="Exact BTC value" value={`${formatUnits18(review.collateralWei, 18)} BTC · ${review.transaction.value}`} />
+              <Detail label="Exact calldata" value={review.transaction.data} />
+              <Detail label="Checked block" value={review.blockNumber.toLocaleString()} />
+            </dl>
           </details>
 
-          <p className="text-xs leading-relaxed text-mist-500">The call contains only `addColl(address,address)`; the BTC amount is attached as `msg.value`. Zero hints invoke the contract's fallback sorted-list search, which is included in the fresh gas estimate. The simulation is not a transaction or receipt.</p>
+          <p className="text-xs leading-relaxed text-mist-500">The app repeats the fresh checks before opening your wallet. Your wallet will ask you to approve one transaction; nothing is signed or sent unless you approve.</p>
           <Button onClick={() => void recheckAndOpenWallet()} disabled={busy || !eligible} className="min-h-11 w-full">
-            {busy ? "Rechecking exact transaction…" : "Recheck & open wallet to review and confirm"}
+            {busy ? "Checking again…" : "Confirm in wallet"}
           </Button>
         </div>
       )}
@@ -248,7 +301,7 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
         </div>
       )}
 
-      <p className="text-xs leading-relaxed text-mist-500">Scope: adding BTC collateral to the existing active Trove only. This action does not borrow more, repay, withdraw, close, or sign automatically. Submission requires your own wallet approval.</p>
+      <p className="text-xs leading-relaxed text-mist-500">This only adds BTC to the active Trove. Your wallet must approve the transaction; the app never signs or submits it for you.</p>
     </section>
   );
 }

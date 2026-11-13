@@ -34,6 +34,8 @@ interface MockOptions {
   emptyCodeAddress?: string;
   failSelector?: string;
   failEstimate?: boolean;
+  insufficientFundsEstimate?: boolean;
+  balanceWei?: bigint;
 }
 
 function handler(o: MockOptions = {}): Handler {
@@ -49,12 +51,19 @@ function handler(o: MockOptions = {}): Handler {
       if (o.emptyCodeAddress?.toLowerCase() === String(params[0]).toLowerCase()) return "0x";
       return "0x60006000";
     }
+    if (method === "eth_getBalance") {
+      assert.equal(params[1], BLOCK_TAG, "wallet BTC balance must use the Trove snapshot block");
+      return `0x${(o.balanceWei ?? 2n * E18).toString(16)}`;
+    }
     if (method === "eth_estimateGas") {
       const tx = params[0] as { from: string; to: string; data: string; value: string };
       assert.equal(params[1], BLOCK_TAG, "gas must be estimated at the position snapshot block");
       assert.equal(tx.to.toLowerCase(), T.borrowerOperations!.address.toLowerCase());
       assert.equal(tx.data, encodeAddCollateralCalldata());
       assert.ok(BigInt(tx.value) > 0n);
+      if (o.insufficientFundsEstimate) {
+        return { raw: JSON.stringify({ jsonrpc: "2.0", id: 0, error: { code: -32000, message: "insufficient funds for gas * price + value" } }) };
+      }
       if (o.failEstimate) return new Error("gas estimate reverted");
       return "0x5208";
     }
@@ -113,6 +122,7 @@ describe("Mezo Testnet addColl execution preflight", () => {
     assert.equal(result.transaction.data, `${ADD_COLL_SELECTOR}${ZERO_WORD}${ZERO_WORD}`);
     assert.equal(result.transaction.value, `0x${(35n * 10n ** 15n).toString(16)}`);
     assert.equal(result.collateralWei, 35n * 10n ** 15n);
+    assert.equal(result.walletBalanceWei, 2n * E18);
     assert.equal(result.existingCollateralWei, 2n * E18);
     assert.equal(result.existingDebtWei, 1_800n * E18);
     assert.equal(result.blockNumber, 9);
@@ -132,6 +142,13 @@ describe("Mezo Testnet addColl execution preflight", () => {
       await assert.rejects(prepare(rpc), /no verified active Trove/);
       assert.equal(calls.some((call) => call.method === "eth_estimateGas"), false);
     }
+  });
+
+  it("stops before gas estimation when the BTC amount exceeds the wallet balance", async () => {
+    const { rpc, calls } = run({ balanceWei: 10n ** 16n });
+    await assert.rejects(prepare(rpc), /less than the 0\.035 BTC amount entered.*need BTC for network fees/);
+    assert.equal(calls.some((call) => call.method === "eth_estimateGas"), false);
+    assert.equal(calls.some((call) => call.method === "eth_sendTransaction"), false);
   });
 
   it("fails closed on mismatched wallet chain, unknown status, and non-empty inactive state", async () => {
@@ -165,6 +182,7 @@ describe("Mezo Testnet addColl execution preflight", () => {
     await assert.rejects(prepare(overflow.rpc, "1"), /overflow/);
 
     await assert.rejects(prepare(run({ failEstimate: true }).rpc), /gas estimate\/simulation failed/);
+    await assert.rejects(prepare(run({ insufficientFundsEstimate: true }).rpc), /not have enough BTC for this amount plus network fees/);
     await assert.rejects(prepare(run({ failSelector: ADD_COLL_SELECTOR }).rpc), /gas estimate\/simulation failed/);
   });
 
@@ -173,9 +191,11 @@ describe("Mezo Testnet addColl execution preflight", () => {
     const same = await prepare(run().rpc);
     const changedAmount = await prepare(run().rpc, "0.036");
     const changedPosition = await prepare(run({ coll: 3n * E18 }).rpc);
+    const changedBalance = await prepare(run({ balanceWei: 3n * E18 }).rpc);
     assert.equal(sameAddCollateralReview(first, same), true);
     assert.equal(sameAddCollateralReview(first, changedAmount), false);
     assert.equal(sameAddCollateralReview(first, changedPosition), false);
+    assert.equal(sameAddCollateralReview(first, changedBalance), false);
   });
 
   it("confirms the active status, collateral, and debt reads are at one fresh block", async () => {

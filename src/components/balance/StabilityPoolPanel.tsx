@@ -78,11 +78,19 @@ export function StabilityPoolPanel() {
     setBusy(true);
     setError("");
     try {
+      const prepared = await prepareStabilityPoolAction({ network, account, walletChainId: state.chainId, amount, rpc });
       const fresh = await prepareStabilityPoolAction({ network, account, walletChainId: state.chainId, amount, rpc });
-      setReviewBundle({ key, review: fresh });
+      if (!sameStabilityPoolReview(prepared, fresh)) {
+        setReviewBundle({ key, review: fresh });
+        setError("Pool or wallet details changed. Review the updated amount before continuing; nothing was sent.");
+        return;
+      }
+      const hash = await wallet.sendTransaction({ ...fresh.transaction }, { account, chainId: TESTNET_STABILITY_POOL.chainId });
+      setSubmission({ hash, expected: fresh, rpc, explorerUrl: network.explorerUrl, chainId: TESTNET_STABILITY_POOL.chainId });
+      setReceiptView({ status: "not-checked" });
     } catch (caught) {
       setReviewBundle(null);
-      setError(actionMessage(caught));
+      setError(caught instanceof StabilityPoolError ? caught.message : describeSendError(caught));
     } finally { setBusy(false); }
   }
 
@@ -94,7 +102,7 @@ export function StabilityPoolPanel() {
       const fresh = await prepareStabilityPoolAction({ network, account, walletChainId: state.chainId, amount, rpc });
       if (!sameStabilityPoolReview(review, fresh)) {
         setReviewBundle({ key, review: fresh });
-        setError("Live pool, wallet, allowance, balance, or gas data changed. Review the refreshed transaction; no wallet request was made.");
+        setError("Your MUSD balance or Pool data changed. Review the updated amount and continue again if it still looks right.");
         return;
       }
       const hash = await wallet.sendTransaction({ ...fresh.transaction }, { account, chainId: TESTNET_STABILITY_POOL.chainId });
@@ -126,9 +134,9 @@ export function StabilityPoolPanel() {
   return (
     <Card className="space-y-5" aria-labelledby="stability-pool-title">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wider text-gold-300">Mezo Testnet · direct protocol contract</p>
-        <h2 id="stability-pool-title" className="mt-1 text-lg font-semibold text-mist-100">Stability Pool</h2>
-        <p className="mt-1 text-sm leading-relaxed text-mist-400">A separate place to deposit MUSD you have borrowed. It does not secure or protect your own Trove.</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-gold-300">Optional · Mezo Testnet</p>
+        <h2 id="stability-pool-title" className="mt-1 text-lg font-semibold text-mist-100">Deposit MUSD you borrowed</h2>
+        <p className="mt-1 text-sm leading-relaxed text-mist-400">Put MUSD from your wallet into the Stability Pool. This is separate from managing your Trove.</p>
       </div>
 
       {!onTestnet ? (
@@ -140,75 +148,89 @@ export function StabilityPoolPanel() {
       ) : (
         <>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="break-all font-mono text-xs text-mist-400">Wallet {account}</p>
-            <Button variant="ghost" onClick={() => { setTick((value) => value + 1); setReviewBundle(null); }} className="min-h-11 px-2">Refresh pool read</Button>
+            <Button variant="ghost" onClick={() => { setTick((value) => value + 1); setReviewBundle(null); }} className="min-h-11 px-2">Refresh</Button>
           </div>
-          {snapshotView.status === "loading" && <p role="status" className="text-sm text-mist-400">Verifying Testnet proxy, implementation, MUSD and position at one recent block…</p>}
-          {snapshotView.status === "stale" && <p role="status" className="rounded-lg border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm text-risk-medium">This position snapshot is older than two minutes. The values below are historical to the displayed block; refresh before preparing an action.</p>}
-          {snapshotView.status === "error" && <p role="alert" className="rounded-lg border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm leading-relaxed text-risk-medium">Live Stability Pool data could not be verified: {snapshotView.message} Deposit preparation stays disabled until the chain checks pass.</p>}
+          {snapshotView.status === "loading" && <p role="status" className="text-sm text-mist-400">Checking your MUSD balance and Pool position…</p>}
+          {snapshotView.status === "stale" && <p role="status" className="rounded-lg border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm text-risk-medium">This information is more than two minutes old. Refresh before depositing.</p>}
+          {snapshotView.status === "error" && <p role="alert" className="rounded-lg border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm leading-relaxed text-risk-medium">Could not verify the current Pool data: {snapshotView.message} Refresh before depositing.</p>}
           {snapshot && (
             <>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Stat label="Compounded MUSD deposit at snapshot" value={`${formatTokenUnits(snapshot.compoundedDeposit, 18, 6)} MUSD`} />
-                <Stat label="BTC collateral gain at snapshot" value={`${formatTokenUnits(snapshot.collateralGain, 18, 8)} BTC`} />
-                <Stat label="Wallet MUSD balance" value={`${formatTokenUnits(snapshot.musdBalance, 18, 6)} MUSD`} />
-                <Stat label="Total pool MUSD deposits" value={`${formatTokenUnits(snapshot.totalMUSDDeposits, 18, 6)} MUSD`} />
+                <Stat label="MUSD in your wallet" value={`${formatTokenUnits(snapshot.musdBalance, 18, 6)} MUSD`} />
+                <Stat label="Your MUSD in the Pool" value={`${formatTokenUnits(snapshot.compoundedDeposit, 18, 6)} MUSD`} />
+                <Stat label="BTC gain so far" value={`${formatTokenUnits(snapshot.collateralGain, 18, 8)} BTC`} />
               </div>
-              <p className="text-xs text-mist-500">Chain-read snapshot at block {snapshot.blockNumber.toLocaleString()} · {new Date(snapshot.blockTimestamp * 1_000).toLocaleString()} · implementation {snapshot.implementation}</p>
+              <details className="rounded-lg border border-line px-3">
+                <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">Snapshot details</summary>
+                <p className="pb-3 text-xs text-mist-500">Total MUSD in Pool: {formatTokenUnits(snapshot.totalMUSDDeposits, 18, 6)} · block {snapshot.blockNumber.toLocaleString()} · {new Date(snapshot.blockTimestamp * 1_000).toLocaleString()} · implementation {snapshot.implementation}</p>
+              </details>
             </>
           )}
 
           <div className="space-y-3 border-t border-line pt-4">
             <label htmlFor="stability-pool-amount" className="block space-y-1.5 text-sm font-medium text-mist-100">
-              <span>MUSD amount to deposit</span>
+              <span>MUSD to deposit</span>
               <input id="stability-pool-amount" inputMode="decimal" autoComplete="off" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0.00" className="min-h-12 w-full rounded-xl border border-line bg-ink-800 px-3 text-mist-100 placeholder:text-mist-500" />
-              <span className="block text-xs font-normal text-mist-500">Only the exact amount shown will be approved; no unlimited allowance is used.</span>
+              <span className="block text-xs font-normal text-mist-500">Only the amount you enter will be used. You may need to approve it first.</span>
             </label>
             {error && <p role="alert" className="rounded-lg border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm leading-relaxed text-risk-medium">{error}</p>}
-            <Button onClick={() => void prepareReview()} disabled={!canPrepare || !snapshot || snapshotView.status !== "done" || amount.trim() === ""} className="min-h-11 w-full">{busy ? "Checking fresh Testnet state…" : "Prepare exact Stability Pool action"}</Button>
-            <p className="text-xs leading-relaxed text-mist-500">Preparation reads state, estimates gas, and simulates the exact call at one block. It never opens your wallet. A separate click rechecks everything before asking your wallet to approve the displayed transaction.</p>
+            <Button onClick={() => void prepareReview()} disabled={!canPrepare || Boolean(review) || !snapshot || snapshotView.status !== "done" || amount.trim() === ""} className="min-h-11 w-full">{busy ? "Checking Pool…" : "Deposit MUSD"}</Button>
+            <p className="text-xs leading-relaxed text-mist-500">The app checks the amount and Pool twice before opening your wallet. Your wallet will ask you to approve; nothing is sent unless you do.</p>
           </div>
 
           {review && (
             <div className="space-y-4 rounded-xl border border-gold-500/30 bg-ink-800/40 p-4">
               <div>
-                <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Exact {review.action === "approve" ? "allowance approval" : "deposit"} review</p>
-                <p className="mt-1 text-sm font-semibold text-risk-low">Exact-call simulation passed · block {review.snapshot.blockNumber.toLocaleString()}</p>
+                <p className="text-sm font-semibold text-emerald-300">Fresh checks passed</p>
+                <p className="mt-2 text-sm leading-relaxed text-mist-200">
+                  {review.action === "approve"
+                    ? `First, approve ${formatTokenUnits(review.amountWei, 18, 18)} MUSD so the Pool can use it.`
+                    : `You are depositing ${formatTokenUnits(review.amountWei, 18, 18)} MUSD into the Stability Pool.`}
+                </p>
               </div>
-              <dl className="grid gap-3 sm:grid-cols-2">
-                <Stat label="Action" value={review.action === "approve" ? "Approve exact MUSD allowance only" : "Deposit MUSD to Stability Pool"} />
-                <Stat label="Exact amount" value={`${formatTokenUnits(review.amountWei, 18, 18)} MUSD`} />
-                <Stat label="Wallet" value={review.account} />
-                <Stat label="Network" value="Mezo Testnet · chain 31611" />
-                <Stat label="Pool proxy" value={TESTNET_STABILITY_POOL.proxy} />
-                <Stat label="MUSD token" value={review.snapshot.musdAddress} />
-                <Stat label="Compounded deposit before action" value={`${formatTokenUnits(review.snapshot.compoundedDeposit, 18, 6)} MUSD`} />
-                <Stat label="BTC gain before action" value={`${formatTokenUnits(review.snapshot.collateralGain, 18, 8)} BTC`} />
-                <Stat label="Gas estimate / buffered wallet limit" value={`${review.gasEstimate.toLocaleString()} / ${review.gasLimit.toLocaleString()} (20% buffer)`} />
-                <Stat label="Native BTC value" value="0 BTC (network gas is separate)" />
-              </dl>
-              <details>
-                <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">Show exact calldata</summary>
-                <p className="break-all font-mono text-[11px] leading-relaxed text-mist-400">{review.transaction.data}</p>
-              </details>
+
               {review.action === "approve" ? (
-                <p className="text-xs leading-relaxed text-mist-400">This approval grants the Stability Pool contract allowance for exactly {formatTokenUnits(review.amountWei, 18, 18)} MUSD. Approval is a separate transaction. After its receipt is verified, you must prepare a fresh deposit review; no deposit is submitted automatically.</p>
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm leading-relaxed text-amber-200">
+                  Two wallet confirmations are needed: approve this exact MUSD amount, then prepare again and approve the deposit. The deposit will not happen automatically.
+                </p>
               ) : (
-                <p className="text-xs leading-relaxed text-mist-400">This calls <span className="font-mono">provideToSP(uint256)</span>. MUSD is transferred from your wallet into the Pool; other Troves’ liquidations can consume some or all of your deposit.</p>
+                <p className="text-sm text-mist-400">Your existing MUSD approval covers this amount, so only this deposit confirmation is needed.</p>
               )}
-              <Button onClick={() => void recheckAndOpenWallet()} disabled={busy || pending} className="min-h-11 w-full">{busy ? "Rechecking exact transaction…" : review.action === "approve" ? "Recheck & open wallet to approve exact amount" : "Recheck & open wallet to review deposit"}</Button>
+
+              <details className="rounded-lg border border-line px-3">
+                <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-gold-300">Details</summary>
+                <dl className="grid gap-2 pb-3 sm:grid-cols-2">
+                  <Stat label="Amount" value={`${formatTokenUnits(review.amountWei, 18, 18)} MUSD`} />
+                  <Stat label="Action" value={review.action === "approve" ? "Approve exact amount" : "Deposit to Stability Pool"} />
+                  <Stat label="Wallet" value={review.account} />
+                  <Stat label="Network" value="Mezo Testnet · chain 31611" />
+                  <Stat label="Pool contract" value={TESTNET_STABILITY_POOL.proxy} />
+                  <Stat label="MUSD token" value={review.snapshot.musdAddress} />
+                  <Stat label="MUSD in Pool before action" value={`${formatTokenUnits(review.snapshot.compoundedDeposit, 18, 6)} MUSD`} />
+                  <Stat label="BTC gain before action" value={`${formatTokenUnits(review.snapshot.collateralGain, 18, 8)} BTC`} />
+                  <Stat label="Gas estimate / limit" value={`${review.gasEstimate.toLocaleString()} / ${review.gasLimit.toLocaleString()} (20% buffer)`} />
+                  <Stat label="BTC sent; gas is separate" value="0 BTC" />
+                  <Stat label="Checked block" value={review.snapshot.blockNumber.toLocaleString()} />
+                  <Stat label="Exact calldata" value={review.transaction.data} />
+                </dl>
+              </details>
+
+              <p className="text-xs leading-relaxed text-mist-500">The app checks again before opening your wallet. Nothing is signed or sent unless you approve it there.</p>
+              <Button onClick={() => void recheckAndOpenWallet()} disabled={busy || pending} className="min-h-11 w-full">
+                {busy ? "Checking again…" : review.action === "approve" ? "Approve MUSD in wallet" : "Deposit MUSD in wallet"}
+              </Button>
             </div>
           )}
 
           {submission && (
             <div className="space-y-3 rounded-xl border border-line bg-ink-800/50 p-4">
               <div><h3 className="text-sm font-semibold text-mist-100">{submission.expected.action === "approve" ? "MUSD approval transaction" : "Stability Pool deposit transaction"}</h3><p className="mt-1 text-xs text-mist-400">Wallet {submission.expected.account} · chain {submission.chainId}</p><p className="mt-1 break-all font-mono text-xs text-mist-400">{submission.hash}</p></div>
-              {receiptView.status === "confirmed" && <p role="status" className="text-sm text-risk-low">Exact transaction and expected on-chain event verified in block {receiptView.blockNumber.toLocaleString()}. {submission.expected.action === "approve" ? "Prepare a new review before any deposit; nothing else was submitted." : "Refresh the chain read to see the resulting position."}</p>}
+              {receiptView.status === "confirmed" && <p role="status" className="text-sm text-risk-low">Confirmed on Mezo Testnet in block {receiptView.blockNumber.toLocaleString()}. {submission.expected.action === "approve" ? "Prepare a new review before any deposit; nothing else was submitted." : "Refresh the chain read to see the resulting position."}</p>}
               {receiptView.status === "reverted" && <p role="alert" className="text-sm text-risk-high">The receipt shows a revert in block {receiptView.blockNumber.toLocaleString()}. No successful action is claimed.</p>}
               {receiptView.status === "not-checked" && <p role="status" className="text-sm text-risk-medium">The wallet returned a hash, but its receipt is unchecked and remains unconfirmed.</p>}
               {receiptView.status === "pending" && <p role="status" className="text-sm text-risk-medium">No receipt is available yet. The transaction remains unconfirmed.</p>}
               {receiptView.status === "error" && <p role="alert" className="text-sm text-risk-medium">{receiptView.message}</p>}
-              {receiptView.status !== "confirmed" && receiptView.status !== "reverted" && <Button variant="secondary" onClick={() => void checkReceipt()} disabled={busy} className="min-h-11">{busy ? "Checking receipt…" : "Check transaction receipt"}</Button>}
+              {receiptView.status !== "confirmed" && receiptView.status !== "reverted" && <Button variant="secondary" onClick={() => void checkReceipt()} disabled={busy} className="min-h-11">{busy ? "Checking receipt…" : "Check status"}</Button>}
               <a href={`${submission.explorerUrl.replace(/\/?$/, "/")}tx/${submission.hash}`} target="_blank" rel="noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View on Mezo Testnet Explorer</a>
             </div>
           )}
@@ -216,9 +238,7 @@ export function StabilityPoolPanel() {
       )}
 
       <div className="space-y-2 border-t border-line pt-4 text-xs leading-relaxed text-mist-500">
-        <p><strong className="text-mist-300">Risks and limits:</strong> MUSD deposited here can be used to absorb other Troves’ liquidations, reducing the MUSD you get back. Withdrawals may be blocked or delayed by undercollateralized Troves. BTC collateral gains are uncertain and not guaranteed. This Pool does not protect your own Trove from liquidation, and no APY or return is promised.</p>
-        <p>This is a direct Mezo Testnet contract route, not Morbit or the mainnet-only sMUSD vault. Testnet assets have no real monetary value. Proxy implementation and code are rechecked on every read and preflight; a proxy upgrade between simulation and transaction inclusion cannot be ruled out.</p>
-        <p>Verified sources: <a className="text-gold-300 hover:underline" href={TESTNET_STABILITY_POOL.proxyExplorerUrl} target="_blank" rel="noreferrer">Testnet proxy</a>, <a className="text-gold-300 hover:underline" href={TESTNET_STABILITY_POOL.implementationExplorerUrl} target="_blank" rel="noreferrer">implementation source</a>, <a className="text-gold-300 hover:underline" href={TESTNET_STABILITY_POOL.sourceUrl} target="_blank" rel="noreferrer">Mezo StabilityPool source</a>.</p>
+        <details><summary className="min-h-11 cursor-pointer py-2 font-medium text-gold-300">Technical details and sources</summary><p className="mt-2">This is a direct Mezo Testnet route, not Morbit or the mainnet-only sMUSD vault. Testnet assets have no real monetary value. The app rechecks the Pool contract and its implementation before acting; a contract change between the check and transaction inclusion cannot be ruled out.</p><p className="mt-2">Sources: <a className="text-gold-300 hover:underline" href={TESTNET_STABILITY_POOL.proxyExplorerUrl} target="_blank" rel="noreferrer">Testnet contract</a>, <a className="text-gold-300 hover:underline" href={TESTNET_STABILITY_POOL.implementationExplorerUrl} target="_blank" rel="noreferrer">implementation</a>, <a className="text-gold-300 hover:underline" href={TESTNET_STABILITY_POOL.sourceUrl} target="_blank" rel="noreferrer">Mezo source</a>.</p></details>
       </div>
     </Card>
   );
@@ -226,8 +246,4 @@ export function StabilityPoolPanel() {
 
 function Stat({ label, value }: { label: string; value: string }) {
   return <div className="min-w-0 rounded-lg border border-line bg-ink-900/70 p-3"><dt className="text-xs text-mist-500">{label}</dt><dd className="mt-1 break-all text-xs leading-relaxed text-mist-200">{value}</dd></div>;
-}
-
-function actionMessage(error: unknown): string {
-  return error instanceof StabilityPoolError ? error.message : "The fresh Stability Pool preflight failed. No wallet request was made; refresh and review again.";
 }
