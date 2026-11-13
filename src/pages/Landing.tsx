@@ -7,12 +7,11 @@ import { WalletButton } from "../components/layout/WalletButton";
 const FEATURES = [
   { icon: ShieldCheck, title: "Vault Intelligence", body: "Verified contract addresses and explorer links, with unavailable metrics shown openly." },
   { icon: Radar, title: "MUSD / MEZO Chain Watch", body: "Check a public address across verified EVM token routes without connecting a wallet." },
-  { icon: LineChart, title: "Simulation Lab", body: "Explore hypothetical outcomes using your own assumptions. No strategy is executed or live yield implied." },
 ];
 
 const STEPS = [
   { n: "01", title: "Understand", body: "Review verified sources, mechanics and known limits before relying on a metric." },
-  { n: "02", title: "Simulate", body: "Test hypothetical scenarios with your assumptions, not live strategy or yield data." },
+  { n: "02", title: "Monitor", body: "Check wallet positions and protocol activity using clearly labeled, read-only data." },
 ];
 
 export function Landing() {
@@ -57,14 +56,11 @@ export function Landing() {
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-mist-400 sm:text-lg">
             See your live MUSD, BTC and MEZO balances on Mezo Testnet, or use Chain Watch to check a public address
-            across verified EVM routes without connecting a wallet. Explore DeFi evidence and hypothetical simulations.
+            across verified EVM routes without connecting a wallet. Review DeFi evidence and monitor protocol activity.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <ButtonLink to="/app" className="min-h-11 px-5 py-3">
               Open Dashboard <ArrowRight className="h-4 w-4" aria-hidden="true" />
-            </ButtonLink>
-            <ButtonLink to="/app/simulation" variant="secondary" className="min-h-11 px-5 py-3">
-              Open Simulation Lab
             </ButtonLink>
             <ButtonLink to="/app/chain-watch" variant="secondary" className="min-h-11 px-5 py-3">
               Open Chain Watch <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -74,7 +70,7 @@ export function Landing() {
       </section>
 
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-20 sm:px-8">
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           {FEATURES.map(({ icon: Icon, title, body }) => (
             <Card key={title} className="transition hover:border-gold-500/40">
               <Icon className="h-5 w-5 text-gold-400" aria-hidden="true" />

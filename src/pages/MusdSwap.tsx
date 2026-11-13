@@ -31,6 +31,7 @@ export function MusdSwap() {
   const [prepared, setPrepared] = useState<PreparedMUSDAction | null>(null);
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [receiptOutcome, setReceiptOutcome] = useState<MUSDReceiptOutcome | null>(null);
+  const [approvalReceipt, setApprovalReceipt] = useState<{ hash: string; blockNumber: number; account: string } | null>(null);
   const [providerCalled, setProviderCalled] = useState(false);
   const [busy, setBusy] = useState<"preparing" | "wallet" | "checking" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,21 +50,24 @@ export function MusdSwap() {
   const reviewContextValid = prepared !== null && ready && from !== null &&
     from.toLowerCase() === prepared.transaction.from.toLowerCase() && state.chainId === network.chainId;
   const locked = busy !== null || (submission !== null && receiptOutcome?.status !== "confirmed" && receiptOutcome?.status !== "reverted");
+  const showPrepare = (prepared === null || !reviewContextValid || !reviewFresh || receiptOutcome?.status === "reverted") &&
+    (submission === null || receiptOutcome?.status === "confirmed" || receiptOutcome?.status === "reverted");
 
   function clearReview() {
     setPrepared(null);
     setError(null);
     setProviderCalled(false);
+    setApprovalReceipt(null);
     setSubmission(null);
     setReceiptOutcome(null);
   }
 
-  async function prepare() {
+  async function prepare(): Promise<PreparedMUSDAction | null> {
     setError(null);
     setPrepared(null);
     if (!ready || !from) {
       setError(testnet ? `Connect a wallet on ${network.label} first.` : "MUSD-to-BTC swap is available only on Mezo Testnet.");
-      return;
+      return null;
     }
     setBusy("preparing");
     try {
@@ -75,8 +79,10 @@ export function MusdSwap() {
       setReceiptOutcome(null);
       setProviderCalled(false);
       setPrepared(result);
+      return result;
     } catch (err) {
       setError(err instanceof Error ? err.message : "The live swap checks did not complete.");
+      return null;
     } finally {
       setBusy(null);
     }
@@ -120,6 +126,13 @@ export function MusdSwap() {
     try {
       const outcome = await readMUSDReceipt({ network, rpc, prepared: target.prepared, transactionHash: target.hash });
       setReceiptOutcome(outcome);
+      if (outcome.status === "confirmed" && target.prepared.kind === "approve") {
+        setApprovalReceipt({ hash: target.hash, blockNumber: outcome.blockNumber, account: target.prepared.transaction.from });
+        const refreshed = await prepare();
+        if (refreshed?.kind === "approve") {
+          setError("The exact approval was confirmed, but the refreshed allowance is still short. Review the new exact approval before continuing.");
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "The receipt could not be checked. No second transaction was submitted.");
     } finally {
@@ -137,15 +150,12 @@ export function MusdSwap() {
   };
 
   const explorerTx = submission ? `${network.explorerUrl.replace(/\/$/, "")}/tx/${submission.hash}` : null;
-  const showPrepare = submission === null || receiptOutcome?.status === "confirmed" || receiptOutcome?.status === "reverted";
-  const prepareButtonLabel = prepared?.kind === "approve" ? "Prepare MUSD approval" : "Prepare swap";
-
   return (
     <div className="space-y-5">
       <SectionHeader
         eyebrow="Mezo Testnet · MUSD"
         title="Swap MUSD for BTC"
-        description="A single live-quoted swap through the verified MUSD/BTC basic pool. Your wallet reviews every approval and swap."
+        description="Review a fresh quote, then choose Swap MUSD to open your wallet. If allowance is short, you will confirm an exact approval first; after it verifies, the app refreshes the quote. The swap remains a separate wallet-confirmed transaction."
       />
 
       <Card className="space-y-4">
@@ -166,6 +176,7 @@ export function MusdSwap() {
                   inputMode="decimal"
                   autoComplete="off"
                   value={amount}
+                  disabled={locked}
                   onChange={(event) => onAmountChange(event.target.value)}
                   className="min-w-0 flex-1 bg-transparent py-3 text-lg text-mist-100 outline-none placeholder:text-mist-600"
                   placeholder="0.0"
@@ -179,6 +190,7 @@ export function MusdSwap() {
               <select
                 id="musd-swap-slippage"
                 value={slippageBps}
+                disabled={locked}
                 onChange={(event) => onSlippageChange(event.target.value)}
                 className="min-h-11 w-full rounded-xl border border-line bg-ink-800 px-3 text-sm text-mist-100"
               >
@@ -196,14 +208,20 @@ export function MusdSwap() {
 
             {showPrepare && (
               <Button onClick={() => { void prepare(); }} disabled={!ready || busy !== null} className="min-h-12 w-full">
-                {busy === "preparing" ? "Checking quote and simulating…" : prepareButtonLabel}
+                {busy === "preparing" ? "Checking quote and simulating…" : "Review swap"}
               </Button>
             )}
 
-            {prepared && (
+            {prepared && submission === null && (
               <div className="space-y-4 rounded-xl border border-gold-500/30 bg-ink-800/70 p-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">Live review · block {prepared.quote.blockNumber.toLocaleString()}</p>
+                  {approvalReceipt && prepared.kind === "swap" && state.status === "connected" && state.address !== null && state.address.toLowerCase() === approvalReceipt.account.toLowerCase() && (
+                    <p role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                      The exact MUSD approval was verified in block {approvalReceipt.blockNumber.toLocaleString()}; this swap quote was refreshed afterward.
+                      <a href={`${network.explorerUrl.replace(/\/$/, "")}/tx/${approvalReceipt.hash}`} target="_blank" rel="noopener noreferrer" className="ml-1 underline">View approval</a>
+                    </p>
+                  )}
                   <p className="text-sm text-mist-300">You pay <span className="font-semibold text-mist-100">{formatMUSDTokenAmount(prepared.quote.amountInRaw)} MUSD</span></p>
                   <p className="text-sm text-mist-300">Current quote <span className="font-semibold text-mist-100">{formatMUSDTokenAmount(prepared.quote.quotedOutRaw)} BTC token</span></p>
                   <p className="text-sm text-mist-300">Minimum received <span className="font-semibold text-mist-100">{formatMUSDTokenAmount(prepared.quote.minimumOutRaw)} BTC token</span> at {(prepared.quote.slippageBps / 100).toFixed(1)}% slippage</p>
@@ -213,7 +231,7 @@ export function MusdSwap() {
 
                 {prepared.kind === "approve" ? (
                   <div className="space-y-3 rounded-lg border border-line bg-ink-900/70 p-3">
-                    <p className="text-sm font-semibold text-mist-100">Approval needed</p>
+                    <p className="text-sm font-semibold text-mist-100">Step 1 · exact MUSD approval needed</p>
                     <p className="text-sm text-mist-300">The wallet currently allows less than this swap. The prepared approval is exactly {formatMUSDTokenAmount(prepared.quote.amountInRaw)} MUSD for the verified router—no unlimited allowance.</p>
                   </div>
                 ) : (
@@ -222,14 +240,11 @@ export function MusdSwap() {
                   </p>
                 )}
 
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Button onClick={confirmInWallet} disabled={busy !== null || submission !== null || !reviewContextValid || !reviewFresh} className="min-h-12 w-full sm:flex-1">
-                    {busy === "wallet" ? "Opening wallet…" : prepared.kind === "approve" ? "Approve MUSD in wallet" : "Confirm swap in wallet"}
-                  </Button>
-                  <Button variant="secondary" onClick={clearReview} disabled={busy !== null} className="min-h-12 w-full sm:w-auto">Cancel review</Button>
-                </div>
+                <Button onClick={confirmInWallet} disabled={busy !== null || submission !== null || !reviewContextValid || !reviewFresh} className="min-h-12 w-full">
+                  {busy === "wallet" ? "Opening wallet…" : prepared.kind === "approve" ? "Approve exact MUSD" : "Swap MUSD"}
+                </Button>
                 <p className="text-xs text-mist-500" role="status">
-                  {providerCalled ? "Wallet provider was called for this reviewed request." : "Wallet provider has not been called. Review details above; the final button opens your wallet."}
+                  {providerCalled ? "Wallet provider was called for this reviewed request." : "Wallet provider has not been called. The primary action opens your wallet immediately with the reviewed request."}
                   {!reviewFresh && " This review has expired; prepare again."}
                 </p>
                 <details className="rounded-lg border border-line bg-ink-900/50 px-3">
@@ -266,9 +281,6 @@ export function MusdSwap() {
                   <Button variant="secondary" onClick={() => { void checkReceipt(submission); }} disabled={busy !== null} className="min-h-11 w-full">
                     {busy === "checking" ? "Checking receipt…" : "Check existing receipt"}
                   </Button>
-                )}
-                {receiptOutcome?.status === "confirmed" && submission.prepared.kind === "approve" && (
-                  <Button onClick={() => { void prepare(); }} disabled={busy !== null || !ready} className="min-h-11 w-full">Prepare swap with fresh quote</Button>
                 )}
                 {receiptOutcome?.status === "confirmed" && submission.prepared.kind === "swap" && (
                   <Button variant="secondary" onClick={clearReview} disabled={busy !== null} className="min-h-11 w-full">Start another swap</Button>

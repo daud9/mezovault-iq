@@ -1,8 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { calculateCollateralRatioBps, calculateTroveRisk, formatPercentBps, formatWad } from "./troveRisk";
+import { calculateCollateralRatioBps, calculateTroveRisk, classifyHistoricalTroveRisk, formatPercentBps, formatWad } from "./troveRisk";
 
 const WAD = 10n ** 18n;
+
+describe("historical Trove risk classification", () => {
+  it("labels only closed-by-redemption status 4 as RISK-ESCAPED", () => {
+    assert.equal(classifyHistoricalTroveRisk(4), "RISK-ESCAPED");
+    for (const status of [0, 1, 2, 3, 5]) assert.equal(classifyHistoricalTroveRisk(status), null);
+  });
+});
 
 describe("Trove risk calculations", () => {
   it("calculates the current collateral ratio exactly without an MCR input", () => {

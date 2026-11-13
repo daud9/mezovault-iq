@@ -5,9 +5,9 @@
 
 MezoVault IQ is a Mezo ecosystem web app for wallet balances, MUSD use, transaction history and evidence-based DeFi monitoring. The main demo path is **Overview → MUSD Swap** on Mezo Testnet.
 
-> **Release status (2026-11-13):** this work starts from deployed `main` commit `5990930`. Pool BTC (ERC-20) Send support is local and uncommitted; it has not been pushed or deployed.
+> **Release status (2026-11-13):** this update builds on deployed `main` commit `8b955c9` and adds Risk Lab redemption history, a separately confirmed MUSD swap flow, and removal of the assumption-only Simulation Lab.
 >
-> **Validation:** `npm test` passes **391 tests**; `npm run typecheck`, `npm run build`, and `git diff --check` pass. The production build emits non-fatal dependency annotation and large-chunk warnings. No phone/browser UI or live wallet-popup test has been performed for this local change. No wallet transaction was signed or broadcast; the new transfer path is covered by mock RPC/provider tests.
+> **Validation:** `npm test` passes **372 tests**; `npm run typecheck`, `npm run build`, and `git diff --check` pass. The production build emits non-fatal dependency-annotation and large-chunk warnings. No browser UI or live wallet-popup test has been performed for this local update. No wallet transaction was signed or broadcast; the swap and position-reader tests use mocked RPC/provider data.
 
 ## App inventory and status
 
@@ -17,7 +17,7 @@ MezoVault IQ is a Mezo ecosystem web app for wallet balances, MUSD use, transact
 | --- | --- |
 | **Landing (`/`)** | Product entry page. |
 | **Overview (`/app`)** | Shows live wallet balances where the connected network and token checks pass, plus a partial BTC-only oracle estimate when fresh. Its primary CTA is now MUSD Swap. MUSD and MEZO are not assigned USD values; DeFi positions are not a complete portfolio total. |
-| **MUSD Swap (`/app/swap`)** | Testnet-only MUSD → pool-BTC flow. Uses a live router quote, exact minimum-received calculation, exact-call simulation and gas checks. Mock-tested; no swap was sent. Requires wallet-held MUSD and native BTC for fees. Its transferable BTC ERC-20 output is distinct from native gas BTC and can now be sent using the labeled Pool BTC option. |
+| **MUSD Swap (`/app/swap`)** | Testnet-only MUSD → pool-BTC flow. Review a pinned live quote, then use the single primary **Swap MUSD** action to open the wallet. If allowance is short, an exact approval is confirmed first; after its receipt verifies, the app refreshes the quote automatically and the user separately confirms the swap. Mock-tested; no swap was sent. Requires wallet-held MUSD and native BTC for fees. The BTC ERC-20 output is distinct from native gas BTC and can be sent using the labeled Pool BTC option. |
 | **Send (`/app/send`)** | Supports native BTC, MUSD, MEZO and the specific Pool BTC (ERC-20) token on Mezo Testnet. The Pool BTC path verifies chain ID, contract bytecode, symbol, 18 decimals, connected-wallet token balance and native BTC gas balance at a pinned current read; it simulates the exact transfer and estimates gas before review. Users still confirm in their wallet. The receipt uses the existing Send status checks. Native BTC remains a separate gas asset. |
 | **MUSD Pay Links (`/app/pay-links`, public `/pay`)** | Seller/buyer x402 implementation and mocked facilitator tests are present. Hosted link creation requires a server-only `PAY_LINK_SECRET` and the dynamic server; readiness of the deployed environment must be checked before claiming hosted payments are available. Buyers authorize payment in their own wallet. |
 | **Legacy Pay (`/app/pay`)** | Legacy request parameters are prefill-only for the standard Send flow. The app no longer generates these links; they are not gasless. |
@@ -29,14 +29,17 @@ MezoVault IQ is a Mezo ecosystem web app for wallet balances, MUSD use, transact
 | **CL Planner (`/app/cl-planner`)** | Read-only pool/range planner. A separate Testnet deposit panel prepares exact approvals and a position mint for wallet confirmation and receipt checking. No APY, return or USD valuation is claimed; no live mint was sent in this work. |
 | **Trove (`/app/trove`)** | Retained on its separate route, not the main MUSD demo path. Reads the connected account’s Trove status and active-position data. Testnet open and active-Trove add-collateral actions remain separate wallet-confirmed flows; borrowing more, repaying, withdrawing, closing and liquidation are unavailable. A status-4 closed-by-redemption history card is described below. |
 | **Stability Pool (on `/app/trove`)** | Reads MUSD deposits and accrued BTC gains; supports the existing exact-allowance and `provideToSP` deposit flow on Testnet. No withdrawal action is exposed. A deposit is not wallet-held MUSD and is not available to the new swap. |
-| **Trove Risk Lab (`/app/trove-risk`)** | Read-only collateral/MCR comparison and hypothetical BTC-price scenarios. Ratios are withheld when required position or oracle inputs are stale or unavailable. No current risk ratio is shown for a closed Trove. |
-| **Simulation Lab (`/app/simulation`)** | Assumption-based scenarios only; not a live strategy, yield estimate or forecast. |
+| **Trove Risk Lab (`/app/trove-risk`)** | Read-only collateral/MCR comparison and hypothetical BTC-price scenarios for active Troves. A fresh status-4 redemption is shown as historical **RISK-ESCAPED**; its event and pinned-block surplus appear only when verified. No closed-position ratio or active-risk scenario is inferred. |
+
+The former assumption-only Simulation Lab has been removed from navigation, routes and the landing page; `/app/simulation` now falls through to the normal app fallback rather than opening a dead feature.
 
 ## MUSD Swap: what is verified
 
 The screen is locked to **Mezo Testnet (chain ID 31611)** and one volatile basic-pool route. Before enabling a wallet request it checks the current chain and pins the pool/token reads, quote and simulations to one block. It verifies MUSD’s on-chain symbol and 18 decimals; verifies the pool contains MUSD and the BTC token; checks both pool and router factories; reads reserves, wallet MUSD, allowance and the pool’s BTC-token balance; and asks the router for `getAmountsOut` using its route tuple `(from, to, stable, factory)` with `stable=false`.
 
-The screen offers 0.5%, 1.0% and 2.0% slippage choices and calculates minimum received using integer arithmetic. If allowance is short, it prepares an approval for **exactly this swap amount**, not an unlimited approval. It estimates gas with a 20% buffer, checks the wallet’s native BTC against the maximum reviewed fee, and simulates the exact approval or swap request at the pinned block. The exact swap simulation must match the live quote. The output token’s `transfer` is also simulated from the pool to the connected account. The final click calls the selected wallet provider immediately; the user must still approve the request there. Approval and swap are separate wallet confirmations when approval is required. The app never signs or broadcasts automatically.
+The screen offers 0.5%, 1.0% and 2.0% slippage choices and calculates minimum received using integer arithmetic. **Review swap** performs the fresh quote and preflight. If allowance is sufficient, the review has one primary **Swap MUSD** action. If allowance is short, the review instead has one **Approve exact MUSD** action for exactly this amount, never an unlimited approval. After the exact approval receipt is verified, the app automatically refreshes the quote and preflight; the user then explicitly presses **Swap MUSD** for a separate wallet request. The app does not submit the swap automatically after approval.
+
+Every transaction is still reviewed in the wallet. The final action directly calls the selected wallet provider without an RPC read or `await` before the call, preserving mobile-wallet behavior. The app estimates gas with a 20% buffer, checks native BTC against the maximum reviewed fee, simulates the exact approval or swap request at the pinned block, requires the swap simulation to match the quote, and simulates the output token transfer. This implementation has no verified or implemented permit-based route, so when allowance is short the approval and swap are two separate on-chain transactions and two wallet confirmations. With sufficient allowance, the swap itself is one on-chain transaction. The app never signs or broadcasts automatically.
 
 A successful wallet response is not enough to show success. The receipt reader checks the submitted request, receipt status and expected approval or MUSD/BTC transfer events. If a receipt is missing or does not match, it remains pending or unverified rather than claiming success.
 
@@ -52,9 +55,9 @@ The exact ERC-20 transfer is gas-estimated with a 20% gas-limit buffer, simulate
 
 ## Closed-Trove history: what is verified
 
-When the connected wallet’s current Testnet Trove status is `4`, the Trove page labels it **Closed by redemption** and looks for the matching `TroveUpdated` event with redemption operation `2`. The event scan is bounded to the latest 10,000 blocks. The page shows the event’s exact block and transaction link only when the log matches; it reads claimable collateral from `CollSurplusPool.getCollateral(owner)` at the same pinned block. If either read fails, that value is marked unavailable. It does not reconstruct a pre-redemption risk ratio and does not provide a surplus-claim action. The existing active-Trove actions were not changed.
+When the connected wallet’s current Testnet Trove status is `4`, the Trove page labels it **Closed by redemption** and the Risk Lab shows the historical classification **RISK-ESCAPED**. Here the label means the exposure ended through redemption; it does not mean the Trove was liquidated, that it was safe, or that an MCR threshold was necessarily avoided. It is not an active Trove and no final pre-redemption or current collateral ratio is reconstructed. The reader looks for the matching `TroveUpdated` event with redemption operation `2`; that scan is bounded to the latest 10,000 blocks. The exact block and transaction link appear only when the log matches. `CollSurplusPool.getCollateral(owner)` is read at the same pinned block and is shown only when available; otherwise the value is marked unavailable. The status, event evidence and surplus refresh with the chain read. No surplus-claim action is provided, and active-Trove actions are unchanged.
 
-The connected wallet’s current live read at block `16,750,468` returned status `4`. The matching zero-principal/interest/collateral redemption event was in block **16,750,026**, transaction [`0x6a5edeeb8b3c7bcf05abcbfeefdc0af870e61e9546516b5e7782d5876fb736fa`](https://explorer.test.mezo.org/tx/0x6a5edeeb8b3c7bcf05abcbfeefdc0af870e61e9546516b5e7782d5876fb736fa). `getCollateral(owner)` returned **0.014859007665964744 BTC** at snapshot block `16,750,468`. These are Testnet values from that read, not a guarantee that the surplus is still claimable later. The closed status and surplus are refreshed from chain; the final pre-redemption collateral ratio is intentionally unavailable.
+The earlier connected-wallet Testnet read at block `16,750,468` returned status `4`. Its matching zero-principal/interest/collateral redemption event was in block **16,750,026**, transaction [`0x6a5edeeb8b3c7bcf05abcbfeefdc0af870e61e9546516b5e7782d5876fb736fa`](https://explorer.test.mezo.org/tx/0x6a5edeeb8b3c7bcf05abcbfeefdc0af870e61e9546516b5e7782d5876fb736fa). `getCollateral(owner)` returned **0.014859007665964744 BTC** at snapshot block `16,750,468`. These values describe that snapshot only; the page refreshes status, event evidence and surplus, and never treats the old surplus as guaranteed claimable later.
 
 The status enum and event are documented in the [Mezo MUSD TroveManager source](https://github.com/mezo-org/musd/blob/main/solidity/contracts/TroveManager.sol) and [interface](https://github.com/mezo-org/musd/blob/main/solidity/contracts/interfaces/ITroveManager.sol); `getCollateral` is documented in [CollSurplusPool](https://github.com/mezo-org/musd/blob/main/solidity/contracts/CollSurplusPool.sol).
 
@@ -62,6 +65,7 @@ The status enum and event are documented in the [Mezo MUSD TroveManager source](
 
 - No smart-vault deposit/withdrawal or verified live yield/TVL feature is exposed.
 - The new swap is MUSD → the one Testnet pool-BTC token only. No Mainnet swap, other pair, native-BTC output, or swap path using Stability Pool-deposited MUSD is implemented.
+- No verified/implemented permit route exists for MUSD Swap. When allowance is insufficient, exact approval and swap require separate wallet-confirmed transactions; the app does not silently chain the wallet prompts.
 - Pool BTC sends are limited to this verified Testnet token; there is no generic ERC-20 token import or Mainnet Pool BTC send option.
 - Stability Pool withdrawal and closed-Trove surplus claim are not implemented.
 - Trove borrowing-more, repayment, collateral withdrawal, closure and liquidation are not implemented.
@@ -116,8 +120,7 @@ src/
   components/   wallet, balance and shared UI
   pages/        Overview, MUSD Swap, Send, Pay, Pay Links, Activity,
                 Chain Watch, Bridge Status, Pool Watch, CL Positions/Planner,
-                Trove, Trove Risk Lab and Simulation Lab
-  engine/       assumption-driven scenario calculations
+                Trove and Trove Risk Lab
 server/         dynamic app server and x402 merchant endpoints
 docs/           protocol and feature implementation notes
 ```

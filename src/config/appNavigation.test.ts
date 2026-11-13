@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { APP_NAV, APP_ROUTE_REDIRECTS } from "./appNavigation";
 
 describe("app navigation and legacy route alias", () => {
-  it("keeps the working Simulation Lab in primary navigation", () => {
-    assert.ok(APP_NAV.some((item) => item.to === "/app/simulation" && item.label === "Simulation Lab"));
+  it("does not expose the removed Simulation Lab in primary navigation", () => {
+    assert.equal(APP_NAV.some((item) => item.to === "/app/simulation" || item.label === "Simulation Lab"), false);
   });
 
   it("adds the MUSD Swap screen to primary navigation", () => {

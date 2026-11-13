@@ -1,7 +1,6 @@
 import {
   Activity as ActivityIcon,
   Radar,
-  FlaskRound,
   Gauge,
   LayoutDashboard,
   Send,
@@ -20,7 +19,6 @@ export const APP_NAV = [
   { to: "/app/cl-positions", label: "CL Positions", icon: Waves },
   { to: "/app/cl-planner", label: "CL Planner", icon: Waves },
   { to: "/app/pools", label: "Pool Watch", icon: Waves },
-  { to: "/app/simulation", label: "Simulation Lab", icon: FlaskRound },
   { to: "/app/trove", label: "Trove", icon: Gauge },
   { to: "/app/trove-risk", label: "Trove Risk Lab", icon: Gauge },
   { to: "/app/activity", label: "Activity", icon: ActivityIcon },

@@ -118,6 +118,22 @@ describe("loan position", () => {
     }
   });
 
+  it("keeps status-4 redemption history distinct without computing current risk", async () => {
+    const { result, calls } = run({ status: 4n });
+    const r = await result;
+    assert.equal(r.status, "ok");
+    if (r.status === "ok") {
+      assert.equal(r.hasLoan, false);
+      assert.equal(r.troveStatus, 4);
+      assert.notEqual(r.closedHistory, null);
+      assert.equal(r.collateralRatioPct, null);
+      assert.equal(r.btcUsdWei, null);
+      assert.equal(r.mcrWei, null);
+    }
+    assert.equal(calls.some((entry) => entry.method === "eth_getLogs"), true);
+    assert.equal(calls.some((entry) => entry.method === "eth_call" && [LOAN_SELECTORS.fetchPrice, LOAN_SELECTORS.mcr].includes(String((entry.params[0] as { data: string }).data))), false);
+  });
+
   it("uses one pinned block for all Trove, price, oracle, and MCR reads", async () => {
     const { result, calls } = run({ coll: 2n * E18, debt: 1000n * E18 });
     const r = await result;

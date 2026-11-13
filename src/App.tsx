@@ -6,7 +6,6 @@ import { WalletProvider } from "./components/wallet/WalletProvider";
 import { Landing } from "./pages/Landing";
 import { Overview } from "./pages/Overview";
 import { MusdSwap } from "./pages/MusdSwap";
-import { SimulationLab } from "./pages/SimulationLab";
 import { Activity } from "./pages/Activity";
 import { PoolWatch } from "./pages/PoolWatch";
 import { Send } from "./pages/Send";
@@ -46,7 +45,6 @@ export default function App() {
               <Route path="cl-positions" element={<ClPositionMonitor />} />
               <Route path="cl-planner" element={<ClPlanner />} />
               <Route path="pools" element={<PoolWatch />} />
-              <Route path="simulation" element={<SimulationLab />} />
               <Route path="activity" element={<Activity />} />
               <Route path="*" element={<Navigate to="/app" replace />} />
             </Route>

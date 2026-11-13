@@ -8,7 +8,8 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { useLoan } from "../hooks/useLoan";
 import { isLoanPriceFresh, isLoanReadFresh, loanReadAgeMs } from "../lib/loan";
 import { formatTime, shortAddress } from "../lib/format";
-import { calculateCollateralRatioBps, calculateTroveRisk, formatPercentBps, formatWad } from "../lib/troveRisk";
+import { calculateCollateralRatioBps, calculateTroveRisk, classifyHistoricalTroveRisk, formatPercentBps, formatWad } from "../lib/troveRisk";
+import type { ClosedTroveHistory } from "../lib/closedTroveHistory";
 
 export function TroveRiskLab() {
   const { state, network } = useWallet();
@@ -28,6 +29,7 @@ export function TroveRiskLab() {
   const readFresh = loan ? isLoanReadFresh(loan, nowMs) : false;
   const priceFresh = loan?.hasLoan ? isLoanPriceFresh(loan, nowMs) : false;
   const loanAgeMs = loan ? loanReadAgeMs(loan, nowMs) : null;
+  const historicalRiskLabel = loan ? classifyHistoricalTroveRisk(loan.troveStatus) : null;
   const ratioBps = loan && loan.hasLoan && readFresh && priceFresh && loan.btcUsdWei !== null
     ? calculateCollateralRatioBps({
         collateralBtcWei: loan.collateralRaw,
@@ -54,7 +56,7 @@ export function TroveRiskLab() {
       <SectionHeader
         eyebrow="Read-only · Mezo Testnet"
         title="Trove Risk Lab"
-        description="Read the connected wallet's current BTC collateral and MUSD debt, then compare the collateral ratio with the live MCR and hypothetical BTC price drops. Inputs are read from one pinned block; no automated actions or transaction controls are available here."
+        description="Compare an active Trove's collateral ratio with the live MCR and hypothetical BTC price drops. A status-4 redemption is shown as historical RISK-ESCAPED with verified closure evidence, never as an active position or current ratio. All reads use one pinned block; no transaction controls are available here."
         actions={ready ? (
           <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh reads
@@ -84,6 +86,14 @@ export function TroveRiskLab() {
           <h2 className="text-base font-semibold text-mist-100">Refresh before using this risk read</h2>
           <p className="text-sm leading-relaxed text-mist-400">The pinned-block read at block {loan.blockNumber} is {loanAgeMs === null ? "not verifiably fresh" : `${Math.floor(loanAgeMs / 1_000)} seconds old`}. The last result {loan.hasLoan ? `recorded ${loan.collateralBtc} BTC collateral and ${loan.debtMusd} MUSD debt` : "found no active Trove"}, but no current ratio or scenario is shown.</p>
         </Card>
+      ) : loan && !loan.hasLoan && historicalRiskLabel ? (
+        <ClosedRedemptionRiskCard
+          label={historicalRiskLabel}
+          history={loan.closedHistory}
+          blockNumber={loan.blockNumber}
+          retrievedAt={loan.retrievedAt}
+          explorerUrl={network.explorerUrl}
+        />
       ) : loan && !loan.hasLoan ? (
         <Card className="space-y-3">
           <DataStatus state="live" detail={`no active Trove · block ${loan.blockNumber}`} />
@@ -211,5 +221,73 @@ function EvidenceLink({ label, address, explorerUrl }: { label: string; address:
     <a href={`${explorerUrl.replace(/\/?$/, "/")}address/${address}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-gold-300 hover:underline">
       {label} {shortAddress(address)} <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
     </a>
+  );
+}
+
+function ClosedRedemptionRiskCard({
+  label,
+  history,
+  blockNumber,
+  retrievedAt,
+  explorerUrl,
+}: {
+  label: "RISK-ESCAPED";
+  history: ClosedTroveHistory | null;
+  blockNumber: number;
+  retrievedAt: string;
+  explorerUrl: string;
+}) {
+  const transactionUrl = history?.closure
+    ? `${explorerUrl.replace(/\/$/, "")}/tx/${history.closure.transactionHash}`
+    : null;
+
+  return (
+    <Card highlight className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <DataStatus state="live" detail={`status 4 · read at block ${blockNumber.toLocaleString()}`} />
+        <span className="inline-flex rounded-full border border-gold-500/40 bg-gold-500/10 px-2.5 py-1 text-xs font-semibold tracking-wide text-gold-300">
+          {label}
+        </span>
+      </div>
+      <div className="space-y-2">
+        <h2 className="text-base font-semibold text-mist-100">Historical redemption</h2>
+        <p className="text-sm leading-relaxed text-mist-300">
+          This label means the Trove's exposure ended through redemption. It does not mean the Trove was liquidated,
+          that it was safe, or that a minimum-collateral threshold was necessarily avoided.
+        </p>
+        <p className="text-sm leading-relaxed text-mist-400">
+          This is a closed historical position, not an active Trove. No current collateral ratio, live MCR comparison,
+          or price-stress scenario is calculated for it.
+        </p>
+      </div>
+      {history?.closure ? (
+        <div className="space-y-2 rounded-lg border border-line bg-ink-800/50 p-3 text-sm text-mist-300">
+          <p>Verified redemption event at block <span className="font-semibold text-mist-100">{history.closure.blockNumber.toLocaleString()}</span>.</p>
+          <p className="break-all font-mono text-xs">{history.closure.transactionHash}</p>
+          {transactionUrl && (
+            <a href={transactionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">
+              Open redemption transaction <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+            </a>
+          )}
+        </div>
+      ) : (
+        <p className="text-sm leading-relaxed text-amber-200">
+          The current TroveManager status is 4, but the matching redemption transaction could not be verified in the recent log window.
+          {history?.closureUnavailableReason ? ` ${history.closureUnavailableReason}` : " Refresh the read or verify the network."}
+        </p>
+      )}
+      {!history || history.claimableSurplusRaw === null ? (
+        <p className="text-sm text-mist-400">
+          Claimable BTC collateral surplus: unavailable.{history?.surplusUnavailableReason ? ` ${history.surplusUnavailableReason}` : " No verified value is shown."}
+        </p>
+      ) : history.claimableSurplusRaw > 0n ? (
+        <p className="text-sm text-mist-300">
+          Claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}: <span className="font-semibold text-mist-100">{history.claimableSurplusBtc} BTC</span>.
+        </p>
+      ) : (
+        <p className="text-sm text-mist-300">No claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}.</p>
+      )}
+      <p className="text-xs text-mist-500">Status and history were read {formatTime(retrievedAt)}. Refresh to read the latest chain snapshot.</p>
+    </Card>
   );
 }

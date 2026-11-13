@@ -16,6 +16,11 @@ export interface TroveRiskResult {
   scenarios: TroveRiskScenario[];
 }
 
+/** Status 4 is a historical redemption disposition, not a live risk verdict. */
+export function classifyHistoricalTroveRisk(troveStatus: number): "RISK-ESCAPED" | null {
+  return troveStatus === 4 ? "RISK-ESCAPED" : null;
+}
+
 /** Computes the collateral/debt percentage in basis points without floating-point math. */
 export function calculateCollateralRatioBps(input: {
   collateralBtcWei: bigint;
