@@ -13,6 +13,7 @@ import {
   NO_WALLET_MESSAGE,
   readChainId,
   requestAccount,
+  requestReviewedWalletTransaction,
   requestWalletTransaction,
   switchToNetwork,
   walletReducer,
@@ -32,6 +33,10 @@ interface WalletContextValue {
   createX402Signer: (expected: WalletExpectation) => Promise<ClientEvmSigner>;
   /** Asks the connected wallet to sign and send. Resolves to the transaction hash, not to a confirmation. */
   sendTransaction: (tx: Record<string, string | undefined>, expected?: WalletExpectation) => Promise<string>;
+  /** Rechecks account and chain without prompting, during preflight rather than the final tap. */
+  checkWalletContext: (expected: WalletExpectation) => Promise<void>;
+  /** Calls eth_sendTransaction synchronously for a just-reviewed request. */
+  sendReviewedTransaction: (tx: Record<string, string | undefined>, expected: WalletExpectation, onProviderCall?: () => void) => Promise<string>;
   /** Requests an off-chain personal_sign message; no transaction is sent. */
   signMessage: (message: string, expected: WalletExpectation) => Promise<`0x${string}`>;
 }
@@ -150,6 +155,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     [network, resolveProvider],
   );
 
+  const checkWalletContext = useCallback(async (expected: WalletExpectation) => {
+    const provider = providerRef.current ?? (await resolveProvider());
+    if (!provider) throw new Error(NO_WALLET_MESSAGE);
+    await assertWalletContext(provider, expected);
+  }, [resolveProvider]);
+
+  const sendReviewedTransaction = useCallback(
+    (tx: Record<string, string | undefined>, expected: WalletExpectation, onProviderCall?: () => void): Promise<string> => {
+      const provider = providerRef.current;
+      if (!provider) return Promise.reject(new Error("The selected wallet provider is unavailable. Reconnect before preparing another review."));
+      return requestReviewedWalletTransaction(provider, tx, expected, network.chainId, onProviderCall);
+    },
+    [network],
+  );
+
   const signMessage = useCallback(async (message: string, expected: WalletExpectation): Promise<`0x${string}`> => {
     if (expected.chainId !== MEZO_NETWORKS.testnet.chainId) {
       throw new Error("Link authorization signing is restricted to Mezo Testnet.");
@@ -192,9 +212,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       switchToTestnet,
       createX402Signer,
       sendTransaction,
+      checkWalletContext,
+      sendReviewedTransaction,
       signMessage,
     }),
-    [state, network, connect, disconnect, switchNetwork, switchToTestnet, createX402Signer, sendTransaction, signMessage],
+    [state, network, connect, disconnect, switchNetwork, switchToTestnet, createX402Signer, sendTransaction, checkWalletContext, sendReviewedTransaction, signMessage],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

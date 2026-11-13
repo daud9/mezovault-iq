@@ -4,8 +4,7 @@ import { MEZO_NETWORKS } from "../config/chains";
 import { MEZO_TESTNET_SELECTORS as S } from "./mezoAbi";
 import { encodeUintResult, fakeFetch, type Handler } from "./testHelpers";
 import { createRpcClient } from "./rpc";
-import { confirmReviewedOpenTrove, formatOpenTroveActionError } from "./openTroveConfirmation";
-import { requestWalletTransaction, type Eip1193Provider } from "./wallet";
+import { formatOpenTroveActionError, recheckReviewedOpenTrove } from "./openTroveConfirmation";
 import {
   OpenTrovePreflightError,
   prepareOpenTrove,
@@ -285,24 +284,11 @@ describe("general Mezo Testnet openTrove preflight", () => {
 });
 
 describe("final open-Trove confirmation", () => {
-  it("rechecks all conditions and reaches the injected provider only after the explicit final confirmation path passes", async () => {
+  it("rechecks all conditions and wallet context, then waits for a separate final wallet tap", async () => {
     const { calls: rpcCalls, rpc, prepared } = run();
     const review = await prepared;
-    const hash = `0x${"b".repeat(64)}`;
     const providerCalls: string[] = [];
-    const provider: Eip1193Provider = {
-      request: async ({ method, params }) => {
-        providerCalls.push(method);
-        if (method === "eth_accounts") return [ACCOUNT];
-        if (method === "eth_chainId") return "0x7b7b";
-        if (method === "eth_sendTransaction") {
-          assert.deepEqual(params, [{ ...review.transaction }]);
-          return hash;
-        }
-        throw new Error(`unexpected provider method ${method}`);
-      },
-    };
-    const result = await confirmReviewedOpenTrove({
+    const result = await recheckReviewedOpenTrove({
       review,
       recheck: () => prepareOpenTrove({
         account: ACCOUNT,
@@ -313,13 +299,14 @@ describe("final open-Trove confirmation", () => {
         nowMs: NOW_MS,
       }),
       reviewIsCurrent: () => true,
-      sendTransaction: (tx, expected) => requestWalletTransaction(provider, tx, expected, NETWORK.chainId),
-      onWalletRequest: () => providerCalls.push("explicit-final-click-approved"),
+      checkWalletContext: async (expected) => {
+        assert.deepEqual(expected, { account: ACCOUNT, chainId: NETWORK.chainId });
+        providerCalls.push("eth_accounts", "eth_chainId");
+      },
     });
 
-    assert.equal(result.status, "submitted");
-    if (result.status === "submitted") assert.equal(result.hash, hash);
-    assert.deepEqual(providerCalls, ["explicit-final-click-approved", "eth_accounts", "eth_chainId", "eth_sendTransaction"]);
+    assert.equal(result.status, "ready");
+    assert.deepEqual(providerCalls, ["eth_accounts", "eth_chainId"]);
     assert.ok(rpcCalls.some((call) => call.method === "eth_estimateGas"));
     assert.equal(rpcCalls.some((call) => call.method === "eth_sendTransaction"), false);
   });
@@ -330,11 +317,11 @@ describe("final open-Trove confirmation", () => {
     const failure = new OpenTrovePreflightError("The current Testnet Trove could not be verified (RPC timeout). Refresh and retry; no wallet request was made.");
     let walletCalls = 0;
 
-    await assert.rejects(confirmReviewedOpenTrove({
+    await assert.rejects(recheckReviewedOpenTrove({
       review,
       recheck: async () => { throw failure; },
       reviewIsCurrent: () => true,
-      sendTransaction: async () => { walletCalls += 1; return `0x${"b".repeat(64)}`; },
+      checkWalletContext: async () => { walletCalls += 1; },
     }), (caught: unknown) => caught === failure);
     assert.equal(walletCalls, 0);
     assert.equal(formatOpenTroveActionError(failure), failure.message);
@@ -345,11 +332,11 @@ describe("final open-Trove confirmation", () => {
     const { prepared } = run();
     const review = await prepared;
     let walletCalls = 0;
-    const result = await confirmReviewedOpenTrove({
+    const result = await recheckReviewedOpenTrove({
       review,
       recheck: async () => ({ ...review, gasEstimate: review.gasEstimate + 1n }),
       reviewIsCurrent: () => true,
-      sendTransaction: async () => { walletCalls += 1; return `0x${"b".repeat(64)}`; },
+      checkWalletContext: async () => { walletCalls += 1; },
     });
     assert.equal(result.status, "changed");
     assert.equal(walletCalls, 0);

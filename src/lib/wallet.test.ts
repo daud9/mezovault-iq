@@ -6,6 +6,7 @@ import {
   INITIAL_WALLET_STATE,
   NO_WALLET_MESSAGE,
   requestAccount,
+  requestReviewedWalletTransaction,
   requestWalletTransaction,
   switchToNetwork,
   walletReducer,
@@ -236,5 +237,38 @@ describe("requestWalletTransaction", () => {
     const correctAccount = provider((method) => method === "eth_accounts" ? [ADDR] : "0x7b7b");
     await assert.rejects(requestWalletTransaction(correctAccount.p, tx, { account: ADDR, chainId: 31_611 }, 1), /selected network/);
     assert.deepEqual(correctAccount.calls, []);
+  });
+});
+
+describe("requestReviewedWalletTransaction", () => {
+  it("invokes eth_sendTransaction synchronously without awaiting provider reads", async () => {
+    const hash = `0x${"c".repeat(64)}`;
+    let resolveSend: ((value: unknown) => void) | undefined;
+    const { p, calls } = provider((method, params) => {
+      if (method !== "eth_sendTransaction") throw new Error(`unexpected ${method}`);
+      assert.deepEqual(params, [{ from: ADDR, to: "0x2222222222222222222222222222222222222222", value: "0x100", data: "0x1234" }]);
+      return new Promise((resolve) => { resolveSend = resolve; });
+    });
+    let providerCallReported = false;
+    const pending = requestReviewedWalletTransaction(
+      p,
+      { from: ADDR, to: "0x2222222222222222222222222222222222222222", value: "0x100", data: "0x1234" },
+      { account: ADDR, chainId: 31_611 },
+      31_611,
+      () => { providerCallReported = true; },
+    );
+
+    assert.deepEqual(calls, ["eth_sendTransaction"]);
+    assert.equal(providerCallReported, true);
+    resolveSend?.(hash);
+    assert.equal(await pending, hash);
+  });
+
+  it("blocks a wrong sender or configured chain before invoking the provider", async () => {
+    const { p, calls } = provider(() => `0x${"c".repeat(64)}`);
+    const tx = { from: ADDR, to: "0x2222222222222222222222222222222222222222" };
+    await assert.rejects(requestReviewedWalletTransaction(p, { ...tx, from: "0x2222222222222222222222222222222222222222" }, { account: ADDR, chainId: 31_611 }, 31_611));
+    await assert.rejects(requestReviewedWalletTransaction(p, tx, { account: ADDR, chainId: 31_611 }, 1));
+    assert.deepEqual(calls, []);
   });
 });

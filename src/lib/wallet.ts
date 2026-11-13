@@ -128,6 +128,38 @@ export async function requestWalletTransaction(
   return hash;
 }
 
+/**
+ * Sends a transaction that has already passed fresh read-only wallet-context
+ * checks. This calls EIP-1193 before awaiting anything so mobile wallets receive
+ * the request during the user's explicit button activation.
+ */
+export function requestReviewedWalletTransaction(
+  provider: Eip1193Provider,
+  tx: Record<string, string | undefined>,
+  expected: WalletExpectation,
+  configuredChainId: number,
+  onProviderCall?: () => void,
+): Promise<string> {
+  if (expected.chainId !== configuredChainId) {
+    return Promise.reject(new Error("The approved transaction does not match the app's selected network."));
+  }
+  if (typeof tx.from !== "string" || tx.from.toLowerCase() !== expected.account.toLowerCase()) {
+    return Promise.reject(new Error("The transaction sender does not match the reviewed wallet account."));
+  }
+  let result: Promise<unknown>;
+  try {
+    result = Promise.resolve(provider.request({ method: "eth_sendTransaction", params: [tx] }));
+  } catch (error) {
+    onProviderCall?.();
+    return Promise.reject(error);
+  }
+  onProviderCall?.();
+  return result.then((hash) => {
+    if (!isTxHash(hash)) throw new Error("The wallet did not return a transaction hash.");
+    return hash;
+  });
+}
+
 /** Turns an EIP-1193 or EIP-1474 error into a message that tells the user what to do. */
 export function describeWalletError(err: unknown): { code: WalletErrorCode; message: string } {
   if (err instanceof WalletError) return { code: err.code, message: err.message };

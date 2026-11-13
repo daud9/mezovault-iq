@@ -6,7 +6,7 @@ import {
   prepareOpenTrove,
   type PreparedOpenTrove,
 } from "../../lib/openTroveExecution";
-import { confirmReviewedOpenTrove, formatOpenTroveActionError } from "../../lib/openTroveConfirmation";
+import { formatOpenTroveActionError, recheckReviewedOpenTrove } from "../../lib/openTroveConfirmation";
 import { formatBasisPoints, formatUnits18, MEZO_TESTNET_CHAIN_ID, OPEN_TROVE_SELECTOR } from "../../lib/openTrovePlanner";
 import { OpenTroveReceiptError, readOpenTroveReceipt } from "../../lib/openTroveReceipt";
 import { createRpcClient } from "../../lib/rpc";
@@ -25,6 +25,12 @@ interface ReviewBundle {
   prepared: PreparedOpenTrove;
 }
 
+interface ReadyBundle {
+  key: string;
+  prepared: PreparedOpenTrove;
+  checkedAtMs: number;
+}
+
 interface Submission {
   hash: string;
   prepared: PreparedOpenTrove;
@@ -41,7 +47,7 @@ export function OpenTroveAction({
   onConfirmed(): void;
   onExistingTroveDetected(): void;
 }) {
-  const { state: walletState, network, sendTransaction } = useWallet();
+  const { state: walletState, network, checkWalletContext, sendReviewedTransaction } = useWallet();
   const connectedAccount = walletState.status === "connected" ? walletState.address : null;
   const networkMatches = network.key === "testnet" && network.chainId === MEZO_TESTNET_CHAIN_ID;
   const chainMatches = walletState.chainId === MEZO_TESTNET_CHAIN_ID;
@@ -50,6 +56,7 @@ export function OpenTroveAction({
   const currentReviewKeyRef = useRef(reviewKey);
   currentReviewKeyRef.current = reviewKey;
   const [reviewBundle, setReviewBundle] = useState<ReviewBundle | null>(null);
+  const [readyBundle, setReadyBundle] = useState<ReadyBundle | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState("");
@@ -57,9 +64,11 @@ export function OpenTroveAction({
   const [submission, setSubmission] = useState<Submission | null>(null);
   const [receiptState, setReceiptState] = useState<ReceiptState>({ status: "not-checked" });
   const review = reviewBundle?.key === reviewKey ? reviewBundle.prepared : null;
+  const ready = readyBundle?.key === reviewKey ? readyBundle : null;
 
   useEffect(() => {
     if (reviewBundle && reviewBundle.key !== reviewKey) setReviewBundle(null);
+    if (readyBundle && readyBundle.key !== reviewKey) setReadyBundle(null);
     setError("");
     setNotice("");
   }, [reviewKey]);
@@ -78,6 +87,7 @@ export function OpenTroveAction({
     setError("");
     setNotice("");
     setReviewBundle(null);
+    setReadyBundle(null);
     try {
       const rpc = createRpcClient({ url: resolveRpcUrl(MEZO_NETWORKS.testnet) });
       const prepared = await prepareOpenTrove({
@@ -101,15 +111,16 @@ export function OpenTroveAction({
     }
   }
 
-  async function recheckAndOpenWallet() {
+  async function recheckFinalRequest() {
     if (!review || !eligible || !connectedAccount || busyRef.current || submission) return;
     busyRef.current = true;
     setBusy(true);
     setError("");
     setNotice("");
+    setReadyBundle(null);
     try {
       const rpc = createRpcClient({ url: resolveRpcUrl(MEZO_NETWORKS.testnet) });
-      const result = await confirmReviewedOpenTrove({
+      const result = await recheckReviewedOpenTrove({
         review,
         recheck: () => prepareOpenTrove({
           account: connectedAccount,
@@ -119,8 +130,7 @@ export function OpenTroveAction({
           rpc,
         }),
         reviewIsCurrent: () => currentReviewKeyRef.current === reviewKey,
-        sendTransaction,
-        onWalletRequest: () => setNotice("The exact request still matches the displayed review. Your injected wallet will now show the transaction for your approval; the app will not sign or submit on its own."),
+        checkWalletContext,
       });
       if (result.status === "stale") {
         setReviewBundle(null);
@@ -132,17 +142,62 @@ export function OpenTroveAction({
         setNotice("Live protocol terms or the exact gas result changed. The review has been refreshed, and no wallet request was made. Check the updated values and click again if they are still what you want.");
         return;
       }
-      setSubmission({ hash: result.hash, prepared: result.fresh });
-      setReceiptState({ status: "not-checked" });
-      setReviewBundle(null);
-      setNotice("");
+      setReviewBundle({ key: reviewKey, prepared: result.fresh });
+      setReadyBundle({ key: reviewKey, prepared: result.fresh, checkedAtMs: Date.now() });
+      setNotice("Fresh protocol checks, exact-call simulation, gas estimate, and wallet account/network checks passed. The wallet provider has not been called yet; use the button below for an immediate wallet request.");
     } catch (caught) {
       if (caught instanceof OpenTrovePreflightError) {
         setReviewBundle(null);
+        setReadyBundle(null);
         reportPreflightError(caught);
       } else {
-        setError(formatOpenTroveActionError(caught));
+        setReadyBundle(null);
+        setError(formatOpenTroveActionError(caught, "wallet-context"));
       }
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function openWalletForApproval() {
+    if (!ready || !eligible || !connectedAccount || busyRef.current || submission) return;
+    if (currentReviewKeyRef.current !== reviewKey || ready.prepared.account.toLowerCase() !== connectedAccount.toLowerCase()) {
+      setReadyBundle(null);
+      setNotice("The connected wallet or planner values changed. No wallet request was made; run the final recheck again.");
+      return;
+    }
+    if (Date.now() - ready.checkedAtMs > 15_000) {
+      setReadyBundle(null);
+      setNotice("The final review expired before the wallet tap. No wallet request was made; run the final recheck again.");
+      return;
+    }
+    busyRef.current = true;
+    setBusy(true);
+    setError("");
+    setNotice("Wallet provider call: not made yet.");
+    let providerCalled = false;
+    try {
+      const pending = sendReviewedTransaction(
+        { ...ready.prepared.transaction },
+        { account: ready.prepared.account, chainId: MEZO_TESTNET_CHAIN_ID },
+        () => {
+          providerCalled = true;
+          setNotice(`Wallet provider call: sent eth_sendTransaction to ${walletState.walletName ?? "the selected wallet"}. Waiting for its approval; the app has not signed or submitted automatically.`);
+        },
+      );
+      const hash = await pending;
+      setSubmission({ hash, prepared: ready.prepared });
+      setReceiptState({ status: "not-checked" });
+      setReviewBundle(null);
+      setReadyBundle(null);
+      setNotice("");
+    } catch (caught) {
+      setError(formatOpenTroveActionError(caught));
+      setNotice(providerCalled
+        ? `Wallet provider call: made to ${walletState.walletName ?? "the selected wallet"}, but no transaction hash was returned. Check wallet activity before retrying.`
+        : "Wallet provider call: not made. No transaction request was sent; reconnect and recheck before trying again.");
+      setReadyBundle(null);
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -180,7 +235,7 @@ export function OpenTroveAction({
       <div>
         <p className="text-xs font-medium uppercase tracking-wider text-gold-300">Wallet-confirmed action · open only</p>
         <h3 id="open-trove-action-title" className="mt-1 text-base font-semibold">Open a new Trove</h3>
-        <p className="mt-1 text-sm leading-relaxed text-mist-400">This action uses the editable planner values above. First prepare a fresh review; then a separate click repeats all reads and the exact simulation before opening your wallet. The app never signs or auto-submits.</p>
+        <p className="mt-1 text-sm leading-relaxed text-mist-400">This action uses the editable planner values above. Review the exact request, run a final fresh check, then make one separate tap that immediately calls the selected wallet for your approval. The app never signs or auto-submits.</p>
       </div>
 
       {gateMessage && <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">{gateMessage}</p>}
@@ -192,7 +247,7 @@ export function OpenTroveAction({
           <Button onClick={() => void prepareReview()} disabled={busy || !eligible} className="min-h-11 w-full">
             {busy ? "Checking fresh Testnet conditions…" : "Prepare fresh open-Trove review"}
           </Button>
-          <p className="text-xs leading-relaxed text-mist-500">This first step is read-only and does not open your wallet. After it shows the exact request, review the amounts and gas, then use the separate button to repeat the checks and open your wallet for approval.</p>
+          <p className="text-xs leading-relaxed text-mist-500">This first step is read-only and does not open your wallet. After reviewing the exact amounts and gas, run a separate final freshness check; if it passes unchanged, the next tap immediately sends the request to your wallet.</p>
         </div>
       )}
 
@@ -201,7 +256,7 @@ export function OpenTroveAction({
           <div>
             <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Fresh exact request review</p>
             <p className="mt-1 text-sm font-semibold text-emerald-300">Simulation passed · block {review.snapshot.blockNumber.toLocaleString()}</p>
-            <p className="mt-1 text-xs text-mist-500">Prepared {new Date(review.reviewedAtMs).toLocaleString()}. Final click re-reads and simulates again; if any displayed terms change, it will refresh this review instead of opening the wallet.</p>
+            <p className="mt-1 text-xs text-mist-500">Prepared {new Date(review.reviewedAtMs).toLocaleString()}. The final freshness check repeats the protocol reads, exact simulation, and gas estimate; changed terms refresh this review without calling the wallet.</p>
           </div>
 
           <dl className="grid gap-2 text-sm sm:grid-cols-2">
@@ -230,8 +285,9 @@ export function OpenTroveAction({
           </details>
 
           <p className="text-xs leading-relaxed text-mist-500">The requested MUSD is the `_debtAmount` argument; BTC collateral is attached as native `msg.value`. Borrowing fee, net debt and reserve are calculated from current same-block values. Network gas is paid separately in native BTC, and your wallet shows its fee before approval. A simulation is not a transaction or receipt.</p>
-          <Button onClick={() => void recheckAndOpenWallet()} disabled={busy || !eligible} className="min-h-11 w-full">
-            {busy ? "Rechecking exact transaction…" : "Recheck & open wallet to review and confirm"}
+          {ready && <p className="text-xs leading-relaxed text-emerald-300" role="status">Fresh review passed at {new Date(ready.checkedAtMs).toLocaleTimeString()}. The provider has not been called. Tap the button within 15 seconds; if you wait longer, the app will require another recheck.</p>}
+          <Button onClick={() => void (ready ? openWalletForApproval() : recheckFinalRequest())} disabled={busy || !eligible} className="min-h-11 w-full">
+            {busy ? ready ? "Waiting for wallet approval…" : "Rechecking exact transaction…" : ready ? "Open wallet to review and confirm" : "Run final freshness check"}
           </Button>
         </div>
       )}
