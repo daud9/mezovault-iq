@@ -12,10 +12,13 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { useNativeBalance } from "../hooks/useNativeBalance";
 import { useMusdBalance } from "../hooks/useMusdBalance";
 import { useMezoBalance } from "../hooks/useMezoBalance";
+import { usePoolBtcBalance } from "../hooks/usePoolBtcBalance";
 import { resolveRpcUrl } from "../config/env";
+import { TESTNET_POOL_BTC_TOKEN } from "../config/pools";
 import { createRpcClient } from "../lib/rpc";
 import { formatTokenUnits } from "../lib/tokenAmount";
 import { shortAddress } from "../lib/format";
+import { preparePoolBtcTransfer } from "../lib/poolBtcTransfer";
 import {
   buildTransfer,
   describeSendError,
@@ -28,7 +31,7 @@ import {
   type TxRequest,
 } from "../lib/transfer";
 
-type SendSymbol = "BTC" | "MUSD" | "MEZO";
+type SendSymbol = "BTC" | "MUSD" | "MEZO" | "POOL_BTC";
 
 interface Review {
   recipient: string;
@@ -45,6 +48,7 @@ export function Send() {
   const native = useNativeBalance();
   const musd = useMusdBalance();
   const mezo = useMezoBalance();
+  const poolBtc = usePoolBtcBalance();
 
   const [params] = useSearchParams();
   const prefill = useMemo(() => parsePaymentParams(params), [params]);
@@ -61,17 +65,23 @@ export function Send() {
   const btcBalance = native.view.status === "done" && native.view.result.status === "ok" ? native.view.result : null;
   const musdBalance = musd.view.status === "done" && musd.view.result.status === "ok" ? musd.view.result : null;
   const mezoBalance = mezo.view.status === "done" && mezo.view.result.status === "ok" ? mezo.view.result : null;
+  const poolBtcBalance = poolBtc.view.status === "done" && poolBtc.view.result.status === "ok" &&
+    poolBtc.view.result.tokenAddress.toLowerCase() === TESTNET_POOL_BTC_TOKEN.address.toLowerCase() &&
+    poolBtc.view.result.symbol === "BTC" && poolBtc.view.result.decimals === 18
+    ? poolBtc.view.result
+    : null;
 
-  const options: { value: SendSymbol; label: string }[] = [{ value: "BTC", label: "BTC" }];
+  const options: { value: SendSymbol; label: string }[] = [{ value: "BTC", label: "BTC (native gas)" }];
   if (musdBalance || network.musd) options.push({ value: "MUSD", label: "MUSD" });
   if (mezoBalance) options.push({ value: "MEZO", label: "MEZO" });
+  if (network.key === "testnet" && network.chainId === 31_611) options.push({ value: "POOL_BTC", label: "Pool BTC (ERC-20)" });
 
   const from = state.address;
   const ready = state.status === "connected" && from !== null && isSupportedNetwork;
   const locked = busy !== null || (hash !== null && outcome?.status !== "success" && outcome?.status !== "reverted");
   const reviewContextValid = review !== null && state.status === "connected" && from !== null &&
     from.toLowerCase() === review.tx.from.toLowerCase() && state.chainId === network.chainId && isSupportedNetwork;
-  const balanceText = (view: typeof native.view | typeof musd.view | typeof mezo.view, tokenSymbol: string) => {
+  const balanceText = (view: typeof native.view | typeof musd.view | typeof mezo.view | typeof poolBtc.view, tokenSymbol: string) => {
     if (view.status !== "done") return view.status === "loading" ? "loading" : "not read";
     return view.result.status === "ok" ? `${view.result.formatted} ${tokenSymbol}` : "unavailable";
   };
@@ -79,6 +89,8 @@ export function Send() {
     native.view.status === "done" && native.view.result.status !== "ok" ? `BTC: ${balanceProblem(native.view.result)}` : null,
     musd.view.status === "done" && musd.view.result.status !== "ok" ? `MUSD: ${balanceProblem(musd.view.result)}` : null,
     mezo.view.status === "done" && mezo.view.result.status !== "ok" ? `MEZO: ${balanceProblem(mezo.view.result)}` : null,
+    poolBtc.view.status === "done" && poolBtc.view.result.status !== "ok" ? `Pool BTC (ERC-20): ${balanceProblem(poolBtc.view.result)}` : null,
+    poolBtc.view.status === "done" && poolBtc.view.result.status === "ok" && !poolBtcBalance ? "Pool BTC (ERC-20): the contract address, symbol or decimals did not match the expected Testnet token." : null,
   ].filter((issue): issue is string => issue !== null);
 
   function tokenFor(sym: SendSymbol): { token: SendToken; balanceRaw: bigint | null; decimals: number } | string {
@@ -86,6 +98,14 @@ export function Send() {
     if (sym === "MUSD") {
       if (!network.musd) return "MUSD is not configured on this network.";
       return { token: { kind: "erc20", symbol: "MUSD", decimals: 18, address: network.musd.address }, balanceRaw: musdBalance?.balanceRaw ?? null, decimals: 18 };
+    }
+    if (sym === "POOL_BTC") {
+      if (network.key !== "testnet" || network.chainId !== 31_611) return "Pool BTC (ERC-20) transfers are available only on Mezo Testnet (chain ID 31611).";
+      return {
+        token: { kind: "erc20", symbol: "Pool BTC (ERC-20)", decimals: 18, address: TESTNET_POOL_BTC_TOKEN.address },
+        balanceRaw: poolBtcBalance?.balanceRaw ?? null,
+        decimals: 18,
+      };
     }
     if (!mezoBalance || !network.mezo) return "MEZO is not verified on this network, so it cannot be sent.";
     return {
@@ -107,31 +127,46 @@ export function Send() {
     if (recipientError) problems.push(recipientError);
     const amount = parseAmount(amountText, resolved.decimals);
     if (!amount.ok) problems.push(amount.error);
-    if (btcBalance === null) problems.push("Your BTC balance is not verified yet. Retry its read before preparing a transfer.");
-    if (resolved.token.kind !== "native" && resolved.balanceRaw === null) problems.push(`Your ${symbol} balance is not verified yet. Retry its read before preparing a transfer.`);
+    const isPoolBtc = symbol === "POOL_BTC";
+    if (!isPoolBtc && btcBalance === null) problems.push("Your BTC balance is not verified yet. Retry its read before preparing a transfer.");
+    if (!isPoolBtc && resolved.token.kind !== "native" && resolved.balanceRaw === null) problems.push(`Your ${resolved.token.symbol} balance is not verified yet. Retry its read before preparing a transfer.`);
     if (problems.length > 0 || !amount.ok) return setErrors(problems);
 
     setBusy("estimating");
     try {
       const rpc = createRpcClient({ url: resolveRpcUrl(network) });
-      const tx = buildTransfer(resolved.token, from, recipient as `0x${string}`, amount.raw);
-      const gasLimit = BigInt(await rpc.call<string>("eth_estimateGas", [{ ...tx }]));
-      const gasPrice = BigInt(await rpc.call<string>("eth_gasPrice", []));
-      const feeWei = gasLimit * gasPrice;
-
-      const btcRaw = btcBalance?.balanceRaw ?? null;
-      const balanceProblems: string[] = [];
-      if (btcRaw === null) balanceProblems.push("Your BTC balance is not loaded yet. Wait for it, then try again.");
-      else if (resolved.token.kind === "native") {
-        if (nativeTotalCost(amount.raw, gasLimit, gasPrice) > btcRaw) balanceProblems.push("Insufficient BTC for this amount plus network fees.");
+      let tx: TxRequest;
+      let gasLimit: bigint;
+      let feeWei: bigint;
+      let reviewedAmountRaw = amount.raw;
+      let reviewedAmountText = amountText.trim();
+      if (isPoolBtc) {
+        const prepared = await preparePoolBtcTransfer({ network, owner: from, recipient, amount: amountText, rpc });
+        tx = prepared.transaction;
+        gasLimit = prepared.gasLimit;
+        feeWei = prepared.maximumFeeRaw;
+        reviewedAmountRaw = prepared.amountRaw;
+        reviewedAmountText = prepared.amountText;
       } else {
-        if (feeWei > btcRaw) balanceProblems.push("You need some BTC to pay network fees.");
-        if (resolved.balanceRaw === null) balanceProblems.push(`Your ${symbol} balance is not loaded yet.`);
-        else if (amount.raw > resolved.balanceRaw) balanceProblems.push(`Insufficient ${symbol} for this amount.`);
-      }
-      if (balanceProblems.length > 0) return setErrors(balanceProblems);
+        tx = buildTransfer(resolved.token, from, recipient as `0x${string}`, amount.raw);
+        gasLimit = BigInt(await rpc.call<string>("eth_estimateGas", [{ ...tx }]));
+        const gasPrice = BigInt(await rpc.call<string>("eth_gasPrice", []));
+        feeWei = gasLimit * gasPrice;
 
-      setReview({ recipient, tx, token: resolved.token, amountRaw: amount.raw, amountText: amountText.trim(), feeWei, gasLimit });
+        const btcRaw = btcBalance?.balanceRaw ?? null;
+        const balanceProblems: string[] = [];
+        if (btcRaw === null) balanceProblems.push("Your BTC balance is not loaded yet. Wait for it, then try again.");
+        else if (resolved.token.kind === "native") {
+          if (nativeTotalCost(amount.raw, gasLimit, gasPrice) > btcRaw) balanceProblems.push("Insufficient BTC for this amount plus network fees.");
+        } else {
+          if (feeWei > btcRaw) balanceProblems.push("You need some BTC to pay network fees.");
+          if (resolved.balanceRaw === null) balanceProblems.push(`Your ${resolved.token.symbol} balance is not loaded yet.`);
+          else if (amount.raw > resolved.balanceRaw) balanceProblems.push(`Insufficient ${resolved.token.symbol} for this amount.`);
+        }
+        if (balanceProblems.length > 0) return setErrors(balanceProblems);
+      }
+
+      setReview({ recipient, tx, token: resolved.token, amountRaw: reviewedAmountRaw, amountText: reviewedAmountText, feeWei, gasLimit });
     } catch (err) {
       setErrors([describeSendError(err)]);
     } finally {
@@ -181,6 +216,7 @@ export function Send() {
         native.refresh();
         musd.refresh();
         mezo.refresh();
+        poolBtc.refresh();
       }
       const ledgerStatus: LedgerStatus =
         result.status === "success" ? "success" : result.status === "reverted" ? "reverted" : "unconfirmed";
@@ -206,8 +242,8 @@ export function Send() {
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Standard wallet transfer"
-        title="Send BTC, MUSD or MEZO"
-        description="Review every direct transfer and approve it in your wallet. Direct on-chain transfers require BTC for network fees; gasless x402 MUSD links are a separate feature and require a configured merchant server."
+        title="Send BTC, Pool BTC, MUSD or MEZO"
+        description="BTC (native gas) and Pool BTC (ERC-20) are different assets. Pool BTC is a Testnet token and cannot pay fees. Review every transfer and approve it in your wallet; on-chain transfers need native BTC for network fees."
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -240,7 +276,7 @@ export function Send() {
                 />
               </div>
               <div className="space-y-1.5">
-                <label htmlFor="send-amount" className="text-sm font-medium text-mist-100">Amount ({symbol})</label>
+                <label htmlFor="send-amount" className="text-sm font-medium text-mist-100">Amount ({symbol === "BTC" ? "BTC (native gas)" : symbol === "POOL_BTC" ? "Pool BTC (ERC-20)" : symbol})</label>
                 <input
                   id="send-amount"
                   inputMode="decimal"
@@ -251,14 +287,15 @@ export function Send() {
                   className="w-full rounded-xl border border-line bg-ink-800 px-3 py-2.5 text-sm text-mist-100 outline-none focus:border-gold-500/60"
                 />
                 <p className="text-xs text-mist-500">
-                  Available: {symbol === "BTC" ? balanceText(native.view, "BTC") : symbol === "MUSD" ? balanceText(musd.view, "MUSD") : balanceText(mezo.view, "MEZO")}
+                  Available: {symbol === "BTC" ? balanceText(native.view, "BTC (native gas)") : symbol === "MUSD" ? balanceText(musd.view, "MUSD") : symbol === "POOL_BTC" ? (poolBtcBalance ? `${poolBtcBalance.formatted} Pool BTC (ERC-20)` : poolBtc.view.status === "loading" ? "loading" : poolBtc.view.status === "idle" ? "not read" : "unavailable (token not verified)") : balanceText(mezo.view, "MEZO")}
                 </p>
+                {symbol === "POOL_BTC" && <p className="text-xs leading-relaxed text-mist-500">This is the Testnet pool’s BTC ERC-20 at {TESTNET_POOL_BTC_TOKEN.address}. It is not native BTC and cannot pay gas; transaction fees use your separate native BTC balance.</p>}
               </div>
               {balanceIssues.length > 0 && (
                 <div className="space-y-2 rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3">
                   <p className="text-sm font-medium text-mist-200">Some balance reads are unavailable; a transfer that needs an unverified balance cannot be prepared.</p>
                   <ul className="list-inside list-disc space-y-1 text-xs text-mist-400">{balanceIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
-                  <Button variant="secondary" onClick={() => { native.refresh(); musd.refresh(); mezo.refresh(); }} disabled={busy !== null} className="min-h-11">Retry balance reads</Button>
+                  <Button variant="secondary" onClick={() => { native.refresh(); musd.refresh(); mezo.refresh(); poolBtc.refresh(); }} disabled={busy !== null} className="min-h-11">Retry balance reads</Button>
                 </div>
               )}
               <FormErrors errors={errors} />
@@ -277,9 +314,10 @@ export function Send() {
               <h2 className="text-sm font-semibold text-mist-100">Review before you confirm</h2>
               <dl className="grid gap-3 text-sm">
                 <div><dt className="text-xs text-mist-500">From</dt><dd className="font-mono text-mist-200">{shortAddress(from!)}</dd></div>
-                <div><dt className="text-xs text-mist-500">To</dt><dd className="break-all font-mono text-mist-200">{review.tx.to}</dd></div>
-                <div><dt className="text-xs text-mist-500">Amount</dt><dd className="text-mist-100">{review.amountText} {review.token.symbol}</dd></div>
-                <div><dt className="text-xs text-mist-500">Estimated network fee</dt><dd className="text-mist-100">{formatTokenUnits(review.feeWei, 18, 8)} BTC</dd></div>
+                <div><dt className="text-xs text-mist-500">Recipient</dt><dd className="break-all font-mono text-mist-200">{review.recipient}</dd></div>
+                {review.token.kind === "erc20" && <div><dt className="text-xs text-mist-500">Token contract</dt><dd className="break-all font-mono text-mist-200">{review.tx.to}</dd></div>}
+                <div><dt className="text-xs text-mist-500">Amount</dt><dd className="text-mist-100">{review.amountText} {displayTokenLabel(review.token)}</dd></div>
+                <div><dt className="text-xs text-mist-500">Estimated network fee (native BTC)</dt><dd className="text-mist-100">{formatTokenUnits(review.feeWei, 18, 8)} BTC</dd></div>
                 <div><dt className="text-xs text-mist-500">Network</dt><dd className="text-mist-100">{network.label} (chain {network.chainId})</dd></div>
               </dl>
               <p className="text-xs leading-relaxed text-mist-500">
@@ -335,7 +373,7 @@ export function Send() {
 
           <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
             <p className="font-medium text-mist-200">How this works</p>
-            <p>BTC is sent as the native gas token. MUSD and MEZO are standard token transfers. Each transaction is shown for review, then sent from your wallet; MUSD and MEZO transfers need BTC available for network fees.</p>
+            <p>BTC (native gas) is sent as Mezo’s native asset. Pool BTC (ERC-20), MUSD and MEZO are token transfers to their respective contracts. The Pool BTC option is Testnet-only; all token transfers need separate native BTC for network fees.</p>
             <p>Success is shown only when the network receipt reports success. Until then the transaction is shown as waiting.</p>
           </Card>
         </div>
@@ -350,4 +388,8 @@ function balanceProblem(result: { status: string; message?: string; reason?: str
   if (result.status === "not-configured") return result.reason ?? "No token contract is configured.";
   if (result.status === "no-contract") return "The configured token address has no contract code.";
   return `Read status: ${result.status}.`;
+}
+
+function displayTokenLabel(token: SendToken): string {
+  return token.kind === "native" ? "BTC (native gas)" : token.symbol;
 }

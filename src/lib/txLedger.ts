@@ -10,7 +10,7 @@ export interface LedgerEntry {
   chainId: number;
   from: string;
   to: string;
-  token: "BTC" | "MUSD" | "MEZO";
+  token: "BTC" | "MUSD" | "MEZO" | "Pool BTC (ERC-20)";
   amount: string;
   createdAt: string;
   status: LedgerStatus;
@@ -31,7 +31,7 @@ function isLedgerEntry(value: unknown): value is LedgerEntry {
   return typeof entry.hash === "string" && entry.hash.length > 0 &&
     Number.isSafeInteger(entry.chainId) &&
     typeof entry.from === "string" && typeof entry.to === "string" &&
-    (entry.token === "BTC" || entry.token === "MUSD" || entry.token === "MEZO") &&
+    (entry.token === "BTC" || entry.token === "MUSD" || entry.token === "MEZO" || entry.token === "Pool BTC (ERC-20)") &&
     typeof entry.amount === "string" && typeof entry.createdAt === "string" &&
     (entry.status === "pending" || entry.status === "success" || entry.status === "reverted" || entry.status === "unconfirmed") &&
     (entry.blockNumber === null || Number.isSafeInteger(entry.blockNumber));

@@ -14,13 +14,14 @@ export const TRANSFER_SELECTOR = "0xa9059cbb";
 
 export type SendToken =
   | { kind: "native"; symbol: "BTC"; decimals: 18 }
-  | { kind: "erc20"; symbol: "MUSD" | "MEZO"; decimals: number; address: `0x${string}` };
+  | { kind: "erc20"; symbol: "MUSD" | "MEZO" | "Pool BTC (ERC-20)"; decimals: number; address: `0x${string}` };
 
 export interface TxRequest {
   from: `0x${string}`;
   to: `0x${string}`;
   value: string;
   data?: string;
+  gas?: string;
 }
 
 const ZERO = "0x0000000000000000000000000000000000000000";

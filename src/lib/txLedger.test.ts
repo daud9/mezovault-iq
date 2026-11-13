@@ -30,6 +30,12 @@ describe("transaction ledger", () => {
     assert.equal(readLedger(s)[0].status, "pending");
   });
 
+  it("preserves Pool BTC as a distinct ERC-20 label", () => {
+    const s = memoryStore();
+    addEntry(s, entry("0xbb", { token: "Pool BTC (ERC-20)" }));
+    assert.equal(readLedger(s)[0].token, "Pool BTC (ERC-20)");
+  });
+
   it("updates status from a receipt without duplicating the entry", () => {
     const s = memoryStore();
     addEntry(s, entry("0xaa"));

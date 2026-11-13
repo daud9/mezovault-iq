@@ -20,6 +20,16 @@ export const TESTNET_BASIC_POOLS: PoolRef[] = [
   { id: "musd-musdt", name: "MUSD/mUSDT", address: "0x27414B76CF00E24ed087adb56E26bAeEEe93494e", kind: "stable", source: OFFICIAL_SOURCES.mezoPools },
 ];
 
+/**
+ * The MUSD/BTC pool's transferable BTC ERC-20 output, confirmed from the live
+ * Mezo Testnet pool reads. This is not native BTC and cannot pay gas.
+ */
+export const TESTNET_POOL_BTC_TOKEN = {
+  address: "0x7b7c000000000000000000000000000000000000" as const,
+  symbol: "BTC" as const,
+  decimals: 18 as const,
+};
+
 /** The official Mezo Testnet basic-pool router and its live default factory. */
 export const TESTNET_BASIC_POOL_ROUTER = {
   address: "0x9a1ff7FE3a0F69959A3fBa1F1e5ee18e1A9CD7E9" as const,

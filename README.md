@@ -5,9 +5,9 @@
 
 MezoVault IQ is a Mezo ecosystem web app for wallet balances, MUSD use, transaction history and evidence-based DeFi monitoring. The main demo path is **Overview → MUSD Swap** on Mezo Testnet.
 
-> **Release status (2026-11-13):** the deployed `main` baseline is commit `aca9b29`. The MUSD Swap and closed-Trove history changes described below are local and uncommitted; they have not been pushed, deployed or submitted. The deployed link does not yet contain these changes.
+> **Release status (2026-11-13):** this work starts from deployed `main` commit `5990930`. Pool BTC (ERC-20) Send support is local and uncommitted; it has not been pushed or deployed.
 >
-> **Validation:** `npm test` passes **381 tests**; `npm run typecheck`, `npm run build` and `git diff --check` pass. The production build prints non-fatal third-party annotation and large-chunk warnings. No phone/browser UI test or live Brave wallet-popup test was performed for these local changes. No wallet transaction was signed or broadcast as part of this work; transaction flows were tested with mock RPC/provider tests.
+> **Validation:** `npm test` passes **391 tests**; `npm run typecheck`, `npm run build`, and `git diff --check` pass. The production build emits non-fatal dependency annotation and large-chunk warnings. No phone/browser UI or live wallet-popup test has been performed for this local change. No wallet transaction was signed or broadcast; the new transfer path is covered by mock RPC/provider tests.
 
 ## App inventory and status
 
@@ -17,8 +17,8 @@ MezoVault IQ is a Mezo ecosystem web app for wallet balances, MUSD use, transact
 | --- | --- |
 | **Landing (`/`)** | Product entry page. |
 | **Overview (`/app`)** | Shows live wallet balances where the connected network and token checks pass, plus a partial BTC-only oracle estimate when fresh. Its primary CTA is now MUSD Swap. MUSD and MEZO are not assigned USD values; DeFi positions are not a complete portfolio total. |
-| **MUSD Swap (`/app/swap`)** | New, Testnet-only MUSD → pool-BTC flow. Uses a live router quote, exact minimum-received calculation, exact-call simulation and gas checks. Mock-tested; no swap was sent. Requires wallet-held MUSD and native BTC for fees. The output is a transferable BTC ERC-20, not native gas BTC; the app’s Send page does not yet send this pool token. |
-| **Send (`/app/send`)** | Supports native BTC, MUSD and MEZO when the connected-network token checks pass. The user reviews and confirms in their wallet; status is verified from the receipt. MUSD/MEZO transfers need native BTC for gas. Pool-BTC output is not a Send option. |
+| **MUSD Swap (`/app/swap`)** | Testnet-only MUSD → pool-BTC flow. Uses a live router quote, exact minimum-received calculation, exact-call simulation and gas checks. Mock-tested; no swap was sent. Requires wallet-held MUSD and native BTC for fees. Its transferable BTC ERC-20 output is distinct from native gas BTC and can now be sent using the labeled Pool BTC option. |
+| **Send (`/app/send`)** | Supports native BTC, MUSD, MEZO and the specific Pool BTC (ERC-20) token on Mezo Testnet. The Pool BTC path verifies chain ID, contract bytecode, symbol, 18 decimals, connected-wallet token balance and native BTC gas balance at a pinned current read; it simulates the exact transfer and estimates gas before review. Users still confirm in their wallet. The receipt uses the existing Send status checks. Native BTC remains a separate gas asset. |
 | **MUSD Pay Links (`/app/pay-links`, public `/pay`)** | Seller/buyer x402 implementation and mocked facilitator tests are present. Hosted link creation requires a server-only `PAY_LINK_SECRET` and the dynamic server; readiness of the deployed environment must be checked before claiming hosted payments are available. Buyers authorize payment in their own wallet. |
 | **Legacy Pay (`/app/pay`)** | Legacy request parameters are prefill-only for the standard Send flow. The app no longer generates these links; they are not gasless. |
 | **Activity (`/app/activity`)** | Shows app-submitted transactions and bounded MUSD/MEZO `Transfer` logs with a coverage range and CSV export. Older 5,000-block pages load on demand. Native BTC and complete wallet history are not covered. |
@@ -40,9 +40,15 @@ The screen offers 0.5%, 1.0% and 2.0% slippage choices and calculates minimum re
 
 A successful wallet response is not enough to show success. The receipt reader checks the submitted request, receipt status and expected approval or MUSD/BTC transfer events. If a receipt is missing or does not match, it remains pending or unverified rather than claiming success.
 
-**Live Testnet snapshot:** at block `16,750,468`, the MUSD/BTC pool reported token0 MUSD and token1 `0x7b7c000000000000000000000000000000000000`. That output contract had code, returned symbol `BTC` and 18 decimals, and its `transfer` call returned true in a read-only simulation from the pool. The pool and router both reported the documented factory `0x4947243CC818b627A5D06d14C4eCe7398A23Ce1A`. A one-MUSD quote at that block was `0.000012767548162495` pool-BTC; it is a point-in-time quote, not a promised rate. This token is distinct from native BTC used for gas. The app’s Send page cannot yet transfer it, and no real BTC-token transfer was submitted.
+**Live Testnet snapshot:** at block `16,750,468`, the MUSD/BTC pool reported token0 MUSD and token1 `0x7b7c000000000000000000000000000000000000`. That output contract had code, returned symbol `BTC` and 18 decimals, and its `transfer` call returned true in a read-only simulation from the pool. The pool and router both reported the documented factory `0x4947243CC818b627A5D06d14C4eCe7398A23Ce1A`. A one-MUSD quote at that block was `0.000012767548162495` pool-BTC; it is a point-in-time quote, not a promised rate. This token is distinct from native BTC used for gas. A fresh read-only RPC check for this Send change also confirmed bytecode, `BTC`, and 18 decimals at latest block `0xff9854`; no wallet balance was queried in that check.
 
 The router and pool addresses come from the [official Mezo Pools documentation](https://mezo.org/docs/developers/features/mezo-pools/). MUSD address/decimals are documented in the [Mezo contracts reference](https://mezo.org/docs/users/resources/contracts-reference/). Current runtime checks—not the docs alone—gate the quote and wallet request.
+
+## Pool BTC Send: what is checked
+
+The Send option is labeled **Pool BTC (ERC-20)** and appears only on Mezo Testnet (chain ID `31611`). It targets only `0x7b7c000000000000000000000000000000000000`, not an arbitrary token and not native BTC. Before showing review, the app rechecks the RPC chain, token bytecode, on-chain `BTC` symbol and 18 decimals, the connected wallet’s token balance, and its separate native BTC gas balance at one pinned block. Amounts are parsed as exact integer units and the recipient is validated.
+
+The exact ERC-20 transfer is gas-estimated with a 20% gas-limit buffer, simulated at that block, and blocked if the reviewed maximum fee exceeds the wallet’s native BTC balance. Only the explicit **Confirm in wallet** action asks the selected wallet to send; the user must approve there. The existing Send receipt check continues to report confirmed only on a successful receipt, with missing outcomes left unconfirmed. Mock RPC/provider tests cover the preflight and handoff; no real transfer or live wallet popup was tested.
 
 ## Closed-Trove history: what is verified
 
@@ -56,7 +62,7 @@ The status enum and event are documented in the [Mezo MUSD TroveManager source](
 
 - No smart-vault deposit/withdrawal or verified live yield/TVL feature is exposed.
 - The new swap is MUSD → the one Testnet pool-BTC token only. No Mainnet swap, other pair, native-BTC output, or swap path using Stability Pool-deposited MUSD is implemented.
-- The pool-BTC token is not yet selectable on the Send page, despite its simulated ERC-20 transfer path.
+- Pool BTC sends are limited to this verified Testnet token; there is no generic ERC-20 token import or Mainnet Pool BTC send option.
 - Stability Pool withdrawal and closed-Trove surplus claim are not implemented.
 - Trove borrowing-more, repayment, collateral withdrawal, closure and liquidation are not implemented.
 - MUSD and MEZO dollar prices are not presented; BTC valuation is a partial estimate from Mezo’s BTC/USD oracle and expires when stale.
