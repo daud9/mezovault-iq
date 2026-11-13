@@ -93,6 +93,102 @@ export function formatUnits18(value: bigint, maxFractionDigits = 8): string {
   return fraction ? `${wholeText}.${fraction}` : wholeText;
 }
 
+/** Exact, parser-safe decimal representation for editable transaction inputs. */
+export function formatUnits18Input(value: bigint): string {
+  if (value < 0n) return `-${formatUnits18Input(-value)}`;
+  const whole = value / WAD;
+  const fraction = (value % WAD).toString().padStart(18, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
+}
+
+export type MinimumOpenTroveAmounts =
+  | { status: "ready"; collateralWei: bigint; requestedMusdWei: bigint; collateralBtc: string; requestedMusd: string }
+  | { status: "unavailable"; reason: string };
+
+function ceilDiv(numerator: bigint, denominator: bigint): bigint {
+  return numerator === 0n ? 0n : (numerator + denominator - 1n) / denominator;
+}
+
+/**
+ * Find the smallest exact 18-decimal input pair that passes the live net-debt,
+ * ICR, and (in Normal Mode) post-open TCR equations. The result is only a
+ * prefill; prepareOpenTrove still repeats live reads, eligibility, simulation,
+ * and gas estimation before a wallet request can be enabled.
+ */
+export function calculateMinimumOpenTroveAmounts(
+  snapshot: OpenTroveLiveSnapshot | null,
+  options: PlannerOptions = {},
+): MinimumOpenTroveAmounts {
+  const nowMs = options.nowMs ?? Date.now();
+  const liveError = snapshotError(snapshot, nowMs, options.maxSnapshotAgeMs ?? 60_000, options.maxPriceAgeSeconds ?? 3_600);
+  if (liveError) return { status: "unavailable", reason: liveError };
+
+  const live = snapshot as OpenTroveLiveSnapshot;
+  const feeApplies = live.mode === "normal" && !live.feeExempt;
+  const debtAt = (requestedWei: bigint): bigint | null => {
+    if (feeApplies && live.borrowingRateWei > 0n && requestedWei > UINT256_MAX / live.borrowingRateWei) return null;
+    const feeWei = feeApplies ? (requestedWei * live.borrowingRateWei) / WAD : 0n;
+    const netDebtWei = requestedWei + feeWei;
+    return netDebtWei <= UINT256_MAX ? netDebtWei : null;
+  };
+
+  // First bound the search to amounts whose fee and net debt fit uint256.
+  let validLow = 0n;
+  let validHigh = live.minNetDebtWei + 1n;
+  while (validLow + 1n < validHigh) {
+    const middle = (validLow + validHigh) / 2n;
+    if (debtAt(middle) === null) validHigh = middle;
+    else validLow = middle;
+  }
+  if (validLow === 0n || (debtAt(validLow) ?? 0n) < live.minNetDebtWei) {
+    return { status: "unavailable", reason: "The live minimum debt and fee do not fit the contract's safe amount range." };
+  }
+
+  // Find the first requested amount whose amount-plus-fee reaches minNetDebt.
+  let debtLow = 1n;
+  let debtHigh = validLow;
+  while (debtLow < debtHigh) {
+    const middle = (debtLow + debtHigh) / 2n;
+    const netDebtWei = debtAt(middle);
+    if (netDebtWei !== null && netDebtWei >= live.minNetDebtWei) debtHigh = middle;
+    else debtLow = middle + 1n;
+  }
+  const requestedMusdWei = debtLow;
+  const netDebtWei = debtAt(requestedMusdWei);
+  if (netDebtWei === null || netDebtWei < live.minNetDebtWei) {
+    return { status: "unavailable", reason: "The live minimum debt could not be represented safely." };
+  }
+  const compositeDebtWei = netDebtWei + live.gasCompensationWei;
+  const icrThresholdWei = live.mode === "normal" ? live.mcrWei : live.ccrWei;
+  let collateralWei = ceilDiv(compositeDebtWei * icrThresholdWei, live.btcUsdWei);
+
+  if (live.mode === "normal") {
+    const requiredSystemValue = (live.systemDebtWei + compositeDebtWei) * live.ccrWei;
+    const currentSystemValue = live.systemCollateralBtcWei * live.btcUsdWei;
+    if (requiredSystemValue > currentSystemValue) {
+      collateralWei = collateralWei > ceilDiv(requiredSystemValue - currentSystemValue, live.btcUsdWei)
+        ? collateralWei
+        : ceilDiv(requiredSystemValue - currentSystemValue, live.btcUsdWei);
+    }
+  }
+  if (collateralWei <= 0n || collateralWei > UINT256_MAX) {
+    return { status: "unavailable", reason: "A safe minimum BTC collateral amount could not be calculated from the live terms." };
+  }
+
+  const collateralBtc = formatUnits18Input(collateralWei);
+  const requestedMusd = formatUnits18Input(requestedMusdWei);
+  const plan = calculateOpenTrovePlan(live, collateralBtc, requestedMusd, {
+    nowMs,
+    maxSnapshotAgeMs: options.maxSnapshotAgeMs,
+    maxPriceAgeSeconds: options.maxPriceAgeSeconds,
+  });
+  if (plan.status !== "calculated" || plan.allowed !== true) {
+    return { status: "unavailable", reason: plan.status === "calculated" ? "No passing minimum amount pair is available under the current Testnet conditions." : plan.reason ?? "The live minimum amount calculation is unavailable." };
+  }
+
+  return { status: "ready", collateralWei, requestedMusdWei, collateralBtc, requestedMusd };
+}
+
 /** Percent from basis points, floored so the display never overstates a ratio. */
 export function formatBasisPoints(bps: bigint | null | undefined): string {
   if (bps === null || bps === undefined) return "Unavailable";

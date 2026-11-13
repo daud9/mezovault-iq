@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import { toFunctionSelector } from "viem";
 import {
   calculateOpenTrovePlan,
+  calculateMinimumOpenTroveAmounts,
   formatBasisPoints,
   formatUnits18,
+  formatUnits18Input,
   MEZO_TESTNET_BORROWER_OPERATIONS,
   MEZO_TESTNET_CHAIN_ID,
   OPEN_TROVE_ABI,
@@ -36,6 +38,59 @@ const base = (overrides: Partial<OpenTroveLiveSnapshot> = {}): OpenTroveLiveSnap
 });
 
 describe("read-only open-trove planner", () => {
+  it("derives the smallest fee-adjusted debt and collateral that pass live Normal Mode checks", () => {
+    const result = calculateMinimumOpenTroveAmounts(base(), { nowMs: NOW });
+    assert.equal(result.status, "ready");
+    if (result.status !== "ready") return;
+    assert.equal(result.requestedMusd, "1798.201798201798201799");
+    assert.equal(result.collateralBtc, "0.0275");
+    const exact = calculateOpenTrovePlan(base(), result.collateralBtc, result.requestedMusd, { nowMs: NOW });
+    assert.equal(exact.status, "calculated");
+    if (exact.status === "calculated") {
+      assert.equal(exact.minDebtPass, true);
+      assert.equal(exact.icrPass, true);
+      assert.equal(exact.allowed, true);
+    }
+    const oneWeiLessCollateral = calculateOpenTrovePlan(base(), formatUnits18Input(result.collateralWei - 1n), result.requestedMusd, { nowMs: NOW });
+    assert.equal(oneWeiLessCollateral.status, "calculated");
+    if (oneWeiLessCollateral.status === "calculated") assert.equal(oneWeiLessCollateral.icrPass, false);
+    const oneWeiLessDebt = calculateOpenTrovePlan(base(), result.collateralBtc, formatUnits18Input(result.requestedMusdWei - 1n), { nowMs: NOW });
+    assert.equal(oneWeiLessDebt.status, "calculated");
+    if (oneWeiLessDebt.status === "calculated") assert.equal(oneWeiLessDebt.minDebtPass, false);
+  });
+
+  it("derives no-fee minimum debt for exempt accounts and Recovery Mode", () => {
+    const exempt = calculateMinimumOpenTroveAmounts(base({ feeExempt: true }), { nowMs: NOW });
+    const recovery = calculateMinimumOpenTroveAmounts(base({ mode: "recovery" }), { nowMs: NOW });
+    assert.equal(exempt.status, "ready");
+    assert.equal(recovery.status, "ready");
+    if (exempt.status === "ready") assert.equal(exempt.requestedMusd, "1800");
+    if (recovery.status === "ready") assert.equal(recovery.requestedMusd, "1800");
+  });
+
+  it("adds the exact collateral required to bring a Normal Mode post-open TCR to CCR", () => {
+    const snapshot = base({
+      minNetDebtWei: 100n * WAD,
+      borrowingRateWei: 0n,
+      systemCollateralBtcWei: 15n * WAD / 10n,
+      systemDebtWei: 100_000n * WAD,
+    });
+    const result = calculateMinimumOpenTroveAmounts(snapshot, { nowMs: NOW });
+    assert.equal(result.status, "ready");
+    if (result.status !== "ready") return;
+    const plan = calculateOpenTrovePlan(snapshot, result.collateralBtc, result.requestedMusd, { nowMs: NOW });
+    assert.equal(plan.status, "calculated");
+    if (plan.status === "calculated") {
+      assert.equal(plan.postOpenTcrPass, true);
+      assert.equal(plan.allowed, true);
+    }
+  });
+
+  it("fails closed when the snapshot is stale or no safe amount pair fits", () => {
+    assert.equal(calculateMinimumOpenTroveAmounts(base({ observedAtMs: NOW - 60_001 }), { nowMs: NOW }).status, "unavailable");
+    assert.equal(calculateMinimumOpenTroveAmounts(base({ btcUsdWei: 0n }), { nowMs: NOW }).status, "unavailable");
+  });
+
   it("applies the live-rate floor exactly at minNetDebt and rejects one wei less", () => {
     const exact = calculateOpenTrovePlan(base(), "1", "1798.201798201798201799", { nowMs: NOW });
     assert.equal(exact.status, "calculated");

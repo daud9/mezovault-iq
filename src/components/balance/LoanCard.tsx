@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
@@ -11,6 +11,7 @@ import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
 import { formatTime } from "../../lib/format";
+import { calculateMinimumOpenTroveAmounts, type OpenTroveLiveSnapshot } from "../../lib/openTrovePlanner";
 import { isLoanPriceFresh, isLoanReadFresh, loanReadAgeMs } from "../../lib/loan";
 import { calculateCollateralRatioBps, formatPercentBps } from "../../lib/troveRisk";
 
@@ -21,6 +22,11 @@ export function LoanCard() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [plannerExpanded, setPlannerExpanded] = useState(false);
   const [openTroveConflictAccount, setOpenTroveConflictAccount] = useState<string | null>(null);
+  const [plannerCollateralBtc, setPlannerCollateralBtc] = useState("");
+  const [plannerRequestedMusd, setPlannerRequestedMusd] = useState("");
+  const plannerCollateralTouched = useRef(false);
+  const plannerRequestedTouched = useRef(false);
+  const autoMinimums = useRef<{ accountKey: string; collateralBtc: string; requestedMusd: string } | null>(null);
   const accountKey = state.status === "connected" ? state.address?.toLowerCase() ?? "" : "";
   const previousAccountKey = useRef(accountKey);
   const openTroveConflict = Boolean(accountKey && openTroveConflictAccount === accountKey);
@@ -32,6 +38,11 @@ export function LoanCard() {
     if (previousAccountKey.current !== accountKey) {
       previousAccountKey.current = accountKey;
       setOpenTroveConflictAccount(null);
+      setPlannerCollateralBtc("");
+      setPlannerRequestedMusd("");
+      plannerCollateralTouched.current = false;
+      plannerRequestedTouched.current = false;
+      autoMinimums.current = null;
     }
   }, [accountKey]);
 
@@ -43,11 +54,48 @@ export function LoanCard() {
     : null;
   const plannerEnabled = loan !== null && readFresh && !loan.hasLoan && plannerExpanded && !openTroveConflict;
   const { view: plannerView, refresh: refreshPlanner } = useOpenTroveSnapshot(plannerEnabled);
-  const [plannerCollateralBtc, setPlannerCollateralBtc] = useState("");
-  const [plannerRequestedMusd, setPlannerRequestedMusd] = useState("");
   const plannerSnapshot = plannerView.status === "done" && plannerView.result.status === "ok"
     ? plannerView.result.snapshot
     : null;
+  const applyMinimums = useCallback((snapshot: OpenTroveLiveSnapshot) => {
+    const minimum = calculateMinimumOpenTroveAmounts(snapshot);
+    if (minimum.status !== "ready") return;
+    const previous = autoMinimums.current;
+    const sameAccount = previous?.accountKey === accountKey;
+    if (!sameAccount || !plannerCollateralTouched.current || (previous && plannerCollateralBtc === previous.collateralBtc)) {
+      setPlannerCollateralBtc(minimum.collateralBtc);
+      plannerCollateralTouched.current = false;
+    }
+    if (!sameAccount || !plannerRequestedTouched.current || (previous && plannerRequestedMusd === previous.requestedMusd)) {
+      setPlannerRequestedMusd(minimum.requestedMusd);
+      plannerRequestedTouched.current = false;
+    }
+    autoMinimums.current = { accountKey, collateralBtc: minimum.collateralBtc, requestedMusd: minimum.requestedMusd };
+  }, [accountKey, plannerCollateralBtc, plannerRequestedMusd]);
+  useEffect(() => {
+    if (plannerSnapshot) applyMinimums(plannerSnapshot);
+  }, [plannerSnapshot, applyMinimums]);
+  const changePlannerCollateral = useCallback((value: string) => {
+    plannerCollateralTouched.current = true;
+    setPlannerCollateralBtc(value);
+  }, []);
+  const changePlannerRequested = useCallback((value: string) => {
+    plannerRequestedTouched.current = true;
+    setPlannerRequestedMusd(value);
+  }, []);
+  const refreshOpenTroveReads = useCallback(() => {
+    refresh();
+    refreshPlanner();
+  }, [refresh, refreshPlanner]);
+  const handleTroveConfirmed = useCallback(() => {
+    refresh();
+    refreshPlanner();
+  }, [refresh, refreshPlanner]);
+  const handleExistingTroveDetected = useCallback(() => {
+    if (state.address) setOpenTroveConflictAccount(state.address.toLowerCase());
+    refresh();
+    refreshPlanner();
+  }, [state.address, refresh, refreshPlanner]);
   const plannerUnavailableReason = plannerView.status === "idle"
     ? "Open this section to check current Mezo Testnet conditions."
     : plannerView.status === "done" && plannerView.result.status !== "ok"
@@ -74,7 +122,7 @@ export function LoanCard() {
         <div className="space-y-3">
           <DataStatus state="unavailable" detail="Trove reads disagree for this wallet" />
           <p className="text-sm text-rose-200" role="alert">The open-Trove checks found an existing or non-empty Trove for this account, but the summary read says there is none. No open action is available until a fresh read resolves this mismatch. Refresh the Trove read or verify the selected account; no wallet request was made.</p>
-          <Button variant="secondary" onClick={() => { refresh(); refreshPlanner(); }} className="min-h-11">Refresh Trove read</Button>
+          <Button variant="secondary" onClick={refreshOpenTroveReads} className="min-h-11">Refresh Trove read</Button>
         </div>
       ) : !readFresh ? (
         <div className="space-y-3">
@@ -90,27 +138,26 @@ export function LoanCard() {
             className="rounded-lg border border-line bg-ink-800/40 px-3"
             onToggle={(event) => setPlannerExpanded(event.currentTarget.open)}
           >
-            <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-gold-300">Want to open a new Trove instead?</summary>
+            <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-gold-300">Open a new Trove</summary>
             <div className="space-y-4 pb-4">
-              <p className="text-sm text-mist-400">This is optional. Opening a new Trove requires BTC collateral and creates MUSD debt.</p>
+              <p className="text-sm text-mist-400">Use the live protocol minimums, then confirm once in your wallet.</p>
               <OpenTrovePlanner
                 live={plannerSnapshot}
                 loading={plannerView.status === "loading"}
                 unavailableReason={plannerUnavailableReason}
                 collateralBtc={plannerCollateralBtc}
                 requestedMusd={plannerRequestedMusd}
-                onCollateralBtcChange={setPlannerCollateralBtc}
-                onRequestedMusdChange={setPlannerRequestedMusd}
+                onCollateralBtcChange={changePlannerCollateral}
+                onRequestedMusdChange={changePlannerRequested}
               />
               <OpenTroveAction
+                enabled={plannerExpanded}
                 collateralBtc={plannerCollateralBtc}
                 requestedMusd={plannerRequestedMusd}
-                onConfirmed={() => { refresh(); refreshPlanner(); }}
-                onExistingTroveDetected={() => {
-                  if (state.address) setOpenTroveConflictAccount(state.address.toLowerCase());
-                  refresh();
-                  refreshPlanner();
-                }}
+                onConfirmed={handleTroveConfirmed}
+                onExistingTroveDetected={handleExistingTroveDetected}
+                onFreshSnapshot={applyMinimums}
+                onRefreshMinimums={refreshPlanner}
               />
             </div>
           </details>
@@ -173,7 +220,7 @@ export function LoanCard() {
           <p className="mt-1 text-sm text-mist-400">BTC collateral · MUSD debt</p>
         </div>
         {state.status === "connected" && isSupportedNetwork && (
-          <Button variant="ghost" onClick={() => { refresh(); refreshPlanner(); }} className="min-h-11 px-2" aria-label="Refresh Trove">
+          <Button variant="ghost" onClick={refreshOpenTroveReads} className="min-h-11 px-2" aria-label="Refresh Trove">
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
           </Button>
         )}

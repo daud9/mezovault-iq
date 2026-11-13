@@ -4,7 +4,7 @@ import { MEZO_NETWORKS } from "../config/chains";
 import { MEZO_TESTNET_SELECTORS as S } from "./mezoAbi";
 import { encodeUintResult, fakeFetch, type Handler } from "./testHelpers";
 import { createRpcClient } from "./rpc";
-import { formatOpenTroveActionError, recheckReviewedOpenTrove } from "./openTroveConfirmation";
+import { formatOpenTroveActionError, recheckReviewedOpenTrove, requestReadyOpenTrove } from "./openTroveConfirmation";
 import {
   OpenTrovePreflightError,
   prepareOpenTrove,
@@ -15,6 +15,7 @@ import {
   parseUnits18,
   WAD,
 } from "./openTrovePlanner";
+import { requestReviewedWalletTransaction, type Eip1193Provider } from "./wallet";
 
 const NETWORK = MEZO_NETWORKS.testnet;
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as const;
@@ -340,5 +341,46 @@ describe("final open-Trove confirmation", () => {
     });
     assert.equal(result.status, "changed");
     assert.equal(walletCalls, 0);
+  });
+});
+
+describe("single-tap open-Trove readiness gate", () => {
+  it("calls the mock wallet's eth_sendTransaction synchronously for a fresh ready request", async () => {
+    const prepared = await run().prepared;
+    const methods: string[] = [];
+    const provider: Eip1193Provider = {
+      request: ({ method }) => {
+        methods.push(method);
+        return Promise.resolve(`0x${"d".repeat(64)}`);
+      },
+    };
+    const result = requestReadyOpenTrove({
+      ready: { key: "wallet|amounts", prepared, checkedAtMs: NOW_MS },
+      currentKey: "wallet|amounts",
+      connectedAccount: ACCOUNT,
+      nowMs: NOW_MS,
+      send: (tx, expected, onProviderCall) => requestReviewedWalletTransaction(provider, tx, expected, NETWORK.chainId, onProviderCall),
+    });
+
+    assert.equal(result.status, "requested");
+    assert.deepEqual(methods, ["eth_sendTransaction"]);
+    if (result.status === "requested") assert.equal(await result.promise, `0x${"d".repeat(64)}`);
+  });
+
+  it("does not call the mock wallet for stale snapshots or missing/failed readiness", async () => {
+    const prepared = await run().prepared;
+    const methods: string[] = [];
+    const provider: Eip1193Provider = { request: ({ method }) => { methods.push(method); return Promise.resolve(`0x${"e".repeat(64)}`); } };
+    const send = (tx: Record<string, string | undefined>, expected: { account: `0x${string}`; chainId: number }, onProviderCall?: () => void) =>
+      requestReviewedWalletTransaction(provider, tx, expected, NETWORK.chainId, onProviderCall);
+    const ready = { key: "wallet|amounts", prepared, checkedAtMs: NOW_MS };
+    const stale = requestReadyOpenTrove({ ready, currentKey: ready.key, connectedAccount: ACCOUNT, nowMs: NOW_MS + 60_001, send });
+    const failed = requestReadyOpenTrove({ ready: null, currentKey: ready.key, connectedAccount: ACCOUNT, nowMs: NOW_MS, send });
+    const changed = requestReadyOpenTrove({ ready, currentKey: "other", connectedAccount: ACCOUNT, nowMs: NOW_MS, send });
+
+    assert.equal(stale.status, "stale");
+    assert.equal(failed.status, "not-ready");
+    assert.equal(changed.status, "context-changed");
+    assert.deepEqual(methods, []);
   });
 });

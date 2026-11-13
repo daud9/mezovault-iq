@@ -1,13 +1,7 @@
-import { useEffect, useState, type ReactNode } from "react";
 import {
-  calculateOpenTrovePlan,
-  formatBasisPoints,
-  formatUnits18,
-  WAD,
+  calculateMinimumOpenTroveAmounts,
   type OpenTroveLiveSnapshot,
 } from "../../lib/openTrovePlanner";
-
-const MAX_SNAPSHOT_AGE_MS = 60_000;
 
 export interface OpenTrovePlannerProps {
   /** A coherent, recent snapshot from the app's verified read layer. */
@@ -18,25 +12,10 @@ export interface OpenTrovePlannerProps {
   requestedMusd: string;
   onCollateralBtcChange(value: string): void;
   onRequestedMusdChange(value: string): void;
-  nowMs?: number;
+  disabled?: boolean;
 }
 
-function amount(value: bigint | undefined): string {
-  return value === undefined ? "Unavailable" : `${formatUnits18(value)} MUSD`;
-}
-
-function CheckLine({ label, pass }: { label: string; pass: boolean | null | undefined }) {
-  const text = pass === null || pass === undefined ? "Not applicable" : pass ? "Pass" : "Does not pass";
-  const tone = pass === true ? "text-emerald-300" : pass === false ? "text-rose-300" : "text-mist-400";
-  return (
-    <div className="flex justify-between gap-3 text-sm">
-      <span className="text-mist-300">{label}</span>
-      <span className={tone}>{text}</span>
-    </div>
-  );
-}
-
-/** Live-parameter preview. It has no wallet writer or submission behavior. */
+/** Compact, editable, live-derived prefill; it has no wallet writer behavior. */
 export function OpenTrovePlanner({
   live,
   loading = false,
@@ -45,52 +24,17 @@ export function OpenTrovePlanner({
   requestedMusd,
   onCollateralBtcChange,
   onRequestedMusdChange,
-  nowMs,
+  disabled = false,
 }: OpenTrovePlannerProps) {
-  const [clockMs, setClockMs] = useState(() => Date.now());
-  useEffect(() => {
-    if (nowMs !== undefined || !live) return;
-    setClockMs(Date.now());
-    const timer = setInterval(() => setClockMs(Date.now()), 5_000);
-    return () => clearInterval(timer);
-  }, [live?.blockNumber, live?.observedAtMs, nowMs]);
-  const effectiveNowMs = nowMs ?? clockMs;
-  const plan = calculateOpenTrovePlan(live, collateralBtc, requestedMusd, {
-    nowMs: effectiveNowMs,
-    maxSnapshotAgeMs: MAX_SNAPSHOT_AGE_MS,
-  });
-  const snapshotAgeSeconds = live && Number.isFinite(live.observedAtMs)
-    ? Math.floor((effectiveNowMs - live.observedAtMs) / 1_000)
-    : null;
-  const mcrPercent = live ? formatBasisPoints((live.mcrWei * 10_000n) / WAD) : "Unavailable";
-  const ccrPercent = live ? formatBasisPoints((live.ccrWei * 10_000n) / WAD) : "Unavailable";
-  const rows: ReactNode = plan.status === "calculated" ? (
-    <>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">BTC collateral sent as native transaction value</span><span>{formatUnits18(plan.collateralWei ?? 0n)} BTC</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Requested MUSD (_debtAmount)</span><span>{amount(plan.requestWei)}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Borrowing fee</span><span>{amount(plan.feeWei)}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Net debt (request + fee)</span><span>{amount(plan.netDebtWei)}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">MUSD gas reserve added after minimum debt</span><span>{amount(plan.reserveWei)}</span></div>
-      <div className="flex justify-between gap-3 border-t border-line pt-2 text-sm font-semibold"><span>Composite debt (used for ICR)</span><span>{amount(plan.compositeDebtWei)}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Live BTC/USD oracle price</span><span>${formatUnits18(live?.btcUsdWei ?? 0n, 2)}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Current Mezo system mode</span><span>{live?.mode === "recovery" ? "Recovery Mode" : "Normal Mode"}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Collateral value at live BTC/USD</span><span>${plan.collateralValueWei === undefined ? "Unavailable" : formatUnits18(plan.collateralValueWei)}</span></div>
-      <div className="flex justify-between gap-3 text-sm"><span className="text-mist-300">Open-time ICR</span><span>{formatBasisPoints(plan.icrBasisPoints)}</span></div>
-      <CheckLine label={`Minimum net debt (${live ? formatUnits18(live.minNetDebtWei) : "—"} MUSD; amount + fee)`} pass={plan.minDebtPass} />
-      <CheckLine
-        label={live?.mode === "recovery" ? `Recovery-mode ICR ≥ CCR (${ccrPercent})` : `Normal-mode ICR ≥ MCR (${mcrPercent})`}
-        pass={plan.icrPass}
-      />
-      {live?.mode === "normal" && <CheckLine label={`Post-open TCR ≥ live CCR (${ccrPercent})`} pass={plan.postOpenTcrPass} />}
-    </>
-  ) : null;
+  const minimum = calculateMinimumOpenTroveAmounts(live);
+  const prefillReady = collateralBtc.length > 0 && requestedMusd.length > 0;
 
   return (
-    <section className="space-y-4 rounded-xl border border-line bg-ink-900 p-4 text-mist-100" aria-labelledby="open-trove-planner-title">
+    <section className="space-y-3 rounded-xl border border-line bg-ink-900 p-3 text-mist-100" aria-labelledby="open-trove-planner-title">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wider text-mist-500">MUSD borrowing · Mezo Testnet only</p>
-        <h2 id="open-trove-planner-title" className="mt-1 text-lg font-semibold">Open-Trove planner</h2>
-        <p className="mt-1 text-sm text-mist-400">Edit the collateral and requested MUSD. This live-parameter preview is informational; the separate open-only action below repeats protocol reads, eligibility checks, gas estimation, and exact-call simulation before the wallet is opened.</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Mezo Testnet only</p>
+        <h2 id="open-trove-planner-title" className="mt-1 text-base font-semibold">Open a new Trove</h2>
+        <p className="mt-1 text-sm text-mist-400">Both fields start at the current protocol minimum. Change either amount if you want.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -100,51 +44,48 @@ export function OpenTrovePlanner({
             type="text"
             inputMode="decimal"
             autoComplete="off"
+            spellCheck={false}
             value={collateralBtc}
             onChange={(event) => onCollateralBtcChange(event.currentTarget.value)}
-            placeholder="0.00"
+            placeholder={minimum.status === "ready" ? minimum.collateralBtc : "Calculating…"}
             aria-label="BTC collateral amount"
-            className="min-h-11 w-full rounded-lg border border-line bg-ink-800 px-3 text-mist-100 outline-none focus:border-gold-300"
+            className="min-h-11 w-full rounded-lg border border-line bg-ink-800 px-3 text-mist-100 outline-none focus:border-gold-300 disabled:opacity-60"
+            disabled={disabled || !prefillReady}
           />
         </label>
         <label className="space-y-1 text-sm">
-          <span className="text-mist-300">Requested MUSD (_debtAmount)</span>
+          <span className="text-mist-300">MUSD to borrow</span>
           <input
             type="text"
             inputMode="decimal"
             autoComplete="off"
+            spellCheck={false}
             value={requestedMusd}
             onChange={(event) => onRequestedMusdChange(event.currentTarget.value)}
-            placeholder="0.00"
+            placeholder={minimum.status === "ready" ? minimum.requestedMusd : "Calculating…"}
             aria-label="Requested MUSD debt amount"
-            className="min-h-11 w-full rounded-lg border border-line bg-ink-800 px-3 text-mist-100 outline-none focus:border-gold-300"
+            className="min-h-11 w-full rounded-lg border border-line bg-ink-800 px-3 text-mist-100 outline-none focus:border-gold-300 disabled:opacity-60"
+            disabled={disabled || !prefillReady}
           />
         </label>
       </div>
 
-      {loading ? (
-        <p className="text-sm text-mist-400" role="status">Refreshing same-block Mezo Testnet reads…</p>
-      ) : !live ? (
+      {loading && !prefillReady ? (
+        <p className="text-sm text-mist-400" role="status">Getting live Testnet minimums…</p>
+      ) : !live && !prefillReady ? (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">
-          {unavailableReason ?? "Live protocol data is unavailable. No fallback values are used."}
+          {unavailableReason ?? "Live Testnet terms are unavailable. No fallback amounts are used."}
         </p>
-      ) : plan.status === "unavailable" || plan.status === "invalid-input" ? (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">{plan.reason}</p>
+      ) : minimum.status === "unavailable" && !prefillReady ? (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">{minimum.reason}</p>
       ) : (
-        <div className="space-y-2 rounded-lg border border-line bg-ink-800/60 p-3" aria-live="polite">
-          {rows}
-          <p className={`border-t border-line pt-2 text-sm font-semibold ${plan.allowed ? "text-emerald-300" : "text-rose-300"}`}>
-            {plan.allowed ? "Planner checks pass; final checks still required" : "Planner checks do not pass"}
-          </p>
-        </div>
+        <p className="text-xs leading-relaxed text-amber-200">Protocol minimums · Testnet only. Minimum BTC collateral leaves a thin safety buffer.</p>
       )}
 
-      <p className="text-xs leading-relaxed text-mist-500">
-        {live
-          ? `Mezo Testnet · block ${live.blockNumber} · snapshot ${snapshotAgeSeconds === null ? "time unavailable" : `${snapshotAgeSeconds}s old`} · oracle updated ${new Date(live.priceUpdatedAt * 1_000).toLocaleString()} · ${live.feeExempt ? "fee-exempt account" : "standard fee status"}`
-          : "Live Mezo Testnet parameters and a fresh oracle price are required; hard-coded fallback values are not used."}
-      </p>
-      <p className="text-xs leading-relaxed text-mist-500">This planner is for opening a new Trove only. To add BTC to an existing Trove, use the separate collateral section below. Borrowing more, repaying, withdrawing, closing, and liquidation actions are not available here. No transaction runs without your explicit click and your own wallet approval.</p>
+      <details>
+        <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">How the minimums are calculated</summary>
+        <p className="pb-2 text-xs leading-relaxed text-mist-400">MUSD is calculated from the live minimum net debt and borrowing fee. BTC is calculated from the live oracle price and collateral requirements. The app repeats fresh account, network, protocol, exact-call simulation and gas checks automatically before enabling the wallet button.</p>
+      </details>
     </section>
   );
 }
