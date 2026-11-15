@@ -1,4 +1,4 @@
-import { OFFICIAL_SOURCES } from "./chains";
+import { OFFICIAL_SOURCES } from "./chains.ts";
 
 export const CHAIN_WATCH_SOURCES = {
   buildathon: "https://mezo.org/blog/mezo-buildathon-is-underway/",
