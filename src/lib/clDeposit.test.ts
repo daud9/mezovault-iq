@@ -14,6 +14,7 @@ import {
   encodeClMintCall,
   formatClFeePips,
   formatRawTokenAmount,
+  matchesClTransactionAttribution,
   minimumAmount,
   token0RawValueInToken1Raw,
   parseTokenAmount,
@@ -33,6 +34,7 @@ const WALLET = "0x4444444444444444444444444444444444444444" as const;
 const Q96 = 1n << 96n;
 const BLOCK = "0x100";
 const TIMESTAMP = 10_000;
+const HASH = `0x${"a".repeat(64)}`;
 
 function word(value: bigint | number): string {
   const n = BigInt(value);
@@ -110,6 +112,18 @@ async function makeReview(rpc: RpcClient, nowMs = 20_000, selectedPool = createP
 }
 
 describe("Mezo Testnet Slipstream deposit transaction builder", () => {
+  it("attributes a CL receipt only to the exact submitted hash, wallet, and reviewed contract", () => {
+    const expected = { from: WALLET, to: MANAGER, data: "0x1234", value: "0x0" };
+    const tx = { hash: HASH, ...expected, input: expected.data };
+    assert.equal(matchesClTransactionAttribution(tx, HASH, expected), true);
+    assert.equal(matchesClTransactionAttribution({ ...tx, hash: `0x${"b".repeat(64)}` }, HASH, expected), false);
+    assert.equal(matchesClTransactionAttribution({ ...tx, from: TOKEN0 }, HASH, expected), false);
+    assert.equal(matchesClTransactionAttribution({ ...tx, to: TOKEN0 }, HASH, expected), false);
+    assert.equal(matchesClTransactionAttribution({ ...tx, input: "0xabcd" }, HASH, expected), false);
+    assert.equal(matchesClTransactionAttribution({ ...tx, value: "0x1" }, HASH, expected), false);
+    assert.equal(matchesClTransactionAttribution(null, HASH, expected), false);
+  });
+
   it("encodes the exact 12-word mint tuple, signed ticks, recipient and zero sqrtPriceX96", () => {
     const data = encodeClMintCall({
       token0: TOKEN0,

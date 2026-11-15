@@ -11,7 +11,7 @@ import { WalletDetailsPopover } from "./WalletDetailsPopover";
  * the full address, network status and an app-local disconnect action. Touch targets are at least 44px tall.
  */
 export function WalletButton({ className = "", compact = false }: { className?: string; compact?: boolean }) {
-  const { state, network, isSupportedNetwork, connect, disconnect, switchNetwork } = useWallet();
+  const { state, network, isSupportedNetwork, connect, walletChoices, chooseWallet, disconnect, switchNetwork } = useWallet();
   const [open, setOpen] = useState(false);
   const compactPadding = compact ? "px-2 sm:px-4" : "px-4";
   const compactType = compact ? "max-[360px]:text-xs" : "";
@@ -95,6 +95,16 @@ export function WalletButton({ className = "", compact = false }: { className?: 
               Open in MetaMask app <ExternalLink className="h-4 w-4" aria-hidden="true" />
             </a>
           )}
+        </div>
+      )}
+      {walletChoices.length > 1 && (
+        <div role="group" aria-label="Choose a wallet to connect" className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2.5rem))] space-y-2 rounded-xl border border-line bg-ink-900 p-3 shadow-xl">
+          <p className="px-1 text-xs font-medium text-mist-300">Choose a wallet before connecting</p>
+          {walletChoices.map((wallet) => (
+            <Button key={wallet.uuid} variant="secondary" onClick={() => void chooseWallet(wallet.uuid)} className="min-h-11 w-full justify-start">
+              {wallet.name}
+            </Button>
+          ))}
         </div>
       )}
     </div>

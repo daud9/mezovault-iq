@@ -12,6 +12,7 @@ import { createRpcClient } from "../lib/rpc";
 import { addEntry, browserStore, updateEntryForContext } from "../lib/txLedger";
 import {
   formatMUSDTokenAmount,
+  isMUSDReviewFresh,
   MUSD_SWAP_MAX_REVIEW_AGE_MS,
   MUSD_SWAP_SLIPPAGE_OPTIONS,
   prepareMUSDAction,
@@ -98,7 +99,7 @@ export function MusdSwap() {
       setError("The wallet account or network changed after review. Prepare again before continuing.");
       return;
     }
-    if (!reviewFresh) {
+    if (!isMUSDReviewFresh(prepared.preparedAtMs, Date.now())) {
       setError("This quote and simulation are more than 30 seconds old. Prepare again for a fresh review.");
       return;
     }

@@ -45,6 +45,10 @@
 }
 
 @layer components {
+  .landing-grid {
+    background-image: linear-gradient(to right, #d4af6a 1px, transparent 1px), linear-gradient(to bottom, #d4af6a 1px, transparent 1px);
+    background-size: 64px 64px;
+  }
   .gold-text {
     background: linear-gradient(120deg, var(--color-gold-300), var(--color-gold-500));
     -webkit-background-clip: text;

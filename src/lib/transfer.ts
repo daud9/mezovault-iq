@@ -101,6 +101,7 @@ export type ReceiptOutcome =
 export async function waitForReceipt(options: {
   rpc: RpcClient;
   hash: string;
+  expected: { chainId: number; transaction: TxRequest };
   intervalMs?: number;
   timeoutMs?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -110,11 +111,16 @@ export async function waitForReceipt(options: {
   const sleep = options.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
   const deadline = Date.now() + timeout;
   while (true) {
-    const receipt = await options.rpc.call<{ status: string; blockNumber: string; gasUsed: string } | null>(
-      "eth_getTransactionReceipt",
-      [options.hash],
-    );
+    const chainId = parseChainId(await options.rpc.call<unknown>("eth_chainId"));
+    if (chainId !== options.expected.chainId) throw new Error("The RPC reports a different chain; the transaction outcome is unknown.");
+    const [transaction, receipt] = await Promise.all([
+      options.rpc.call<Record<string, unknown> | null>("eth_getTransactionByHash", [options.hash]),
+      options.rpc.call<Record<string, unknown> | null>("eth_getTransactionReceipt", [options.hash]),
+    ]);
     if (receipt) {
+      if (!matchesSubmittedTransfer(transaction, receipt, options.hash, options.expected.transaction)) {
+        throw new Error("The transaction or receipt does not match the submitted Send request; the outcome is unverified.");
+      }
       const status = parseReceiptQuantity(receipt.status, "receipt status");
       const block = parseReceiptQuantity(receipt.blockNumber, "receipt block number");
       const gasUsed = parseReceiptQuantity(receipt.gasUsed, "receipt gas used");
@@ -125,6 +131,25 @@ export async function waitForReceipt(options: {
     }
     if (Date.now() >= deadline) return { status: "timeout", hash: options.hash };
     await sleep(interval);
+  }
+}
+
+function matchesSubmittedTransfer(
+  transaction: Record<string, unknown> | null,
+  receipt: Record<string, unknown>,
+  hash: string,
+  expected: TxRequest,
+): boolean {
+  if (!transaction || typeof transaction.hash !== "string" || transaction.hash.toLowerCase() !== hash.toLowerCase() ||
+      typeof receipt.transactionHash !== "string" || receipt.transactionHash.toLowerCase() !== hash.toLowerCase() ||
+      typeof transaction.from !== "string" || transaction.from.toLowerCase() !== expected.from.toLowerCase() ||
+      typeof transaction.to !== "string" || transaction.to.toLowerCase() !== expected.to.toLowerCase()) return false;
+  const input = typeof transaction.input === "string" ? transaction.input : transaction.data;
+  if (typeof input !== "string" || input.toLowerCase() !== (expected.data ?? "0x").toLowerCase()) return false;
+  try {
+    return parseReceiptQuantity(transaction.value, "transaction value") === parseReceiptQuantity(expected.value, "reviewed transaction value");
+  } catch {
+    return false;
   }
 }
 

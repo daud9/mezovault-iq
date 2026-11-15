@@ -117,13 +117,21 @@ describe("transaction building", () => {
 });
 
 describe("receipt polling", () => {
-  const receiptHandler = (receipts: (object | null)[]): Handler => {
+  const expected = { chainId: 31_611, transaction: { from: FROM, to: TO, value: "0x1" } };
+  const receiptHandler = (
+    receipts: (object | null)[],
+    overrides: { chainId?: string; transaction?: Record<string, unknown>; receipt?: Record<string, unknown> } = {},
+  ): Handler => {
     let i = 0;
     return (method) => {
+      if (method === "eth_chainId") return overrides.chainId ?? "0x7b7b";
+      if (method === "eth_getTransactionByHash") return {
+        hash: HASH, from: FROM, to: TO, value: "0x1", input: "0x", ...overrides.transaction,
+      };
       if (method === "eth_getTransactionReceipt") {
         const r = receipts[Math.min(i, receipts.length - 1)];
         i++;
-        return r;
+        return r === null ? null : { transactionHash: HASH, ...r, ...overrides.receipt };
       }
       return new Error(`unexpected ${method}`);
     };
@@ -135,6 +143,7 @@ describe("receipt polling", () => {
     const out = await waitForReceipt({
       rpc: rpcFor(receiptHandler([{ status: "0x1", blockNumber: "0x10", gasUsed: "0x5208" }])),
       hash: HASH,
+      expected,
       sleep: noSleep,
     });
     assert.equal(out.status, "success");
@@ -145,6 +154,7 @@ describe("receipt polling", () => {
     const out = await waitForReceipt({
       rpc: rpcFor(receiptHandler([{ status: "0x0", blockNumber: "0x10", gasUsed: "0x5208" }])),
       hash: HASH,
+      expected,
       sleep: noSleep,
     });
     assert.equal(out.status, "reverted");
@@ -154,6 +164,7 @@ describe("receipt polling", () => {
     await assert.rejects(waitForReceipt({
       rpc: rpcFor(receiptHandler([{ status: "0x2", blockNumber: "0x10", gasUsed: "0x5208" }])),
       hash: HASH,
+      expected,
       sleep: noSleep,
     }), /unknown transaction receipt status/);
   });
@@ -162,6 +173,7 @@ describe("receipt polling", () => {
     await assert.rejects(waitForReceipt({
       rpc: rpcFor(receiptHandler([{ status: "garbage", blockNumber: "0x10", gasUsed: "0x5208" }])),
       hash: HASH,
+      expected,
       sleep: noSleep,
     }), /invalid receipt status/);
   });
@@ -170,6 +182,7 @@ describe("receipt polling", () => {
     const out = await waitForReceipt({
       rpc: rpcFor(receiptHandler([null, null, { status: "0x1", blockNumber: "0x2", gasUsed: "0x1" }])),
       hash: HASH,
+      expected,
       sleep: noSleep,
     });
     assert.equal(out.status, "success");
@@ -179,11 +192,29 @@ describe("receipt polling", () => {
     const out = await waitForReceipt({
       rpc: rpcFor(receiptHandler([null])),
       hash: HASH,
+      expected,
       intervalMs: 1,
       timeoutMs: 0,
       sleep: noSleep,
     });
     assert.equal(out.status, "timeout");
+  });
+
+  it("rejects a wrong RPC chain or any hash, sender, target, or receipt-hash mismatch", async () => {
+    for (const overrides of [
+      { chainId: "0x1" },
+      { transaction: { hash: `0x${"b".repeat(64)}` } },
+      { transaction: { from: TO } },
+      { transaction: { to: FROM } },
+      { receipt: { transactionHash: `0x${"b".repeat(64)}` } },
+    ]) {
+      await assert.rejects(waitForReceipt({
+        rpc: rpcFor(receiptHandler([{ status: "0x1", blockNumber: "0x10", gasUsed: "0x5208" }], overrides)),
+        hash: HASH,
+        expected,
+        sleep: noSleep,
+      }));
+    }
   });
 });
 

@@ -7,7 +7,7 @@ import { createRpcClient } from "./rpc";
 import { encodeAddressWord } from "./abi";
 import { fakeFetch, encodeStringResult, encodeUintResult } from "./testHelpers";
 import { TRANSFER_TOPIC } from "./transferLogs";
-import { formatMUSDTokenAmount, minimumReceived, parseMUSDAmount, prepareMUSDAction, readMUSDReceipt, type PreparedMUSDAction } from "./musdSwap";
+import { formatMUSDTokenAmount, isMUSDReviewFresh, minimumReceived, parseMUSDAmount, prepareMUSDAction, readMUSDReceipt, type PreparedMUSDAction } from "./musdSwap";
 
 const NETWORK = MEZO_NETWORKS.testnet;
 const ACCOUNT = "0x1111111111111111111111111111111111111111" as const;
@@ -172,6 +172,12 @@ function transferLog(token: string, from: string, to: string, amount: bigint) {
 }
 
 describe("MUSD swap input and route calculations", () => {
+  it("expires a reviewed action from the current clock even if the render interval has not refreshed", () => {
+    assert.equal(isMUSDReviewFresh(NOW_MS, NOW_MS + 30_000), true);
+    assert.equal(isMUSDReviewFresh(NOW_MS, NOW_MS + 30_001), false);
+    assert.equal(isMUSDReviewFresh(NOW_MS, NOW_MS - 1), false);
+  });
+
   it("parses exact 18-decimal MUSD amounts and rejects unsafe input", () => {
     assert.equal(parseMUSDAmount("2.000000000000000001"), 2n * WAD + 1n);
     for (const value of ["0", "-1", "1e3", ".2", "1.0000000000000000001", ""]) {

@@ -176,13 +176,24 @@ describe("Pool BTC (ERC-20) Testnet transfer preflight", () => {
   });
 
   it("uses the existing receipt polling semantics without submitting anything through RPC", async () => {
-    const mock = fakeFetch((method) => method === "eth_getTransactionReceipt"
-      ? { status: "0x1", blockNumber: "0x101", gasUsed: "0x5208" }
-      : new Error(`unexpected RPC method ${method}`));
+    const run = setup();
+    const prepared = await run.prepared;
+    const mock = fakeFetch((method) => {
+      if (method === "eth_chainId") return "0x7b7b";
+      if (method === "eth_getTransactionByHash") return {
+        hash: HASH,
+        from: prepared.transaction.from,
+        to: prepared.transaction.to,
+        value: prepared.transaction.value,
+        input: prepared.transaction.data,
+      };
+      if (method === "eth_getTransactionReceipt") return { transactionHash: HASH, status: "0x1", blockNumber: "0x101", gasUsed: "0x5208" };
+      return new Error(`unexpected RPC method ${method}`);
+    });
     const rpc = createRpcClient({ url: NETWORK.rpcUrl, fetchImpl: mock.fetchImpl });
-    const outcome = await waitForReceipt({ rpc, hash: HASH, sleep: async () => {} });
+    const outcome = await waitForReceipt({ rpc, hash: HASH, expected: { chainId: 31_611, transaction: prepared.transaction }, sleep: async () => {} });
     assert.equal(outcome.status, "success");
-    assert.deepEqual(mock.calls.map((call) => call.method), ["eth_getTransactionReceipt"]);
+    assert.deepEqual(mock.calls.map((call) => call.method), ["eth_chainId", "eth_getTransactionByHash", "eth_getTransactionReceipt"]);
     assert.equal(mock.calls.some((call) => call.method === "eth_sendTransaction"), false);
   });
 });

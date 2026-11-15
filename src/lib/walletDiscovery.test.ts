@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { buildMobileWalletLink, discoverProviders, isMobileUserAgent, selectWallet, type DiscoveredWallet } from "./walletDiscovery";
+import { buildMobileWalletLink, collectWalletChoices, discoverProviders, isMobileUserAgent, selectWallet, type DiscoveredWallet } from "./walletDiscovery";
 import type { Eip1193Provider } from "./wallet";
 
 const stub = (): Eip1193Provider => ({ request: async () => null });
@@ -47,8 +47,21 @@ describe("EIP-6963 discovery", () => {
 describe("wallet selection", () => {
   const discovered: DiscoveredWallet[] = [{ uuid: "a", name: "Wallet A", provider: stub() }];
 
+  it("retains distinct announced and legacy providers for explicit selection without duplicating the same object", () => {
+    const legacy = stub();
+    assert.deepEqual(collectWalletChoices(discovered, legacy).map((wallet) => wallet.name), ["Wallet A", "Browser wallet"]);
+    assert.equal(collectWalletChoices(discovered, discovered[0].provider).length, 1);
+  });
+
   it("prefers a discovered wallet over window.ethereum", () => {
     assert.equal(selectWallet(discovered, stub())?.name, "Wallet A");
+  });
+
+  it("requires an explicit choice when several announced wallets are available", () => {
+    assert.equal(selectWallet([
+      ...discovered,
+      { uuid: "b", name: "Wallet B", provider: stub() },
+    ], stub()), null);
   });
 
   it("falls back to window.ethereum", () => {

@@ -10,6 +10,9 @@ import { isTxHash } from "./transfer";
 
 export interface Eip1193Provider {
   request(args: { method: string; params?: unknown }): Promise<unknown>;
+  /** Optional synchronous wallet hints exposed by some injected providers. */
+  selectedAddress?: unknown;
+  chainId?: unknown;
   on?(event: string, listener: (...args: unknown[]) => void): void;
   removeListener?(event: string, listener: (...args: unknown[]) => void): void;
 }
@@ -210,10 +213,25 @@ export function requestCachedReviewedWalletTransaction(
   if (contextPending) {
     return Promise.reject(new Error("Wallet account or network is changing. Review again."));
   }
+  if (!isSynchronousWalletContextCurrent(provider, expected)) {
+    return Promise.reject(new Error("The wallet account or network changed. Review again."));
+  }
   if (!isCachedWalletContextCurrent(current, expected, configuredChainId)) {
     return Promise.reject(new Error("Wallet account or network changed. Review again."));
   }
   return requestReviewedWalletTransaction(provider, tx, expected, configuredChainId, onProviderCall);
+}
+
+/** Checks non-standard provider hints synchronously without delaying the final wallet request. */
+export function isSynchronousWalletContextCurrent(provider: Eip1193Provider, expected: WalletExpectation): boolean {
+  try {
+    if ("selectedAddress" in provider &&
+        (!isAddress(provider.selectedAddress) || provider.selectedAddress.toLowerCase() !== expected.account.toLowerCase())) return false;
+    if ("chainId" in provider && parseChainId(provider.chainId) !== expected.chainId) return false;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** Turns an EIP-1193 or EIP-1474 error into a message that tells the user what to do. */
@@ -299,7 +317,7 @@ export function walletReducer(state: WalletState, action: WalletAction): WalletS
       }
       return state.status === "connected" ? { ...state, address: action.address, error: null } : state;
     case "provider-disconnected":
-      return state.status === "connected"
+      return state.status === "connected" || state.status === "connecting"
         ? { ...INITIAL_WALLET_STATE, walletFound: state.walletFound, walletName: state.walletName, error: "Your wallet disconnected." }
         : state;
     case "disconnect":

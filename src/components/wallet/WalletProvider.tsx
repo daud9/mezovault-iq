@@ -1,11 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import type { MezoNetworkConfig } from "../../config/chains";
 import { DEFAULT_NETWORK } from "../../config/env";
 import type { ClientEvmSigner } from "@x402/evm";
 import { MEZO_NETWORKS } from "../../config/chains";
 import { isAddress } from "../../lib/abi";
 import { parseChainId } from "../../lib/network";
-import { discoverProviders, selectWallet } from "../../lib/walletDiscovery";
+import { collectWalletChoices, discoverProviders, selectWallet, type DiscoveredWallet } from "../../lib/walletDiscovery";
 import {
   describeWalletError,
   assertWalletContext,
@@ -28,6 +28,8 @@ interface WalletContextValue {
   network: MezoNetworkConfig;
   isSupportedNetwork: boolean;
   connect: () => Promise<void>;
+  walletChoices: DiscoveredWallet[];
+  chooseWallet: (uuid: string) => Promise<void>;
   disconnect: () => void;
   switchNetwork: () => Promise<void>;
   switchToTestnet: () => Promise<void>;
@@ -51,6 +53,8 @@ const WalletContext = createContext<WalletContextValue | null>(null);
  */
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(walletReducer, INITIAL_WALLET_STATE);
+  const [walletChoices, setWalletChoices] = useState<DiscoveredWallet[]>([]);
+  const walletChoicesRef = useRef<DiscoveredWallet[]>([]);
   const providerRef = useRef<Eip1193Provider | null>(null);
   const detachRef = useRef<(() => void) | null>(null);
   const cachedWalletContextRef = useRef<CachedWalletContext>({ account: null, chainId: null });
@@ -115,13 +119,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   /** Finds a wallet, or returns null after the discovery window closes. */
   const resolveProvider = useCallback(async (): Promise<Eip1193Provider | null> => {
     if (providerRef.current) return providerRef.current;
+    if (walletChoicesRef.current.length > 1) return null;
     const discovered = await discoverProviders(window, 300);
     const injected = window.ethereum ?? null;
-    const selected = selectWallet(discovered, injected);
+    const candidates = collectWalletChoices(discovered, injected);
+    if (candidates.length > 1) {
+      walletChoicesRef.current = candidates;
+      setWalletChoices(candidates);
+      return null;
+    }
+    const selected = selectWallet(candidates, null);
     if (!selected) {
       dispatch({ type: "no-wallet" });
       return null;
     }
+    walletChoicesRef.current = [];
+    setWalletChoices([]);
     providerRef.current = selected.provider;
     dispatch({ type: "wallet-found", name: selected.name });
     attach(selected.provider);
@@ -151,9 +164,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    void resolveProvider();
     return () => detachRef.current?.();
-  }, [resolveProvider]);
+  }, []);
 
   const connect = useCallback(async () => {
     const operationId = ++walletOperationGenerationRef.current;
@@ -167,7 +179,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (manualDisconnectRef.current || operationId !== walletOperationGenerationRef.current) return;
       if (!provider) {
         walletContextPendingRef.current = false;
-        dispatch({ type: "connect-error", message: NO_WALLET_MESSAGE });
+        dispatch({ type: "connect-error", message: walletChoicesRef.current.length > 1 ? "Choose a wallet before connecting." : NO_WALLET_MESSAGE });
         return;
       }
       await requestAccount(provider);
@@ -180,6 +192,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       dispatch({ type: "connect-error", message: describeWalletError(err).message });
     }
   }, [readAndCommitWalletContext, resolveProvider]);
+
+  const chooseWallet = useCallback(async (uuid: string) => {
+    const selected = walletChoicesRef.current.find((wallet) => wallet.uuid === uuid);
+    if (!selected) return;
+    walletChoicesRef.current = [];
+    setWalletChoices([]);
+    providerRef.current = selected.provider;
+    dispatch({ type: "wallet-found", name: selected.name });
+    attach(selected.provider);
+    await connect();
+  }, [attach, connect]);
 
   const switchNetwork = useCallback(async () => {
     const operationId = ++walletOperationGenerationRef.current;
@@ -330,6 +353,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       network,
       isSupportedNetwork: state.chainId === network.chainId,
       connect,
+      walletChoices,
+      chooseWallet,
       disconnect,
       switchNetwork,
       switchToTestnet,
@@ -339,7 +364,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       sendReviewedTransaction,
       signMessage,
     }),
-    [state, network, connect, disconnect, switchNetwork, switchToTestnet, createX402Signer, sendTransaction, checkWalletContext, sendReviewedTransaction, signMessage],
+    [state, network, connect, walletChoices, chooseWallet, disconnect, switchNetwork, switchToTestnet, createX402Signer, sendTransaction, checkWalletContext, sendReviewedTransaction, signMessage],
   );
 
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;

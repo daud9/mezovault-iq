@@ -8,6 +8,7 @@ import { fakeFetch, encodeUintResult, OWNER, type Handler } from "./testHelpers"
 import {
   ADD_COLL_SELECTOR,
   encodeAddCollateralCalldata,
+  getInitialAddCollateralReviewOutcome,
   prepareAddCollateral,
   sameAddCollateralReview,
 } from "./addCollateralExecution";
@@ -193,6 +194,7 @@ describe("Mezo Testnet addColl execution preflight", () => {
     const changedPosition = await prepare(run({ coll: 3n * E18 }).rpc);
     const changedBalance = await prepare(run({ balanceWei: 3n * E18 }).rpc);
     assert.equal(sameAddCollateralReview(first, same), true);
+    assert.deepEqual(getInitialAddCollateralReviewOutcome(first, same), { prepared: same, changed: false });
     assert.equal(sameAddCollateralReview(first, changedAmount), false);
     assert.equal(sameAddCollateralReview(first, changedPosition), false);
     assert.equal(sameAddCollateralReview(first, changedBalance), false);

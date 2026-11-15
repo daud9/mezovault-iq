@@ -1,12 +1,12 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FacilitatorClient } from "@x402/core/server";
 import { buildLinkAuthorizationMessage, X402_TESTNET_NETWORK } from "../src/lib/x402PayLinks.ts";
-import { createMerchantApp, FixedWindowLimiter } from "./app.ts";
+import { buildContentSecurityPolicy, createMerchantApp, FixedWindowLimiter } from "./app.ts";
 
 const SECRET = "test-only-hmac-key-do-not-use-in-production-0001";
 const RECIPIENT = "0x1111111111111111111111111111111111111111" as const;
@@ -48,6 +48,7 @@ class MockFacilitator implements FacilitatorClient {
   settlementNetwork: `${string}:${string}` = X402_TESTNET_NETWORK;
   settlementAmount: string | null = null;
   settlementTransaction = FAKE_TX;
+  settlementPayer: string | null = BUYER;
 
   async getSupported(): ReturnType<FacilitatorClient["getSupported"]> {
     return {
@@ -68,7 +69,7 @@ class MockFacilitator implements FacilitatorClient {
       success: this.settlementSucceeds,
       transaction: this.settlementSucceeds ? this.settlementTransaction : "",
       network: this.settlementNetwork,
-      payer: BUYER,
+      ...(this.settlementPayer ? { payer: this.settlementPayer } : {}),
       ...(this.settlementSucceeds ? { amount: this.settlementAmount ?? requirements.amount } : { errorReason: "mock_settlement_failure", errorMessage: "Mock failure" }),
     };
   }
@@ -278,7 +279,7 @@ describe("Mezo Testnet x402 pay-link server", () => {
       assert.ok(encoded);
       const required = decodePaymentRequired(encoded);
       const accepts = required.accepts as Array<Record<string, unknown>>;
-      const payload = { x402Version: 2, resource: required.resource, accepted: accepts[0], payload: { signature: TEST_SIGNATURE } };
+      const payload = { x402Version: 2, resource: required.resource, accepted: accepts[0], payload: { authorization: { from: BUYER }, signature: TEST_SIGNATURE } };
       const response = await fetch(link.resourceUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json", "PAYMENT-SIGNATURE": encodeHeader(payload) },
@@ -290,6 +291,32 @@ describe("Mezo Testnet x402 pay-link server", () => {
       assert.equal(body.error, "settlement_receipt_mismatch");
       assert.equal(body.network, mismatch.network);
       assert.equal(body.transaction, FAKE_TX);
+      assert.equal(facilitator.verifies.length, 1);
+      assert.equal(facilitator.settles.length, 1);
+    }
+  });
+
+  it("never returns HTTP 200 when the facilitator payer is missing or differs from the verified buyer", async (t) => {
+    for (const settlementPayer of ["0x4444444444444444444444444444444444444444", null]) {
+      const facilitator = new MockFacilitator();
+      facilitator.settlementPayer = settlementPayer;
+      const running = await startApp(makeApp(facilitator));
+      t.after(running.close);
+      const link = await createLink(running.baseUrl);
+      const challenge = await fetch(link.resourceUrl, {
+        method: "POST", headers: { Accept: "application/json", "Content-Type": "application/json" }, body: linkBody(link.token),
+      });
+      const required = decodePaymentRequired(challenge.headers.get("payment-required")!);
+      const accepts = required.accepts as Array<Record<string, unknown>>;
+      const payload = { x402Version: 2, resource: required.resource, accepted: accepts[0], payload: { authorization: { from: BUYER }, signature: TEST_SIGNATURE } };
+      const response = await fetch(link.resourceUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "PAYMENT-SIGNATURE": encodeHeader(payload) },
+        body: linkBody(link.token),
+      });
+      assert.equal(response.status, 502);
+      assert.equal(response.headers.get("payment-response"), null);
+      assert.equal((await response.json() as { error: string }).error, "settlement_payer_mismatch");
       assert.equal(facilitator.verifies.length, 1);
       assert.equal(facilitator.settles.length, 1);
     }
@@ -413,5 +440,61 @@ describe("API not-found behavior with SPA serving enabled", () => {
     assert.equal(clientRoute.status, 200);
     assert.match(clientRoute.headers.get("content-type") ?? "", /^text\/html/i);
     assert.match(await clientRoute.text(), /SPA fixture/);
+  });
+});
+
+describe("global security headers", () => {
+  it("protects SPA HTML, JavaScript, CSS, and API responses with a narrow CSP and baseline headers", async (t) => {
+    const staticDir = await mkdtemp(join(tmpdir(), "mezovault-iq-headers-"));
+    await mkdir(join(staticDir, "assets"));
+    await writeFile(join(staticDir, "index.html"), "<!doctype html><title>SPA fixture</title>", "utf8");
+    await writeFile(join(staticDir, "assets", "app.js"), "console.log('ok')", "utf8");
+    await writeFile(join(staticDir, "assets", "app.css"), "body { color: black }", "utf8");
+    t.after(async () => { await rm(staticDir, { recursive: true, force: true }); });
+
+    const running = await startApp(createMerchantApp({
+      facilitator: new MockFacilitator(),
+      staticDir,
+      testnetRpcUrl: "https://custom-rpc.example/private/path?token=must-not-appear",
+    }));
+    t.after(running.close);
+
+    for (const path of ["/", "/assets/app.js", "/assets/app.css", "/api/pay-links/status"]) {
+      const response = await fetch(`${running.baseUrl}${path}`);
+      assert.equal(response.status, 200, path);
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff", path);
+      assert.equal(response.headers.get("x-frame-options"), "DENY", path);
+      assert.equal(response.headers.get("permissions-policy"), "camera=(), microphone=(), geolocation=()", path);
+      assert.equal(response.headers.get("referrer-policy"), "strict-origin-when-cross-origin", path);
+      assert.equal(response.headers.get("strict-transport-security"), "max-age=31536000");
+      assert.equal(response.headers.get("x-powered-by"), null);
+      const policy = response.headers.get("content-security-policy") ?? "";
+      assert.match(policy, /default-src 'none'/);
+      const connectDirective = policy.split(";").find((directive) => directive.trim().startsWith("connect-src ")) ?? "";
+      for (const origin of [
+        "https://rpc.test.mezo.org",
+        "https://mezo-mainnet.boar.network",
+        "https://ethereum-rpc.publicnode.com",
+        "https://base-rpc.publicnode.com",
+        "https://bsc-rpc.publicnode.com",
+        "https://api.testnet.wormholescan.io",
+        "https://custom-rpc.example",
+      ]) assert.ok(connectDirective.includes(origin), `connect-src is missing ${origin}`);
+      assert.match(policy, /https:\/\/fonts\.googleapis\.com/);
+      assert.match(policy, /https:\/\/fonts\.gstatic\.com/);
+      assert.match(policy, /script-src 'self' chrome-extension: moz-extension: safari-web-extension:/);
+      assert.match(policy, /style-src-attr 'none'/);
+      assert.doesNotMatch(policy, /unsafe-inline|private\/path|token=must-not-appear|evil\.example/);
+    }
+
+    const secure = await fetch(`${running.baseUrl}/api/pay-links/status`, { headers: { "X-Forwarded-Proto": "https" } });
+    assert.equal(secure.headers.get("strict-transport-security"), "max-age=31536000");
+  });
+
+  it("ignores invalid or insecure custom RPC URLs rather than broadening connect-src", () => {
+    for (const value of ["not a URL", "http://rpc.example/path", "ws://rpc.example"]) {
+      const policy = buildContentSecurityPolicy(value);
+      assert.doesNotMatch(policy, /rpc\.example/);
+    }
   });
 });

@@ -7,6 +7,7 @@ import {
   NO_WALLET_MESSAGE,
   requestAccount,
   requestCachedReviewedWalletTransaction,
+  isSynchronousWalletContextCurrent,
   readStableWalletContext,
   requestReviewedWalletTransaction,
   requestWalletTransaction,
@@ -234,6 +235,13 @@ describe("wallet state machine", () => {
     assert.deepEqual(walletReducer(INITIAL_WALLET_STATE, { type: "provider-disconnected" }), INITIAL_WALLET_STATE);
   });
 
+  it("clears a pending connection when the provider disconnects", () => {
+    const connecting = walletReducer(INITIAL_WALLET_STATE, { type: "connect-start" });
+    const disconnected = walletReducer(connecting, { type: "provider-disconnected" });
+    assert.equal(disconnected.status, "disconnected");
+    assert.equal(disconnected.error, "Your wallet disconnected.");
+  });
+
   it("clears the connection on disconnect and keeps discovery results", () => {
     const s = walletReducer(connected, { type: "disconnect" });
     assert.equal(s.status, "disconnected");
@@ -335,5 +343,21 @@ describe("requestCachedReviewedWalletTransaction", () => {
     assert.deepEqual(calls, ["eth_sendTransaction"]);
     resolveSend?.(`0x${"b".repeat(64)}`);
     assert.equal(await pending, `0x${"b".repeat(64)}`);
+  });
+
+  it("blocks synchronously mismatched provider account or chain hints before the wallet request", async () => {
+    const tx = { from: ADDR, to: "0x2222222222222222222222222222222222222222", value: "0x0" };
+    const expected = { account: ADDR, chainId: 31_611 };
+    const context = { account: ADDR, chainId: 31_611 };
+    const accountMismatch = provider(() => `0x${"c".repeat(64)}`);
+    Object.assign(accountMismatch.p, { selectedAddress: "0x3333333333333333333333333333333333333333", chainId: "0x7b7b" });
+    await assert.rejects(requestCachedReviewedWalletTransaction(accountMismatch.p, tx, expected, context, 31_611), /account or network changed/);
+    assert.deepEqual(accountMismatch.calls, []);
+
+    const chainMismatch = provider(() => `0x${"c".repeat(64)}`);
+    Object.assign(chainMismatch.p, { selectedAddress: ADDR, chainId: "0x1" });
+    await assert.rejects(requestCachedReviewedWalletTransaction(chainMismatch.p, tx, expected, context, 31_611), /account or network changed/);
+    assert.deepEqual(chainMismatch.calls, []);
+    assert.equal(isSynchronousWalletContextCurrent(accountMismatch.p, expected), false);
   });
 });

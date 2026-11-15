@@ -54,12 +54,22 @@ export function discoverProviders(target: EventTarget, timeoutMs = 300): Promise
   });
 }
 
-/** Prefers an EIP-6963 wallet, then falls back to window.ethereum. Returns null when neither exists. */
+/** Preserves every announced provider and adds a distinct legacy provider as an explicit candidate. */
+export function collectWalletChoices(discovered: DiscoveredWallet[], injected: Eip1193Provider | null): DiscoveredWallet[] {
+  const candidates = [...discovered];
+  if (injected && !candidates.some((candidate) => candidate.provider === injected)) {
+    candidates.push({ uuid: "legacy-window-ethereum", name: "Browser wallet", provider: injected });
+  }
+  return candidates;
+}
+
+/** Selects only a sole candidate; multiple providers require explicit user selection. */
 export function selectWallet(
   discovered: DiscoveredWallet[],
   injected: Eip1193Provider | null,
 ): { provider: Eip1193Provider; name: string } | null {
-  if (discovered.length > 0) return { provider: discovered[0].provider, name: discovered[0].name };
+  if (discovered.length > 1) return null;
+  if (discovered.length === 1) return { provider: discovered[0].provider, name: discovered[0].name };
   if (injected) return { provider: injected, name: "Browser wallet" };
   return null;
 }

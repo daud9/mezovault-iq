@@ -4,6 +4,7 @@ import { MEZO_NETWORKS } from "../../config/chains";
 import {
   AddCollateralPreflightError,
   prepareAddCollateral,
+  getInitialAddCollateralReviewOutcome,
   sameAddCollateralReview,
   type PreparedAddCollateral,
 } from "../../lib/addCollateralExecution";
@@ -74,7 +75,6 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(receipt: AddC
     setError("");
     setNotice("");
     setReviewBundle(null);
-    let openingWallet = false;
     try {
       const rpc = createRpcClient({ url: resolveRpcUrl(MEZO_NETWORKS.testnet) });
       const prepared = await prepareAddCollateral({
@@ -97,26 +97,13 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(receipt: AddC
         setNotice("The BTC amount or wallet changed while checking. Nothing was sent; check the amount again.");
         return;
       }
-      if (!sameAddCollateralReview(prepared, fresh)) {
-        setReviewBundle({ key: reviewKey, prepared: fresh });
-        setNotice("Your Trove, BTC balance, or network fee estimate changed. Review the updated summary before continuing.");
-        return;
-      }
-      setNotice("Fresh checks passed. Your wallet will ask you to approve this BTC addition.");
-      openingWallet = true;
-      const hash = await sendTransaction(
-        { ...fresh.transaction },
-        { account: fresh.account, chainId: MEZO_TESTNET_CHAIN_ID },
-      );
-      recordCollateralAction(hash, fresh);
-      setSubmission({ hash, prepared: fresh });
-      setReceiptState({ status: "not-checked" });
-      setReviewBundle(null);
-      setNotice("");
+      const outcome = getInitialAddCollateralReviewOutcome(prepared, fresh);
+      setReviewBundle({ key: reviewKey, prepared: outcome.prepared });
+      setNotice(outcome.changed
+        ? "Your Trove, BTC balance, or network fee estimate changed. Review the updated summary before continuing."
+        : "Fresh checks passed. Review the exact amount and transaction details below before continuing.");
     } catch (caught) {
-      setError(openingWallet
-        ? `${describeWalletError(caught).message} No success is assumed; check the wallet and explorer before retrying.`
-        : preflightMessage(caught));
+      setError(preflightMessage(caught));
     } finally {
       busyRef.current = false;
       setBusy(false);

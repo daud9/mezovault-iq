@@ -212,6 +212,14 @@ export function sameAddCollateralReview(a: PreparedAddCollateral, b: PreparedAdd
     && BigInt(a.transaction.gas) === BigInt(b.transaction.gas);
 }
 
+/** The initial preflight always yields a visible review; this flag only labels changed live data. */
+export function getInitialAddCollateralReviewOutcome(
+  first: PreparedAddCollateral,
+  fresh: PreparedAddCollateral,
+): { prepared: PreparedAddCollateral; changed: boolean } {
+  return { prepared: fresh, changed: !sameAddCollateralReview(first, fresh) };
+}
+
 /** Exported for exact-calldata tests; both hints intentionally request protocol fallback search. */
 export function encodeAddCollateralCalldata(): string {
   return encodeAddCollCall();

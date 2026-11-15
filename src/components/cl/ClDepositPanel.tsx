@@ -9,6 +9,7 @@ import {
   ClDepositPreflightError,
   formatClFeePips,
   formatRawTokenAmount,
+  matchesClTransactionAttribution,
   readClDepositReview,
   simulateClApproval,
   simulateClMint,
@@ -47,7 +48,7 @@ interface SimulationBundle {
 interface Submission {
   hash: string;
   kind: "mint" | "approve" | "reset-approval";
-  from: string;
+  transaction: { from: string; to: string; data: string; value: string };
   chainId: number;
 }
 
@@ -158,7 +159,17 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
       };
       const hash = await wallet.sendTransaction(transactionRequest, { account, chainId: TESTNET_CL_CONTRACTS.chainId });
       recordClAction(hash, simulation, review);
-      setSubmission({ hash, kind: simulation.kind, from: review.wallet, chainId: review.chainId });
+      setSubmission({
+        hash,
+        kind: simulation.kind,
+        transaction: {
+          from: simulation.transaction.from,
+          to: simulation.transaction.to,
+          data: simulation.transaction.data,
+          value: simulation.transaction.value,
+        },
+        chainId: review.chainId,
+      });
       setReceiptState({ status: "not-checked" });
       setSimulationBundle(null);
       setError("");
@@ -179,9 +190,16 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
         setReceiptState({ status: "error", message: "The RPC reports a different network; receipt outcome is unknown." });
         return;
       }
-      const receipt = await rpc.call<{ status?: unknown; blockNumber?: unknown } | null>("eth_getTransactionReceipt", [submission.hash]);
+      const [transaction, receipt] = await Promise.all([
+        rpc.call<Record<string, unknown> | null>("eth_getTransactionByHash", [submission.hash]),
+        rpc.call<{ status?: unknown; blockNumber?: unknown; transactionHash?: unknown } | null>("eth_getTransactionReceipt", [submission.hash]),
+      ]);
       if (receipt === null) {
         setReceiptState({ status: "pending" });
+        return;
+      }
+      if (!matchesClTransactionAttribution(transaction, submission.hash, submission.transaction)) {
+        setReceiptState({ status: "error", message: "The RPC transaction does not match the submitted wallet or reviewed contract; confirmation is unknown." });
         return;
       }
       const parsedReceipt = parseLedgerReceipt(receipt, submission.hash);
@@ -191,12 +209,12 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
       }
       if (parsedReceipt.status === "success") {
         setReceiptState({ status: "confirmed", blockNumber: parsedReceipt.blockNumber });
-        updateEntryForContext(browserStore(), submission.hash, submission.from, submission.chainId, parsedReceipt);
+        updateEntryForContext(browserStore(), submission.hash, submission.transaction.from, submission.chainId, parsedReceipt);
         setReviewBundle(null);
         setSimulationBundle(null);
       } else if (parsedReceipt.status === "reverted") {
         setReceiptState({ status: "reverted", blockNumber: parsedReceipt.blockNumber });
-        updateEntryForContext(browserStore(), submission.hash, submission.from, submission.chainId, parsedReceipt);
+        updateEntryForContext(browserStore(), submission.hash, submission.transaction.from, submission.chainId, parsedReceipt);
         setReviewBundle(null);
         setSimulationBundle(null);
       }

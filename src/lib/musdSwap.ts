@@ -30,6 +30,11 @@ const MAX_SWAP_DEADLINE_SECONDS = 300;
 export const MUSD_SWAP_SLIPPAGE_OPTIONS = [50, 100, 200] as const;
 export const MUSD_SWAP_MAX_REVIEW_AGE_MS = 30_000;
 
+export function isMUSDReviewFresh(preparedAtMs: number, nowMs: number): boolean {
+  return Number.isSafeInteger(preparedAtMs) && Number.isSafeInteger(nowMs) &&
+    preparedAtMs > 0 && nowMs >= preparedAtMs && nowMs - preparedAtMs <= MUSD_SWAP_MAX_REVIEW_AGE_MS;
+}
+
 export interface MUSDQuote {
   amountInRaw: bigint;
   quotedOutRaw: bigint;

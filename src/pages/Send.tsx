@@ -215,7 +215,7 @@ export function Send() {
         blockNumber: null,
       });
       setBusy(null);
-      await checkReceipt(txHash);
+      await checkReceipt(txHash, review.tx);
     } catch (err) {
       setErrors([describeSendError(err)]);
     } finally {
@@ -223,12 +223,12 @@ export function Send() {
     }
   }
 
-  async function checkReceipt(txHash: string) {
+  async function checkReceipt(txHash: string, expectedTransaction: TxRequest) {
     setReceiptLookupFailed(false);
     setBusy("checking");
     try {
       const rpc = createRpcClient({ url: resolveRpcUrl(network) });
-      const result = await waitForReceipt({ rpc, hash: txHash });
+      const result = await waitForReceipt({ rpc, hash: txHash, expected: { chainId: network.chainId, transaction: expectedTransaction } });
       setOutcome(result);
       if (result.status === "success") {
         native.refresh();
@@ -381,7 +381,7 @@ export function Send() {
                 <div className="space-y-2" role="status">
                   <DataStatus state="unverified" detail="receipt lookup failed; transaction outcome unknown" />
                   <p className="text-sm text-mist-300">The wallet returned this transaction hash, but the network receipt could not be checked. It may have succeeded or remain pending. This retry checks the existing hash and will not submit another transaction.</p>
-                  <Button variant="secondary" onClick={() => void checkReceipt(hash)} disabled={busy !== null} className="min-h-11">{busy === "checking" ? "Checking receipt…" : "Check receipt again"}</Button>
+                  <Button variant="secondary" onClick={() => review && void checkReceipt(hash, review.tx)} disabled={busy !== null} className="min-h-11">{busy === "checking" ? "Checking receipt…" : "Check receipt again"}</Button>
                 </div>
               )}
               {outcome?.status === "success" && (
@@ -400,7 +400,7 @@ export function Send() {
                 <div className="space-y-2">
                   <DataStatus state="unverified" detail="no receipt yet" />
                   <p className="text-sm text-mist-300">No confirmation yet. It may still complete. Check the explorer link before sending again.</p>
-                  <Button variant="secondary" onClick={() => void checkReceipt(hash)} disabled={busy !== null} className="min-h-11">{busy === "checking" ? "Checking receipt…" : "Check receipt again"}</Button>
+                  <Button variant="secondary" onClick={() => review && void checkReceipt(hash, review.tx)} disabled={busy !== null} className="min-h-11">{busy === "checking" ? "Checking receipt…" : "Check receipt again"}</Button>
                 </div>
               )}
               {(outcome?.status === "success" || outcome?.status === "reverted") && <Button variant="secondary" onClick={startOver} className="min-h-11">Send another</Button>}

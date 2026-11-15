@@ -11,6 +11,8 @@ import {
   type HTTPResponseInstructions,
 } from "@x402/core/server";
 import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { MEZO_TESTNET_NTT } from "../src/config/bridge.ts";
+import { CHAIN_WATCH_NETWORKS } from "../src/config/chainWatch.ts";
 import { MEZO_NETWORKS } from "../src/config/chains.ts";
 import { buildLinkAuthorizationMessage, normalizeMUSDLinkAmount, normalizeMUSDRecipient, X402_TESTNET_NETWORK } from "../src/lib/x402PayLinks.ts";
 import { isPayLinkSecretConfigured, mintPayLinkToken, verifyPayLinkToken } from "./payLinkToken.ts";
@@ -71,8 +73,49 @@ export interface MerchantAppOptions {
   facilitator?: FacilitatorClient;
   /** Optional static directory; set to null in tests. */
   staticDir?: string | null;
+  /** Build-time Testnet RPC override; only its HTTPS origin is added to browser connect-src. */
+  testnetRpcUrl?: string;
   now?: () => number;
   recoverSigner?: (message: string, signature: `0x${string}`) => Promise<string>;
+}
+
+function getConnectOrigins(testnetRpcUrl?: string): string[] {
+  const browserEndpoints = [
+    MEZO_NETWORKS.testnet.rpcUrl,
+    MEZO_NETWORKS.mainnet.rpcUrl,
+    ...CHAIN_WATCH_NETWORKS.map((network) => network.rpcUrl),
+    MEZO_TESTNET_NTT.wormholescanApi,
+  ];
+  const origins = new Set(browserEndpoints.map((url) => new URL(url).origin));
+  if (testnetRpcUrl) {
+    try {
+      const url = new URL(testnetRpcUrl);
+      if (url.protocol === "https:") origins.add(url.origin);
+    } catch {
+      // Invalid or non-HTTPS overrides are not granted by the production CSP.
+    }
+  }
+  return [...origins];
+}
+
+export function buildContentSecurityPolicy(testnetRpcUrl?: string): string {
+  const connect = ["'self'", ...getConnectOrigins(testnetRpcUrl)].join(" ");
+  return [
+    "default-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+    "frame-src 'none'",
+    "object-src 'none'",
+    "script-src 'self' chrome-extension: moz-extension: safari-web-extension:",
+    "style-src 'self' https://fonts.googleapis.com",
+    "style-src-attr 'none'",
+    "img-src 'self' data:",
+    "font-src 'self' https://fonts.gstatic.com",
+    `connect-src ${connect}`,
+    "worker-src 'self'",
+    "manifest-src 'self'",
+  ].join("; ");
 }
 
 function getSingleLinkQuery(context: HTTPRequestContext): string | null {
@@ -146,6 +189,12 @@ function isSignature(value: unknown): value is `0x${string}` {
   return typeof value === "string" && /^0x[0-9a-fA-F]{130}$/.test(value);
 }
 
+function verifiedBuyerFromPayload(value: unknown): string | null {
+  if (!isPlainRecord(value) || !isPlainRecord(value.payload) || !isPlainRecord(value.payload.authorization)) return null;
+  const from = value.payload.authorization.from;
+  return typeof from === "string" ? normalizeMUSDRecipient(from) : null;
+}
+
 export function createMerchantApp(options: MerchantAppOptions = {}) {
   const app = express();
   const secret = options.payLinkSecret;
@@ -181,6 +230,17 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
 
   app.disable("x-powered-by");
   app.set("trust proxy", 1);
+
+  app.use((_req, res, next) => {
+    res.setHeader("Content-Security-Policy", buildContentSecurityPolicy(options.testnetRpcUrl));
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    // Browsers ignore HSTS received over plain HTTP; emitting it here also covers TLS-terminated deployments.
+    res.setHeader("Strict-Transport-Security", "max-age=31536000");
+    next();
+  });
 
   app.get("/api/pay-links/status", (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -338,6 +398,14 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
         if (!settlement.success) return sendX402Response(res, settlement.response);
 
         // A successful facilitator settlement may already have caused an on-chain payment; mismatches are ambiguous and must not invite a retry.
+        const verifiedBuyer = verifiedBuyerFromPayload(result.paymentPayload);
+        const settledPayer = typeof settlement.payer === "string" ? normalizeMUSDRecipient(settlement.payer) : null;
+        if (!verifiedBuyer || !settledPayer || settledPayer !== verifiedBuyer) {
+          return res.status(502).json({
+            error: "settlement_payer_mismatch",
+            message: "The facilitator did not confirm the verified buyer as payer. Payment may already have settled; check wallet activity before taking any further action.",
+          });
+        }
         if (settlement.network !== X402_TESTNET_NETWORK ||
             (settlement.amount !== undefined && settlement.amount !== expectedAtomicAmount) ||
             !/^0x[0-9a-fA-F]{64}$/.test(settlement.transaction)) {

@@ -380,6 +380,24 @@ export async function simulateClApproval(options: {
   }
 }
 
+export function matchesClTransactionAttribution(
+  transaction: Record<string, unknown> | null,
+  expectedHash: string,
+  expected: { from: string; to: string; data: string; value: string },
+): boolean {
+  if (!transaction || typeof transaction.hash !== "string" || transaction.hash.toLowerCase() !== expectedHash.toLowerCase() ||
+      typeof transaction.from !== "string" || transaction.from.toLowerCase() !== expected.from.toLowerCase() ||
+      typeof transaction.to !== "string" || transaction.to.toLowerCase() !== expected.to.toLowerCase()) return false;
+  const input = typeof transaction.input === "string" ? transaction.input : transaction.data;
+  if (typeof input !== "string" || input.toLowerCase() !== expected.data.toLowerCase()) return false;
+  try {
+    if (typeof transaction.value !== "string" || BigInt(transaction.value) !== BigInt(expected.value)) return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 function assertReviewUsable(review: ClDepositReview, nowMs: number): void {
   if (review.chainId !== TESTNET_CL_CONTRACTS.chainId || review.manager.toLowerCase() !== TESTNET_CL_CONTRACTS.positionManager.toLowerCase()) {
     throw new ClDepositPreflightError("The deposit review does not match the verified Mezo Testnet manager.");
