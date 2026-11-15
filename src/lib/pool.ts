@@ -159,6 +159,12 @@ export type PoolMarketResult =
   | { status: "wrong-network"; actualChainId: number | null; expectedChainId: number }
   | { status: "error"; kind: string; message: string };
 
+export interface PoolMarketSnapshot {
+  chainId: number;
+  blockNumber: number;
+  blockTag: `0x${string}`;
+}
+
 function formatReserveRatio(
   reserveBase: bigint,
   decimalsBase: number,
@@ -183,6 +189,7 @@ export async function readPoolMarket(options: {
   network: MezoNetworkConfig;
   pool: PoolRef;
   rpc: RpcClient;
+  snapshot?: PoolMarketSnapshot;
   now?: () => Date;
 }): Promise<PoolMarketResult> {
   const { network, pool, rpc } = options;
@@ -191,12 +198,27 @@ export async function readPoolMarket(options: {
   try {
     const chainId = parseChainId(await rpc.call<string>("eth_chainId"));
     if (chainId !== network.chainId) return { status: "wrong-network", actualChainId: chainId, expectedChainId: network.chainId };
-    const blockHex = await rpc.call<string>("eth_blockNumber");
-    if (!/^0x[0-9a-fA-F]+$/.test(blockHex)) throw new Error("The RPC returned an invalid block number.");
-    const blockBig = BigInt(blockHex);
-    if (blockBig > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("The RPC returned an unsafe block number.");
-    const blockNumber = Number(blockBig);
-    const blockTag = `0x${blockBig.toString(16)}`;
+    if (options.snapshot && options.snapshot.chainId !== chainId) {
+      return { status: "wrong-network", actualChainId: chainId, expectedChainId: options.snapshot.chainId };
+    }
+    let blockNumber: number;
+    let blockTag: string;
+    if (options.snapshot) {
+      const { snapshot } = options;
+      if (!Number.isSafeInteger(snapshot.blockNumber) || snapshot.blockNumber < 0 ||
+          !/^0x[0-9a-fA-F]+$/.test(snapshot.blockTag) || BigInt(snapshot.blockTag) !== BigInt(snapshot.blockNumber)) {
+        throw new Error("The shared pool snapshot has an invalid block number or tag.");
+      }
+      blockNumber = snapshot.blockNumber;
+      blockTag = snapshot.blockTag;
+    } else {
+      const blockHex = await rpc.call<string>("eth_blockNumber");
+      if (!/^0x[0-9a-fA-F]+$/.test(blockHex)) throw new Error("The RPC returned an invalid block number.");
+      const blockBig = BigInt(blockHex);
+      if (blockBig > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("The RPC returned an unsafe block number.");
+      blockNumber = Number(blockBig);
+      blockTag = `0x${blockBig.toString(16)}`;
+    }
     const code = await rpc.call<string>("eth_getCode", [pool.address, blockTag]);
     if (typeof code !== "string" || !/^0x(?:[0-9a-fA-F]{2})*$/.test(code)) throw new Error("Pool code response was invalid.");
     if (code.length <= 2) return { status: "no-contract", poolAddress: pool.address };

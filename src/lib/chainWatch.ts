@@ -118,7 +118,7 @@ async function readTokenBalance(
   try {
     const code = await rpc.call<string>("eth_getCode", [token.address, blockTag]);
     if (typeof code !== "string" || !/^0x(?:[0-9a-fA-F]{2})+$/.test(code) || /^0x0+$/i.test(code)) {
-      return failed("No contract bytecode was found at the verified token address; balance withheld.");
+      return failed("No contract bytecode was found at the configured token address; balance withheld.");
     }
 
     const [symbolData, decimalsData] = await Promise.all([
@@ -127,12 +127,12 @@ async function readTokenBalance(
     ]);
     const actualSymbol = decodeAbiString(symbolData);
     if (actualSymbol !== token.symbol) {
-      return failed("The on-chain symbol did not match the verified token; balance withheld.");
+      return failed("The on-chain symbol did not match the configured token; balance withheld.");
     }
 
     const decimalsRaw = decodeUint256(decimalsData);
     if (decimalsRaw !== BigInt(token.decimals)) {
-      return failed("The on-chain decimals did not match the verified value; balance withheld.");
+      return failed("The on-chain decimals did not match the configured value; balance withheld.");
     }
 
     const balanceData = await rpc.call<string>(

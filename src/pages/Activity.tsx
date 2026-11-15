@@ -10,7 +10,7 @@ import { useMezoBalance } from "../hooks/useMezoBalance";
 import { resolveRpcUrl } from "../config/env";
 import { createRpcClient, type RpcClient } from "../lib/rpc";
 import { readTransfersInRange, type TransferLog } from "../lib/transferLogs";
-import { browserStore, entriesFor, readLedger, updateEntry, type LedgerEntry } from "../lib/txLedger";
+import { browserStore, entriesFor, parseLedgerReceipt, readLedger, updateEntry, type LedgerEntry } from "../lib/txLedger";
 import { formatTokenUnits } from "../lib/tokenAmount";
 import { formatTime, shortAddress } from "../lib/format";
 import { buildActivityCsv } from "../lib/activityCsv";
@@ -102,12 +102,10 @@ export function Activity() {
     (async () => {
       for (const entry of pending) {
         try {
-          const receipt = await rpc.call<{ status: string; blockNumber: string } | null>("eth_getTransactionReceipt", [entry.hash]);
+          const receipt = await rpc.call<unknown>("eth_getTransactionReceipt", [entry.hash]);
           if (receipt) {
-            updateEntry(store, entry.hash, {
-              status: receipt.status === "0x1" ? "success" : "reverted",
-              blockNumber: Number(BigInt(receipt.blockNumber)),
-            });
+            const parsed = parseLedgerReceipt(receipt);
+            if (parsed) updateEntry(store, entry.hash, parsed);
           }
         } catch {
           // Keep it pending. It is rechecked on the next visit.
@@ -208,7 +206,7 @@ export function Activity() {
       <SectionHeader
         eyebrow="Activity"
         title="Your transactions"
-        description="Outgoing transactions sent from this app, and MUSD or MEZO Transfer events read from the chain. Older token-log pages load on demand; these are not a complete wallet history."
+        description="App-submitted transactions from this browser and loaded MUSD or MEZO Transfer events. Coverage depends on the displayed block ranges; native BTC transfers are not included."
         actions={
           ready ? (
             <Button variant="ghost" onClick={() => setTick((value) => value + 1)} className="min-h-11 px-2">
@@ -229,8 +227,9 @@ export function Activity() {
       {ready && (
         <>
           <section className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Sent from MezoVault IQ</h2>
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Submitted by this app</h2>
             <Card className="space-y-3">
+              <p className="text-xs leading-relaxed text-mist-500">App-submitted transaction records are kept in this browser; only the newest 200 are retained. A successful receipt means execution succeeded in the displayed block, not that finality was independently checked.</p>
               {mine.length === 0 ? (
                 <p className="text-sm text-mist-400">No transactions have been sent from this app on {network.label} from this browser.</p>
               ) : (
@@ -238,11 +237,12 @@ export function Activity() {
                   {mine.map((entry) => (
                     <li key={entry.hash} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
                       <div className="min-w-0">
-                        <p className="text-sm text-mist-100"><ArrowUpRight className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" />Sent {entry.amount} {entry.token} to {shortAddress(entry.to)}</p>
+                        <p className="text-sm text-mist-100"><ArrowUpRight className="mr-1 inline h-4 w-4 text-gold-400" aria-hidden="true" />{entry.action ?? `Sent ${entry.amount} ${entry.token} to ${shortAddress(entry.to)}`}</p>
+                        {entry.action && <p className="text-xs text-mist-500">{entry.amount} {entry.token} · target {shortAddress(entry.to)}</p>}
                         <p className="text-xs text-mist-500">{formatTime(entry.createdAt)} · {shortAddress(entry.hash)}</p>
                       </div>
                       <div className="flex flex-wrap items-center gap-3">
-                        <DataStatus state={entry.status === "success" ? "live" : entry.status === "pending" || entry.status === "unconfirmed" ? "unverified" : "unavailable"} detail={entry.status === "success" ? `block ${entry.blockNumber}` : entry.status} />
+                        <DataStatus state={entry.status === "success" ? "live" : entry.status === "pending" || entry.status === "unconfirmed" ? "unverified" : "unavailable"} detail={entry.status === "success" ? `execution succeeded · block ${entry.blockNumber}` : entry.status} />
                         <a href={`${explorer}tx/${entry.hash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-gold-300 hover:underline">
                           Explorer <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
                         </a>
@@ -334,7 +334,7 @@ export function Activity() {
           <li>Token transfers older than the pages you have loaded. Use “Load older transfers” to request another bounded range.</li>
           <li>Transaction timestamps for token log rows; they show block numbers instead.</li>
         </ul>
-        <p className="text-xs text-mist-500">Transactions submitted from this app are stored only in this browser. The public explorer's usual address-history API routes were not available during integration checks, so this view does not claim comprehensive indexed history.</p>
+        <p className="text-xs text-mist-500">Transactions submitted from this app are stored only in this browser. Activity checks the RPC receipt status; the individual action pages perform any operation-specific event checks. The public explorer's usual address-history API routes were not available during integration checks, so this view does not claim comprehensive indexed history.</p>
       </Card>
     </div>
   );

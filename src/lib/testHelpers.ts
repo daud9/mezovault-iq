@@ -3,7 +3,7 @@
  * Lives under src/lib so the glob used by `npm test` picks it up as a non-test module.
  * It is excluded from the app build because nothing in the app imports it.
  */
-export type Handler = (method: string, params: unknown[]) => unknown | Error | { httpStatus: number } | { raw: string };
+export type Handler = (method: string, params: unknown[]) => unknown | Error | { httpStatus: number } | { raw: string } | { rpcError: { code: number; message: string; data?: unknown } };
 
 export function fakeFetch(handler: Handler): { fetchImpl: typeof fetch; calls: { method: string; params: unknown[] }[] } {
   const calls: { method: string; params: unknown[] }[] = [];
@@ -15,6 +15,9 @@ export function fakeFetch(handler: Handler): { fetchImpl: typeof fetch; calls: {
     if (out instanceof Error) throw out;
     if (out && typeof out === "object" && "httpStatus" in out) {
       return new Response("error", { status: (out as { httpStatus: number }).httpStatus });
+    }
+    if (out && typeof out === "object" && "rpcError" in out) {
+      return new Response(JSON.stringify({ jsonrpc: "2.0", id: body.id, error: (out as { rpcError: unknown }).rpcError }), { status: 200 });
     }
     if (out && typeof out === "object" && "raw" in out) {
       return new Response((out as { raw: string }).raw, { status: 200 });

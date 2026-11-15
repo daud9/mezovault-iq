@@ -22,6 +22,12 @@ interface CheckoutReceipt {
   payer: string;
 }
 
+function paymentReceiptTransaction(value: unknown): string | null {
+  if (typeof value !== "object" || value === null || !("transaction" in value)) return null;
+  const transaction = (value as { transaction?: unknown }).transaction;
+  return typeof transaction === "string" && /^0x[0-9a-fA-F]{64}$/.test(transaction) ? transaction : null;
+}
+
 function friendlyError(error: unknown): string {
   if (!(error instanceof Error)) return "Checkout could not be completed. Check your wallet activity before retrying.";
   const text = error.message;
@@ -39,6 +45,8 @@ export function X402Checkout() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [working, setWorking] = useState(false);
   const [receipt, setReceipt] = useState<CheckoutReceipt | null>(null);
+  const [paymentStatusUnknown, setPaymentStatusUnknown] = useState(false);
+  const [paymentTxHash, setPaymentTxHash] = useState<string | null>(null);
 
   const token = useMemo(() => {
     const fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -57,6 +65,8 @@ export function X402Checkout() {
     setLoadError(null);
     setPaymentError(null);
     setReceipt(null);
+    setPaymentStatusUnknown(false);
+    setPaymentTxHash(null);
     setLoading(true);
 
     if (!token) {
@@ -97,15 +107,20 @@ export function X402Checkout() {
   }, [resourceUrl, token]);
 
   async function pay() {
-    if (!details || !wallet.address || wallet.status !== "connected" || wallet.chainId !== MEZO_NETWORKS.testnet.chainId) return;
+    if (!details || paymentStatusUnknown || !wallet.address || wallet.status !== "connected" || wallet.chainId !== MEZO_NETWORKS.testnet.chainId) return;
     setWorking(true);
     setPaymentError(null);
     setReceipt(null);
+    setPaymentTxHash(null);
+    let paymentRequestSubmitted = false;
+    let reconciliationMessage: string | null = null;
+    let reconciliationTxHash: string | null = null;
     try {
       const signer = await createX402Signer({ account: wallet.address, chainId: MEZO_NETWORKS.testnet.chainId });
       const httpClient = createMezoTestnetX402HttpClient(signer);
       const payload = await httpClient.createPaymentPayload(details.required);
       const paymentHeaders = httpClient.encodePaymentSignatureHeader(payload);
+      paymentRequestSubmitted = true;
       const response = await fetch(resourceUrl, {
         method: "POST",
         cache: "no-store",
@@ -122,30 +137,61 @@ export function X402Checkout() {
         if (receiptHeader) {
           const failureReceipt = httpClient.getPaymentSettleResponse((name) => response.headers.get(name));
           if (failureReceipt && failureReceipt.success === false) {
-            throw new Error("The facilitator did not confirm settlement. Check wallet activity before retrying or paying again.");
+            setPaymentStatusUnknown(true);
+            setPaymentTxHash(paymentReceiptTransaction(failureReceipt));
+            setPaymentError("The facilitator did not confirm successful settlement. Check wallet activity and the explorer before making another payment.");
+            return;
           }
         }
-        const body = await response.json().catch(() => null) as { message?: unknown; error?: unknown } | null;
+        const body = await response.json().catch(() => null) as { message?: unknown; error?: unknown; transaction?: unknown } | null;
+        if (body?.error === "settlement_status_unknown" || body?.error === "settlement_receipt_mismatch" || response.status === 402 || response.status >= 500) {
+          setPaymentStatusUnknown(true);
+          setPaymentTxHash(paymentReceiptTransaction(body));
+          setPaymentError(typeof body?.message === "string" ? body.message : "No final settlement status was returned. Check wallet activity and the explorer before making another payment.");
+          return;
+        }
         const message = typeof body?.message === "string" ? body.message :
-          response.status === 502 ? "The facilitator could not verify or settle the payment. Check wallet activity before retrying." :
-            "No paid checkout confirmation was returned. Check wallet activity before retrying.";
+          response.status === 404 ? "This payment link is invalid or has expired." :
+            "The checkout request was rejected. No successful payment confirmation was returned.";
         throw new Error(message);
       }
 
-      if (!receiptHeader) throw new Error("The server returned no x402 settlement receipt. Check wallet activity before retrying.");
+      if (!receiptHeader) {
+        reconciliationMessage = "The server returned no x402 settlement receipt. Check wallet activity and the explorer before making another payment.";
+        throw new Error(reconciliationMessage);
+      }
       const settlement = httpClient.getPaymentSettleResponse((name) => response.headers.get(name));
-      if (!settlement) throw new Error("The facilitator’s settlement receipt could not be read. Check wallet activity before retrying.");
-      validateMUSDSettlementReceipt(settlement, details.atomicAmount);
+      if (!settlement) {
+        reconciliationMessage = "The facilitator’s settlement receipt could not be read. Check wallet activity and the explorer before making another payment.";
+        throw new Error(reconciliationMessage);
+      }
+      try {
+        validateMUSDSettlementReceipt(settlement, details.atomicAmount);
+      } catch (error) {
+        reconciliationMessage = error instanceof Error ? error.message : "The settlement receipt could not be verified.";
+        reconciliationTxHash = paymentReceiptTransaction(settlement);
+        throw error;
+      }
       if (typeof settlement.payer !== "string" || settlement.payer.toLowerCase() !== wallet.address.toLowerCase()) {
+        reconciliationMessage = "The facilitator receipt did not match the connected buyer wallet. Check wallet activity before making another payment.";
+        reconciliationTxHash = paymentReceiptTransaction(settlement);
         throw new Error("The facilitator receipt did not match the connected buyer wallet. Check wallet activity before retrying.");
       }
       const body = await response.json().catch(() => null) as { ok?: unknown; network?: unknown } | null;
       if (body?.ok !== true || body.network !== X402_TESTNET_NETWORK) {
+        reconciliationMessage = "The merchant confirmation did not match the Testnet payment. Check wallet activity before making another payment.";
+        reconciliationTxHash = paymentReceiptTransaction(settlement);
         throw new Error("The merchant confirmation did not match the Testnet payment. Check wallet activity before retrying.");
       }
       setReceipt({ transaction: settlement.transaction, payer: settlement.payer });
     } catch (error) {
-      setPaymentError(friendlyError(error));
+      if (paymentRequestSubmitted) {
+        setPaymentStatusUnknown(true);
+        if (reconciliationTxHash) setPaymentTxHash(reconciliationTxHash);
+        setPaymentError(reconciliationMessage ?? "No final settlement confirmation was received. Check wallet activity and the explorer before making another payment.");
+      } else {
+        setPaymentError(friendlyError(error));
+      }
     } finally {
       setWorking(false);
     }
@@ -222,9 +268,15 @@ export function X402Checkout() {
               ) : receipt ? (
                 <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4" role="status">
                   <div className="flex items-center gap-2 text-emerald-300"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /><h2 className="font-semibold">Payment settled</h2></div>
-                  <p className="text-sm text-mist-300">The facilitator confirmed {details.amount} MUSD on Mezo Testnet.</p>
-                  <p className="break-all font-mono text-xs text-mist-400">Transaction: {receipt.transaction}</p>
+                  <p className="text-sm text-mist-300">The facilitator reported successful settlement of {details.amount} MUSD on Mezo Testnet. This does not establish transaction finality.</p>
+                  <a href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}tx/${receipt.transaction}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 break-all font-mono text-xs text-gold-300 hover:underline">Transaction: {receipt.transaction} <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></a>
                   <p className="break-all font-mono text-xs text-mist-500">Buyer: {receipt.payer}</p>
+                </div>
+              ) : paymentStatusUnknown ? (
+                <div className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4" role="alert">
+                  <h2 className="font-semibold text-amber-200">Payment status needs checking</h2>
+                  <p className="text-sm leading-relaxed text-mist-300">{paymentError ?? "No final settlement confirmation was received."} Do not authorize another payment until you have checked the existing attempt.</p>
+                  {paymentTxHash && <a href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}tx/${paymentTxHash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 break-all text-sm font-medium text-gold-300 hover:underline">Check transaction {paymentTxHash} <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></a>}
                 </div>
               ) : (
                 <Button onClick={() => { void pay(); }} disabled={working || !details} className="min-h-12 w-full text-base">
@@ -234,7 +286,7 @@ export function X402Checkout() {
 
               {wallet.error && wallet.status !== "connected" && <p className="rounded-xl border border-risk-high/30 bg-risk-high/5 p-3 text-sm text-risk-high" role="alert">{wallet.error}</p>}
               {wallet.error && wallet.status === "connected" && !onTestnet && <p className="rounded-xl border border-risk-high/30 bg-risk-high/5 p-3 text-sm text-risk-high" role="alert">{wallet.error}</p>}
-              {paymentError && <p className="rounded-xl border border-risk-high/30 bg-risk-high/5 p-3 text-sm leading-relaxed text-risk-high" role="alert">{paymentError}</p>}
+              {paymentError && !paymentStatusUnknown && <p className="rounded-xl border border-risk-high/30 bg-risk-high/5 p-3 text-sm leading-relaxed text-risk-high" role="alert">{paymentError}</p>}
             </Card>
 
             <Card className="space-y-2 text-sm text-mist-400">

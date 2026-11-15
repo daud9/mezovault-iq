@@ -51,6 +51,21 @@ describe("readPoolMarket", () => {
     assert.equal(result.liquidityUsd, null);
   });
 
+  it("uses a supplied shared snapshot without selecting a separate latest block", async () => {
+    const transport = fakeFetch(makeHandler());
+    const rpc = createRpcClient({ url: network.rpcUrl, fetchImpl: transport.fetchImpl });
+    const result = await readPoolMarket({
+      network,
+      pool,
+      rpc,
+      snapshot: { chainId: network.chainId, blockNumber: 32, blockTag: "0x20" },
+    });
+    assert.equal(result.status, "ok");
+    assert.equal(transport.calls.some((call) => call.method === "eth_blockNumber"), false);
+    assert.ok(transport.calls.filter((call) => call.method === "eth_getCode" || call.method === "eth_call")
+      .every((call) => call.params.at(-1) === "0x20"));
+  });
+
   it("normalizes differing token decimals before computing spot price", async () => {
     const result = await read(makeHandler({ r0: 10_000_000n, r1: 2n * 10n ** 18n, dec0: 6n, dec1: 18n }));
     assert.equal(result.status, "ok");

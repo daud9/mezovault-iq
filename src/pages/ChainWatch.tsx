@@ -87,7 +87,7 @@ export function ChainWatch() {
       <SectionHeader
         eyebrow="Access & Distribution · Public read-only checks"
         title="MUSD / MEZO Chain Watch"
-        description="Check a public EVM address across verified Mezo, Ethereum, Base, and BNB Chain token routes. No wallet connection is needed."
+        description="Check a public EVM address against configured MUSD and MEZO token routes on Mezo, Ethereum, Base, and BNB Chain. No wallet connection is needed."
       />
 
       <Card highlight className="space-y-5">
@@ -134,9 +134,14 @@ export function ChainWatch() {
         </div>
       </Card>
 
+      <Card className="space-y-2 border border-risk-medium/30 bg-risk-medium/5 text-sm leading-relaxed text-mist-300">
+        <p className="font-semibold text-mist-100">Mezo Mainnet MEZO address needs confirmation</p>
+        <p>The <a href={CHAIN_WATCH_SOURCES.contracts} target="_blank" rel="noopener noreferrer" className="text-gold-300 underline">Mezo contracts reference</a> lists <span className="break-all font-mono">0x7B7c000000000000000000000000000000000001</span> as MEZO. The <a href="https://explorer.mezo.org/address/0x7B7c000000000000000000000000000000000001" target="_blank" rel="noopener noreferrer" className="text-gold-300 underline">Mezo Mainnet explorer</a> currently labels that address “Stub Token (goerli)” (STUB). This app requires an on-chain MEZO symbol and withholds the balance if it differs. Check both official pages before relying on a Mainnet MEZO balance.</p>
+      </Card>
+
       {view.status === "loading" && (
         <Card>
-          <p role="status" className="text-sm text-mist-300">Checking verified token contracts on each supported EVM network…</p>
+          <p role="status" className="text-sm text-mist-300">Checking configured token addresses and RPC-reported network IDs…</p>
         </Card>
       )}
       {view.status === "failed" && (
@@ -162,7 +167,7 @@ export function ChainWatch() {
           </div>
           <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
             <p className="font-medium text-mist-200">How to read these balances</p>
-            <p>Each figure is read from that network at the displayed block after the RPC chain ID and token contract code, symbol, and 18 decimals are checked. A verified zero is shown as 0; an unavailable read stays unavailable. No USD valuation, total, price, or cross-network fungibility is implied.</p>
+            <p>Each figure is read at the displayed block after the RPC reports the expected chain ID and the configured token address returns code, the expected symbol and 18 decimals. These checks do not independently authenticate the RPC or prove the address is canonical. A successful zero is shown as 0; an unavailable read stays unavailable. No USD valuation, total, price, or cross-network fungibility is implied.</p>
           </Card>
         </section>
       )}
@@ -209,7 +214,7 @@ function NetworkCard({ result, address }: { result: ChainWatchNetworkBalance; ad
             ? "border-risk-low/30 bg-risk-low/10 text-risk-low"
             : "border-risk-medium/30 bg-risk-medium/10 text-risk-medium",
         ].join(" ")}>
-          {result.status === "available" ? "Chain verified" : "Unavailable"}
+          {result.status === "available" ? "RPC checks passed" : "Unavailable"}
         </span>
       </div>
 
@@ -253,7 +258,7 @@ function TokenRow({
           <p className="text-sm font-semibold text-mist-200">{symbol}</p>
           <span className="text-xs font-medium text-mist-500">Not supported</span>
         </div>
-        <p className="mt-2 text-xs leading-relaxed text-mist-500">No verified {symbol} route is listed for this network. This is not a zero balance.</p>
+        <p className="mt-2 text-xs leading-relaxed text-mist-500">No {symbol} balance was read because this network has no configured route.</p>
       </div>
     );
   }
@@ -265,7 +270,7 @@ function TokenRow({
       <div className="flex items-center justify-between gap-3">
         <p className="text-sm font-semibold text-mist-200">{symbol}</p>
         <span className={token.status === "ok" ? "text-xs font-medium text-risk-low" : "text-xs font-medium text-risk-medium"}>
-          {token.status === "ok" ? "Contract verified" : "Balance unavailable"}
+          {token.status === "ok" ? "Code and metadata match" : "Balance unavailable"}
         </span>
       </div>
       {token.status === "ok" ? (

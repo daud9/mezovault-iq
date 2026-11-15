@@ -21,8 +21,8 @@ export const TESTNET_BASIC_POOLS: PoolRef[] = [
 ];
 
 /**
- * The MUSD/BTC pool's transferable BTC ERC-20 output, confirmed from the live
- * Mezo Testnet pool reads. This is not native BTC and cannot pay gas.
+ * The MUSD/BTC pool's transferable BTC ERC-20 output, read from live Mezo
+ * Testnet pools. Pool BTC is an ERC-20 and cannot pay native BTC gas.
  */
 export const TESTNET_POOL_BTC_TOKEN = {
   address: "0x7b7c000000000000000000000000000000000000" as const,

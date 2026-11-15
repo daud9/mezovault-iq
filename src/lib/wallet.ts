@@ -234,14 +234,14 @@ export function walletReducer(state: WalletState, action: WalletAction): WalletS
     case "connect-error":
       return { ...state, status: "error", address: null, error: action.message };
     case "chain-changed":
-      return state.status === "connected" ? { ...state, chainId: action.chainId } : state;
+      return state.status === "connected" ? { ...state, chainId: action.chainId, error: null } : state;
     case "accounts-changed":
       if (action.address === null) {
         return state.status === "connected"
           ? { ...INITIAL_WALLET_STATE, walletFound: state.walletFound, walletName: state.walletName }
           : state;
       }
-      return state.status === "connected" ? { ...state, address: action.address } : state;
+      return state.status === "connected" ? { ...state, address: action.address, error: null } : state;
     case "provider-disconnected":
       return state.status === "connected"
         ? { ...INITIAL_WALLET_STATE, walletFound: state.walletFound, walletName: state.walletName, error: "Your wallet disconnected." }

@@ -345,7 +345,7 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
         res.setHeader("Cache-Control", withPrivateCacheControl(String(res.getHeader("Cache-Control") ?? "no-store")));
         return res.status(200).json(body);
       } catch {
-        return sendError(res, 502, "facilitator_unavailable", "The x402 facilitator could not verify or settle this payment. No paid response was returned.");
+        return sendError(res, 502, "settlement_status_unknown", "The facilitator did not return a final settlement status. Check wallet activity and the Mezo Testnet explorer before attempting another authorization.");
       }
     },
   );

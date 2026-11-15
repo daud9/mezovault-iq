@@ -12,7 +12,7 @@ import { getBridgeStage, lookupMezoNttTransaction, operationRoute, type BridgeLo
 function stageDescription(result: BridgeLookupResult): { title: string; body: string; state: "unverified" } {
   switch (result.stage) {
     case "destination-indexed":
-      return { title: "Destination execution indexed", body: "Wormholescan has a destination-chain transaction record. This tracker reports indexing, not a separate guarantee about the destination transaction's finality.", state: "unverified" };
+      return { title: "Destination transaction indexed", body: "Wormholescan has a destination-chain transaction record. This tracker does not independently verify its receipt status or finality.", state: "unverified" };
     case "attestation-available":
       return { title: "Attestation available; destination not indexed", body: "Wormholescan reports a VAA for this operation, but no destination transaction record is indexed yet.", state: "unverified" };
     case "source-indexed":

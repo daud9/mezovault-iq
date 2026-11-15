@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { addEntry, updateEntry, readLedger, entriesFor, type LedgerEntry, type LedgerStore } from "./txLedger";
+import { addEntry, updateEntry, readLedger, entriesFor, parseLedgerReceipt, type LedgerEntry, type LedgerStore } from "./txLedger";
 
 function memoryStore(initial: string | null = null): LedgerStore & { raw: () => string | null } {
   let value = initial;
@@ -34,6 +34,21 @@ describe("transaction ledger", () => {
     const s = memoryStore();
     addEntry(s, entry("0xbb", { token: "Pool BTC (ERC-20)" }));
     assert.equal(readLedger(s)[0].token, "Pool BTC (ERC-20)");
+  });
+
+  it("preserves action labels for contract transactions and accepts older unlabeled entries", () => {
+    const s = memoryStore();
+    addEntry(s, entry("0xcc", { token: "Trove", action: "Open Trove" }));
+    assert.equal(readLedger(s)[0].action, "Open Trove");
+    assert.deepEqual(readLedger(memoryStore(JSON.stringify([entry("0xdd")]))), [entry("0xdd")]);
+  });
+
+  it("classifies only valid success or revert receipts with a safe block number", () => {
+    assert.deepEqual(parseLedgerReceipt({ status: "0x1", blockNumber: "0x2a" }), { status: "success", blockNumber: 42 });
+    assert.deepEqual(parseLedgerReceipt({ status: "0x0", blockNumber: "0x2a" }), { status: "reverted", blockNumber: 42 });
+    assert.equal(parseLedgerReceipt({ status: "0x2", blockNumber: "0x2a" }), null);
+    assert.equal(parseLedgerReceipt({ status: "0x1", blockNumber: "not-hex" }), null);
+    assert.equal(parseLedgerReceipt({ status: "0x1", blockNumber: `0x${(BigInt(Number.MAX_SAFE_INTEGER) + 1n).toString(16)}` }), null);
   });
 
   it("updates status from a receipt without duplicating the entry", () => {

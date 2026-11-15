@@ -7,11 +7,13 @@ import { buildMobileWalletLink, isMobileUserAgent } from "../../lib/walletDiscov
 
 /**
  * Connect Wallet control. Shows the shortened address once connected, and opens a panel with
- * the full address, network status and Disconnect. Touch targets are at least 44px tall.
+ * the full address, network status and an app-local disconnect action. Touch targets are at least 44px tall.
  */
-export function WalletButton({ className = "" }: { className?: string }) {
+export function WalletButton({ className = "", compact = false }: { className?: string; compact?: boolean }) {
   const { state, network, isSupportedNetwork, connect, disconnect, switchNetwork } = useWallet();
   const [open, setOpen] = useState(false);
+  const compactPadding = compact ? "px-2 sm:px-4" : "px-4";
+  const compactType = compact ? "max-[360px]:text-xs" : "";
 
   const isConnected = state.status === "connected" && state.address !== null;
   const mobileLink =
@@ -21,7 +23,7 @@ export function WalletButton({ className = "" }: { className?: string }) {
 
   if (state.status === "connecting") {
     return (
-      <Button variant="secondary" disabled className={`min-h-11 px-4 text-sm ${className}`}>
+      <Button variant="secondary" disabled className={`min-h-11 whitespace-nowrap ${compactPadding} text-sm ${compactType} ${className}`}>
         Connecting…
       </Button>
     );
@@ -33,9 +35,9 @@ export function WalletButton({ className = "" }: { className?: string }) {
         <button
           type="button"
           aria-expanded={open}
-          aria-haspopup="dialog"
+          aria-controls="wallet-details-panel"
           onClick={() => setOpen((o) => !o)}
-          className={`inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 text-sm font-semibold transition ${
+          className={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-xl border ${compactPadding} text-sm ${compactType} font-semibold transition ${
             isSupportedNetwork
               ? "border-gold-500/50 bg-gold-500/10 text-gold-300 hover:bg-gold-500/20"
               : "border-risk-high/50 bg-risk-high/10 text-risk-high"
@@ -46,7 +48,7 @@ export function WalletButton({ className = "" }: { className?: string }) {
         </button>
 
         {open && (
-          <div role="dialog" aria-label="Wallet details" className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2.5rem))] space-y-4 rounded-xl border border-line bg-ink-900 p-4 text-sm shadow-xl">
+          <div id="wallet-details-panel" role="region" aria-label="Wallet details" className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2.5rem))] space-y-4 rounded-xl border border-line bg-ink-900 p-4 text-sm shadow-xl">
             <div>
               <p className="text-xs text-mist-500">Connected{state.walletName ? ` with ${state.walletName}` : ""}</p>
               <p className="mt-1 break-all font-mono text-xs text-mist-100">{state.address}</p>
@@ -57,14 +59,16 @@ export function WalletButton({ className = "" }: { className?: string }) {
                 {isSupportedNetwork ? network.label : `Not ${network.label}. Switch to read balances.`}
               </p>
             </div>
+            {state.error && <p role="alert" className="rounded-lg border border-risk-high/40 bg-risk-high/10 p-3 text-xs leading-relaxed text-risk-high">{state.error}</p>}
             {!isSupportedNetwork && (
               <Button onClick={switchNetwork} className="min-h-11 w-full">
                 Switch to {network.label}
               </Button>
             )}
             <Button variant="secondary" onClick={() => { disconnect(); setOpen(false); }} className="min-h-11 w-full">
-              Disconnect
+              Disconnect in this app
             </Button>
+            <p className="text-xs leading-relaxed text-mist-500">This clears the connection shown here. It does not revoke this app’s authorization in your wallet.</p>
           </div>
         )}
       </div>
@@ -76,10 +80,10 @@ export function WalletButton({ className = "" }: { className?: string }) {
       <button
         type="button"
         onClick={connect}
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 px-4 text-sm font-semibold text-ink-950 shadow-[0_8px_30px_-12px_rgba(212,175,106,0.6)] transition hover:brightness-110"
+        className={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 ${compactPadding} text-sm ${compactType} font-semibold text-ink-950 shadow-[0_8px_30px_-12px_rgba(212,175,106,0.6)] transition hover:brightness-110`}
       >
         <Wallet className="h-4 w-4" aria-hidden="true" />
-        Connect Wallet
+        {compact ? <><span className="sm:hidden">Connect</span><span className="hidden sm:inline">Connect Wallet</span></> : "Connect Wallet"}
       </button>
 
       {state.error && (

@@ -2,6 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { MEZO_NETWORKS } from "./chains";
 import { PROTOCOL_CANDIDATES, verifiedCapabilityCount } from "./protocols";
+import { CHAIN_WATCH_NETWORKS } from "./chainWatch";
 
 const isAddr = (v: string) => /^0x[0-9a-fA-F]{40}$/.test(v);
 
@@ -16,9 +17,10 @@ describe("network configuration", () => {
     assert.equal(t.musd?.decimals, 18);
   });
 
-  it("mainnet uses the official RPC, not a third-party endpoint", () => {
-    assert.equal(MEZO_NETWORKS.mainnet.rpcUrl, "https://rpc-http.mezo.boar.network");
+  it("mainnet uses the HTTPS RPC endpoint listed in Mezo's developer guide", () => {
+    assert.equal(MEZO_NETWORKS.mainnet.rpcUrl, "https://mezo-mainnet.boar.network");
     assert.equal(MEZO_NETWORKS.mainnet.chainId, 31612);
+    assert.equal(CHAIN_WATCH_NETWORKS.find((network) => network.key === "mezo-mainnet")?.rpcUrl, MEZO_NETWORKS.mainnet.rpcUrl);
   });
 
   it("every recorded address is well formed and has a source", () => {

@@ -38,6 +38,17 @@ export function parseAmount(input: string, decimals: number): { ok: true; raw: b
   return { ok: true, raw };
 }
 
+/** Returns true only when a prepared review still matches the editable Send draft. */
+export function doesSendReviewMatchDraft(
+  review: { recipient: string; amountRaw: bigint; token: SendToken },
+  draft: { recipient: string; amountText: string; tokenSymbol: SendToken["symbol"] },
+): boolean {
+  if (review.recipient.toLowerCase() !== draft.recipient.trim().toLowerCase()) return false;
+  if (review.token.symbol !== draft.tokenSymbol) return false;
+  const amount = parseAmount(draft.amountText, review.token.decimals);
+  return amount.ok && amount.raw === review.amountRaw;
+}
+
 export function validateRecipient(recipient: string, from: string): string | null {
   if (!isAddress(recipient)) return "Enter a valid recipient address (0x followed by 40 hex characters).";
   if (recipient.toLowerCase() === ZERO) return "The zero address cannot receive funds.";
@@ -52,6 +63,25 @@ export function buildTransfer(token: SendToken, from: `0x${string}`, recipient: 
   }
   const data = `${TRANSFER_SELECTOR}${encodeAddressWord(recipient)}${amountRaw.toString(16).padStart(64, "0")}`;
   return { from, to: token.address, value: "0x0", data };
+}
+
+/** Simulates the exact ERC-20 request; a false or malformed return is not a successful preflight. */
+export async function simulateErc20Transfer(rpc: RpcClient, transaction: TxRequest): Promise<void> {
+  if (!transaction.data?.startsWith(TRANSFER_SELECTOR)) {
+    throw new Error("The reviewed transaction is not a standard ERC-20 transfer.");
+  }
+  const result = await rpc.call<string>("eth_call", [{
+    from: transaction.from,
+    to: transaction.to,
+    data: transaction.data,
+    value: transaction.value,
+  }]);
+  if (!/^0x[0-9a-fA-F]{64}$/.test(result)) {
+    throw new Error("The token transfer simulation returned an invalid boolean result.");
+  }
+  if (BigInt(result) !== 1n) {
+    throw new Error("The token transfer simulation did not return true. No transfer is prepared.");
+  }
 }
 
 /** Total BTC a native send needs: amount plus the estimated gas cost. */
@@ -85,14 +115,24 @@ export async function waitForReceipt(options: {
       [options.hash],
     );
     if (receipt) {
-      const blockNumber = Number(BigInt(receipt.blockNumber));
-      const gasUsed = BigInt(receipt.gasUsed);
-      if (receipt.status === "0x1") return { status: "success", hash: options.hash, blockNumber, gasUsed };
-      return { status: "reverted", hash: options.hash, blockNumber, gasUsed };
+      const status = parseReceiptQuantity(receipt.status, "receipt status");
+      const block = parseReceiptQuantity(receipt.blockNumber, "receipt block number");
+      const gasUsed = parseReceiptQuantity(receipt.gasUsed, "receipt gas used");
+      if (status !== 0n && status !== 1n) throw new Error("The RPC returned an unknown transaction receipt status.");
+      if (block > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("The RPC returned an unsafe receipt block number.");
+      if (status === 1n) return { status: "success", hash: options.hash, blockNumber: Number(block), gasUsed };
+      return { status: "reverted", hash: options.hash, blockNumber: Number(block), gasUsed };
     }
     if (Date.now() >= deadline) return { status: "timeout", hash: options.hash };
     await sleep(interval);
   }
+}
+
+function parseReceiptQuantity(value: unknown, label: string): bigint {
+  if (typeof value !== "string" || !/^0x[0-9a-fA-F]+$/.test(value)) {
+    throw new Error(`The RPC returned an invalid ${label}.`);
+  }
+  return BigInt(value);
 }
 
 export function isTxHash(value: unknown): value is string {

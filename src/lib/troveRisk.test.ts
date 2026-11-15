@@ -1,13 +1,14 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { calculateCollateralRatioBps, calculateTroveRisk, classifyHistoricalTroveRisk, formatPercentBps, formatWad } from "./troveRisk";
+import { calculateCollateralRatioBps, calculateTroveRisk, calculateTroveRiskAtDrop, classifyHistoricalTroveRisk, formatPercentBps, formatWad } from "./troveRisk";
 
 const WAD = 10n ** 18n;
 
 describe("historical Trove risk classification", () => {
-  it("labels only closed-by-redemption status 4 as RISK-ESCAPED", () => {
-    assert.equal(classifyHistoricalTroveRisk(4), "RISK-ESCAPED");
-    for (const status of [0, 1, 2, 3, 5]) assert.equal(classifyHistoricalTroveRisk(status), null);
+  it("requires status 4 and a verified closure event for RISK-ESCAPED", () => {
+    assert.equal(classifyHistoricalTroveRisk(4, true), "RISK-ESCAPED");
+    assert.equal(classifyHistoricalTroveRisk(4, false), null);
+    for (const status of [0, 1, 2, 3, 5]) assert.equal(classifyHistoricalTroveRisk(status, true), null);
   });
 });
 
@@ -52,6 +53,21 @@ describe("Trove risk calculations", () => {
     assert.equal(result.priceDistanceBps, -1_000n);
     assert.equal(result.belowThreshold, true);
     assert.deepEqual(result.scenarios.map((scenario) => scenario.belowThreshold), [true, true, true]);
+  });
+
+  it("calculates a user-selected price drawdown with exact integer arithmetic", () => {
+    const result = calculateTroveRiskAtDrop({
+      collateralBtcWei: WAD,
+      debtMusdWei: 50_000n * WAD,
+      btcUsdWei: 100_000n * WAD,
+      mcrWei: 1_100_000_000_000_000_000n,
+      dropPct: 45,
+    });
+    assert.ok(result);
+    assert.equal(result.scenarioPriceWei, 55_000n * WAD);
+    assert.equal(result.ratioBps, 11_000n);
+    assert.equal(result.belowThreshold, false);
+    assert.equal(calculateTroveRiskAtDrop({ collateralBtcWei: WAD, debtMusdWei: WAD, btcUsdWei: WAD, mcrWei: WAD, dropPct: 100 }), null);
   });
 
   it("rounds the threshold price upward so it never understates the required price", () => {

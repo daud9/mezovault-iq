@@ -62,7 +62,7 @@ function handler(o: MockOptions = {}): Handler {
       assert.equal(tx.data, encodeAddCollateralCalldata());
       assert.ok(BigInt(tx.value) > 0n);
       if (o.insufficientFundsEstimate) {
-        return { raw: JSON.stringify({ jsonrpc: "2.0", id: 0, error: { code: -32000, message: "insufficient funds for gas * price + value" } }) };
+        return { rpcError: { code: -32000, message: "insufficient funds for gas * price + value" } };
       }
       if (o.failEstimate) return new Error("gas estimate reverted");
       return "0x5208";

@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { APP_NAV, APP_ROUTE_REDIRECTS } from "./appNavigation";
+import { APP_NAV, APP_ROUTE_REDIRECTS, MOBILE_MORE_NAV, MOBILE_PRIMARY_NAV } from "./appNavigation";
 
 describe("app navigation and legacy route alias", () => {
   it("does not expose the removed Simulation Lab in primary navigation", () => {
@@ -14,6 +14,14 @@ describe("app navigation and legacy route alias", () => {
 
   it("uses the accurate bridge tracker label and canonical route", () => {
     assert.ok(APP_NAV.some((item) => item.to === "/app/bridge-status" && item.label === "Bridge Status Tracker"));
+  });
+
+  it("keeps phone navigation to four core links and retains every other route in More", () => {
+    assert.deepEqual(MOBILE_PRIMARY_NAV.map((item) => item.to), ["/app", "/app/swap", "/app/send", "/app/activity"]);
+    const allMobileRoutes = [...MOBILE_PRIMARY_NAV, ...MOBILE_MORE_NAV].map((item) => item.to);
+    assert.equal(allMobileRoutes.length, APP_NAV.length);
+    assert.deepEqual([...allMobileRoutes].sort(), APP_NAV.map((item) => item.to).sort());
+    assert.equal(new Set(allMobileRoutes).size, APP_NAV.length);
   });
 
   it("does not expose the removed Protocol Evidence page in navigation", () => {

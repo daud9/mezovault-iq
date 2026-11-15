@@ -21,7 +21,7 @@ export function Button({ variant = "primary", className = "", children, disabled
       type="button"
       disabled={disabled}
       className={[
-        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+        "inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
         "disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         className,
@@ -46,7 +46,7 @@ export function ButtonLink({ to, variant = "primary", className = "", children }
     <Link
       to={to}
       className={[
-        "inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
+        "inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
         variants[variant],
         className,
       ].join(" ")}

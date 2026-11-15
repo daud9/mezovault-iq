@@ -3,16 +3,20 @@ import { ArrowRight, LineChart, ShieldCheck, Radar } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { ButtonLink } from "../components/ui/Button";
 import { WalletButton } from "../components/layout/WalletButton";
+import { DEFAULT_NETWORK } from "../config/env";
 
 const FEATURES = [
-  { icon: ShieldCheck, title: "Vault Intelligence", body: "Verified contract addresses and explorer links, with unavailable metrics shown openly." },
-  { icon: Radar, title: "MUSD / MEZO Chain Watch", body: "Check a public address across verified EVM token routes without connecting a wallet." },
+  { icon: ShieldCheck, title: "Read positions and protocol data", body: "Check balances, pool reserves, CL positions and Trove risk. Each monitor is read-only and reports unavailable data instead of filling gaps." },
+  { icon: Radar, title: "Review wallet actions", body: "Prepare MUSD swaps, transfers, liquidity deposits and Trove actions, then inspect the request before you approve it in your wallet." },
 ];
 
 const STEPS = [
-  { n: "01", title: "Understand", body: "Review verified sources, mechanics and known limits before relying on a metric." },
-  { n: "02", title: "Monitor", body: "Check wallet positions and protocol activity using clearly labeled, read-only data." },
+  { n: "01", title: "Read", body: "Check balances and positions against the selected network. Read-only pages do not request signatures." },
+  { n: "02", title: "Review", body: "Inspect amounts, network and transaction details before a wallet action." },
+  { n: "03", title: "Check the result", body: "Use the transaction hash and receipt state to see what the chain accepted." },
 ];
+
+const NETWORK_LABEL = DEFAULT_NETWORK.key === "testnet" ? "Mezo Testnet" : "Mezo Mainnet";
 
 export function Landing() {
   return (
@@ -49,21 +53,20 @@ export function Landing() {
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-20 pt-10 sm:px-8 lg:pt-20">
         <div className="max-w-3xl animate-fade-up">
           <span className="inline-flex items-center gap-2 rounded-full border border-gold-500/30 bg-gold-500/10 px-3 py-1 text-xs font-medium text-gold-300">
-            Built around MUSD and the Mezo ecosystem
+            {NETWORK_LABEL} · wallet tools and protocol monitors
           </span>
           <h1 className="mt-6 text-4xl font-semibold leading-[1.1] tracking-tight text-mist-100 sm:text-5xl lg:text-6xl">
-            Make Every MUSD Decision <span className="gold-text">Smarter.</span>
+            Inspect Mezo. Review each action.
           </h1>
           <p className="mt-6 max-w-xl text-base leading-relaxed text-mist-400 sm:text-lg">
-            See your live MUSD, BTC and MEZO balances on Mezo Testnet, or use Chain Watch to check a public address
-            across verified EVM routes without connecting a wallet. Review DeFi evidence and monitor protocol activity.
+            Read balances, pools and positions. Prepare swaps, transfers and selected protocol actions, then review the request in your wallet. Read-only monitors do not ask you to sign.
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <ButtonLink to="/app" className="min-h-11 px-5 py-3">
-              Open Dashboard <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Open dashboard <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </ButtonLink>
             <ButtonLink to="/app/chain-watch" variant="secondary" className="min-h-11 px-5 py-3">
-              Open Chain Watch <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Check a public address <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </ButtonLink>
           </div>
         </div>
@@ -83,7 +86,7 @@ export function Landing() {
 
       <section className="relative z-10 mx-auto max-w-6xl px-5 pb-24 sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400">How it works</p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-mist-100 sm:text-3xl">Understand before you decide.</h2>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-mist-100 sm:text-3xl">Read first. Review before signing.</h2>
         <div className="mt-8 grid gap-4 md:grid-cols-2">
           {STEPS.map((step) => (
             <Card key={step.n}>
@@ -95,8 +98,8 @@ export function Landing() {
         </div>
         <div className="mt-10 flex flex-col items-start gap-4 rounded-2xl border border-line bg-ink-900 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-base font-semibold text-mist-100">Read your MUSD balance on Mezo Testnet</p>
-            <p className="mt-1 text-sm text-mist-400">Connect a wallet to read your balance. Read-only, with no transactions.</p>
+            <p className="text-base font-semibold text-mist-100">Read balances on {NETWORK_LABEL}</p>
+            <p className="mt-1 text-sm text-mist-400">Connect a wallet to read its MUSD, BTC and MEZO balances. This step sends no transaction.</p>
           </div>
           <WalletButton />
         </div>

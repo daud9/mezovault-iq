@@ -15,6 +15,7 @@ import {
   type StabilityPoolReceiptResult,
 } from "../../lib/stabilityPool";
 import { describeSendError } from "../../lib/transfer";
+import { addEntry, browserStore } from "../../lib/txLedger";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { useWallet } from "../wallet/WalletProvider";
@@ -85,9 +86,8 @@ export function StabilityPoolPanel() {
         setError("Pool or wallet details changed. Review the updated amount before continuing; nothing was sent.");
         return;
       }
-      const hash = await wallet.sendTransaction({ ...fresh.transaction }, { account, chainId: TESTNET_STABILITY_POOL.chainId });
-      setSubmission({ hash, expected: fresh, rpc, explorerUrl: network.explorerUrl, chainId: TESTNET_STABILITY_POOL.chainId });
-      setReceiptView({ status: "not-checked" });
+      setReviewBundle({ key, review: fresh });
+      setError("");
     } catch (caught) {
       setReviewBundle(null);
       setError(caught instanceof StabilityPoolError ? caught.message : describeSendError(caught));
@@ -106,6 +106,7 @@ export function StabilityPoolPanel() {
         return;
       }
       const hash = await wallet.sendTransaction({ ...fresh.transaction }, { account, chainId: TESTNET_STABILITY_POOL.chainId });
+      recordPoolAction(hash, fresh);
       setSubmission({ hash, expected: fresh, rpc, explorerUrl: network.explorerUrl, chainId: TESTNET_STABILITY_POOL.chainId });
       setReceiptView({ status: "not-checked" });
       setReviewBundle(null);
@@ -242,6 +243,21 @@ export function StabilityPoolPanel() {
       </div>
     </Card>
   );
+}
+
+function recordPoolAction(hash: string, prepared: PreparedStabilityPoolAction) {
+  addEntry(browserStore(), {
+    hash,
+    chainId: prepared.snapshot.chainId,
+    from: prepared.account,
+    to: prepared.transaction.to,
+    token: "MUSD",
+    amount: formatTokenUnits(prepared.amountWei, 18, 18),
+    action: prepared.action === "approve" ? "Approve MUSD for Stability Pool" : "Deposit MUSD in Stability Pool",
+    createdAt: new Date().toISOString(),
+    status: "pending",
+    blockNumber: null,
+  });
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

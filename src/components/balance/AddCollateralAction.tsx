@@ -10,6 +10,7 @@ import {
 import { AddCollateralReceiptError, readAddCollateralReceipt } from "../../lib/addCollateralReceipt";
 import { formatUnits18, MEZO_TESTNET_CHAIN_ID, parseUnits18 } from "../../lib/openTrovePlanner";
 import { createRpcClient } from "../../lib/rpc";
+import { addEntry, browserStore } from "../../lib/txLedger";
 import { describeWalletError } from "../../lib/wallet";
 import { useNativeBalance } from "../../hooks/useNativeBalance";
 import { Button } from "../ui/Button";
@@ -106,6 +107,7 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
         { ...fresh.transaction },
         { account: fresh.account, chainId: MEZO_TESTNET_CHAIN_ID },
       );
+      recordCollateralAction(hash, fresh);
       setSubmission({ hash, prepared: fresh });
       setReceiptState({ status: "not-checked" });
       setReviewBundle(null);
@@ -149,6 +151,7 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
         { ...fresh.transaction },
         { account: fresh.account, chainId: MEZO_TESTNET_CHAIN_ID },
       );
+      recordCollateralAction(hash, fresh);
       setSubmission({ hash, prepared: fresh });
       setReceiptState({ status: "not-checked" });
       setReviewBundle(null);
@@ -289,7 +292,7 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
           {receiptState.status === "not-checked" && <p role="status" className="text-sm text-amber-200">Your wallet returned a hash, but the receipt has not been checked. This is unconfirmed.</p>}
           {receiptState.status === "pending" && <p role="status" className="text-sm text-amber-200">No receipt is available yet. The transaction remains unconfirmed; check again later.</p>}
           {receiptState.status === "error" && <p role="alert" className="text-sm text-amber-200">{receiptState.message}</p>}
-          {receiptState.status === "confirmed" && <p role="status" className="text-sm text-emerald-300">The exact transaction, successful receipt, and matching TroveUpdated(adjustTrove) event were verified in block {receiptState.blockNumber.toLocaleString()}. Refreshing the Trove read.</p>}
+          {receiptState.status === "confirmed" && <p role="status" className="text-sm text-emerald-300">The receipt shows successful execution and a matching TroveUpdated(adjustTrove) event in block {receiptState.blockNumber.toLocaleString()}; finality is not independently checked. Refreshing the Trove read.</p>}
           {receiptState.status === "reverted" && <p role="alert" className="text-sm text-rose-300">The exact transaction receipt shows a revert in block {receiptState.blockNumber.toLocaleString()}. No successful collateral addition is claimed.</p>}
           {receiptState.status !== "confirmed" && receiptState.status !== "reverted" && (
             <Button variant="secondary" onClick={() => void checkReceipt()} disabled={busy} className="min-h-11">{busy ? "Checking receipt…" : "Check transaction receipt"}</Button>
@@ -304,6 +307,21 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
       <p className="text-xs leading-relaxed text-mist-500">This only adds BTC to the active Trove. Your wallet must approve the transaction; the app never signs or submits it for you.</p>
     </section>
   );
+}
+
+function recordCollateralAction(hash: string, prepared: PreparedAddCollateral) {
+  addEntry(browserStore(), {
+    hash,
+    chainId: MEZO_TESTNET_CHAIN_ID,
+    from: prepared.account,
+    to: prepared.transaction.to,
+    token: "BTC",
+    amount: formatUnits18(prepared.collateralWei, 18),
+    action: "Add BTC collateral to Trove",
+    createdAt: new Date().toISOString(),
+    status: "pending",
+    blockNumber: null,
+  });
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

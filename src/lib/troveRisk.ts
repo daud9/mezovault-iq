@@ -6,6 +6,13 @@ export interface TroveRiskScenario {
   belowThreshold: boolean;
 }
 
+export interface CustomTroveRiskScenario {
+  dropPct: number;
+  scenarioPriceWei: bigint;
+  ratioBps: bigint;
+  belowThreshold: boolean;
+}
+
 export interface TroveRiskResult {
   ratioBps: bigint;
   thresholdBps: bigint;
@@ -16,9 +23,9 @@ export interface TroveRiskResult {
   scenarios: TroveRiskScenario[];
 }
 
-/** Status 4 is a historical redemption disposition, not a live risk verdict. */
-export function classifyHistoricalTroveRisk(troveStatus: number): "RISK-ESCAPED" | null {
-  return troveStatus === 4 ? "RISK-ESCAPED" : null;
+/** The app-defined historical label requires both status 4 and a matching closure event. */
+export function classifyHistoricalTroveRisk(troveStatus: number, closureVerified: boolean): "RISK-ESCAPED" | null {
+  return troveStatus === 4 && closureVerified ? "RISK-ESCAPED" : null;
 }
 
 /** Computes the collateral/debt percentage in basis points without floating-point math. */
@@ -71,6 +78,28 @@ export function calculateTroveRisk(input: {
   });
 
   return { ratioBps, thresholdBps, belowThreshold: ratioWad < mcrWei, thresholdPriceWei, priceDistanceBps, scenarios };
+}
+
+/** Computes a user-selected hypothetical BTC drawdown using integer arithmetic. */
+export function calculateTroveRiskAtDrop(input: {
+  collateralBtcWei: bigint;
+  debtMusdWei: bigint;
+  btcUsdWei: bigint;
+  mcrWei: bigint;
+  dropPct: number;
+}): CustomTroveRiskScenario | null {
+  const { collateralBtcWei, debtMusdWei, btcUsdWei, mcrWei, dropPct } = input;
+  if (!Number.isInteger(dropPct) || dropPct < 0 || dropPct > 99 ||
+      collateralBtcWei <= 0n || debtMusdWei <= 0n || btcUsdWei <= 0n || mcrWei <= 0n) return null;
+  const scenarioPriceWei = (btcUsdWei * BigInt(100 - dropPct)) / 100n;
+  if (scenarioPriceWei <= 0n) return null;
+  const ratioWad = (collateralBtcWei * scenarioPriceWei) / debtMusdWei;
+  return {
+    dropPct,
+    scenarioPriceWei,
+    ratioBps: (ratioWad * 10_000n) / WAD,
+    belowThreshold: ratioWad < mcrWei,
+  };
 }
 
 /** Format an 18-decimal value as a rounded human-readable decimal. */

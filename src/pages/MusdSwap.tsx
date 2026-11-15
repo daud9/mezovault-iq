@@ -6,7 +6,10 @@ import { DataStatus } from "../components/ui/DataStatus";
 import { SectionHeader } from "../components/ui/SectionHeader";
 import { useWallet } from "../components/wallet/WalletProvider";
 import { resolveRpcUrl } from "../config/env";
+import { TESTNET_POOL_BTC_TOKEN } from "../config/pools";
+import { MEZO_NETWORKS } from "../config/chains";
 import { createRpcClient } from "../lib/rpc";
+import { addEntry, browserStore } from "../lib/txLedger";
 import {
   formatMUSDTokenAmount,
   MUSD_SWAP_MAX_REVIEW_AGE_MS,
@@ -110,6 +113,18 @@ export function MusdSwap() {
     setBusy("wallet");
     void walletRequest.then((hash) => {
       const sent = { hash, prepared };
+      addEntry(browserStore(), {
+        hash,
+        chainId: network.chainId,
+        from: prepared.transaction.from,
+        to: prepared.transaction.to,
+        token: "MUSD",
+        amount: formatMUSDTokenAmount(prepared.quote.amountInRaw),
+        action: prepared.kind === "approve" ? "Approve MUSD for MUSD swap" : "Swap MUSD for Pool BTC (ERC-20)",
+        createdAt: new Date().toISOString(),
+        status: "pending",
+        blockNumber: null,
+      });
       setSubmission(sent);
       setBusy("checking");
       void checkReceipt(sent);
@@ -154,9 +169,11 @@ export function MusdSwap() {
     <div className="space-y-5">
       <SectionHeader
         eyebrow="Mezo Testnet · MUSD"
-        title="Swap MUSD for BTC"
+        title="Swap MUSD for Pool BTC"
         description="Review a fresh quote, then choose Swap MUSD to open your wallet. If allowance is short, you will confirm an exact approval first; after it verifies, the app refreshes the quote. The swap remains a separate wallet-confirmed transaction."
       />
+
+      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">Mezo documents a 0.30% fee for volatile basic pools, but this review does not separate the pool fee from price impact. The configured Pool BTC token is <span className="break-all font-mono">{TESTNET_POOL_BTC_TOKEN.address}</span>; Mezo’s <a className="underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noopener noreferrer">pool documentation</a> does not list that token address. Code, symbol and decimal checks do not prove canonical identity. <a className="underline" href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}address/${TESTNET_POOL_BTC_TOKEN.address}`} target="_blank" rel="noopener noreferrer">Inspect the contract on the Testnet explorer</a> before swapping.</p>
 
       <Card className="space-y-4">
         {!testnet ? (
@@ -201,7 +218,7 @@ export function MusdSwap() {
             </div>
 
             <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-              You can swap only MUSD held in this wallet; MUSD deposited in the Stability Pool is not available here. The output is the pool’s BTC token (an ERC-20), not native BTC and not usable for gas. Keep native BTC in this wallet for network fees; the app’s Send page does not yet send this pool BTC token.
+              You can swap only MUSD held in this wallet; MUSD deposited in the Stability Pool is not available here. The output is the pool’s BTC token (an ERC-20), not native BTC and not usable for gas. Keep native BTC in this wallet for network fees; use Send to transfer the pool BTC token.
             </p>
 
             {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
@@ -232,7 +249,7 @@ export function MusdSwap() {
                 {prepared.kind === "approve" ? (
                   <div className="space-y-3 rounded-lg border border-line bg-ink-900/70 p-3">
                     <p className="text-sm font-semibold text-mist-100">Step 1 · exact MUSD approval needed</p>
-                    <p className="text-sm text-mist-300">The wallet currently allows less than this swap. The prepared approval is exactly {formatMUSDTokenAmount(prepared.quote.amountInRaw)} MUSD for the verified router—no unlimited allowance.</p>
+                    <p className="text-sm text-mist-300">The wallet currently allows less than this swap. The prepared approval is exactly {formatMUSDTokenAmount(prepared.quote.amountInRaw)} MUSD for the configured router. It does not request unlimited allowance.</p>
                   </div>
                 ) : (
                   <p className="rounded-lg border border-line bg-ink-900/70 p-3 text-sm text-mist-300">
@@ -268,7 +285,7 @@ export function MusdSwap() {
                 {explorerTx && <a href={explorerTx} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open transaction in Mezo Testnet explorer</a>}
                 {receiptOutcome?.status === "confirmed" && (
                   <p role="status" className="text-sm text-emerald-300">
-                    Confirmed in block {receiptOutcome.blockNumber.toLocaleString()}.{submission.prepared.kind === "approve"
+                    Receipt reports successful execution in block {receiptOutcome.blockNumber.toLocaleString()}. The app has not checked finality. {submission.prepared.kind === "approve"
                       ? " Approval event matches the exact MUSD allowance. Prepare again for a fresh swap quote."
                       : ` Received ${formatMUSDTokenAmount(receiptOutcome.actualOutRaw ?? 0n)} BTC token.`}
                   </p>
@@ -291,7 +308,7 @@ export function MusdSwap() {
         )}
 
         <p className="text-xs leading-relaxed text-mist-500">
-          The route is locked to the verified Mezo Testnet MUSD/BTC basic pool. Quotes can change before execution; the wallet shows the final request. No transaction is signed or sent automatically. See <Link to="/app/pools" className="text-gold-300 hover:underline">Pool Watch</Link> for read-only reserve data.
+          The route is locked to the configured Mezo Testnet MUSD/BTC basic pool. Quotes can change before execution; the wallet shows the final request. No transaction is signed or sent automatically. See <Link to="/app/pools" className="text-gold-300 hover:underline">Pool Watch</Link> for read-only reserve data.
         </p>
       </Card>
     </div>

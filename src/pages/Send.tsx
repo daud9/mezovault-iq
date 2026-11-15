@@ -21,9 +21,11 @@ import { shortAddress } from "../lib/format";
 import { preparePoolBtcTransfer } from "../lib/poolBtcTransfer";
 import {
   buildTransfer,
+  doesSendReviewMatchDraft,
   describeSendError,
   nativeTotalCost,
   parseAmount,
+  simulateErc20Transfer,
   validateRecipient,
   waitForReceipt,
   type ReceiptOutcome,
@@ -56,6 +58,8 @@ export function Send() {
   const [recipient, setRecipient] = useState(prefill.request?.to ?? "");
   const [amountText, setAmountText] = useState(prefill.request?.amount ?? "");
   const [errors, setErrors] = useState<string[]>(prefill.error ? [prefill.error] : []);
+  const [fieldErrors, setFieldErrors] = useState<{ recipient?: string; amount?: string }>({});
+  const [reviewNotice, setReviewNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState<"estimating" | "signing" | "checking" | null>(null);
   const [review, setReview] = useState<Review | null>(null);
   const [hash, setHash] = useState<string | null>(null);
@@ -78,9 +82,11 @@ export function Send() {
 
   const from = state.address;
   const ready = state.status === "connected" && from !== null && isSupportedNetwork;
-  const locked = busy !== null || (hash !== null && outcome?.status !== "success" && outcome?.status !== "reverted");
+  const locked = busy !== null || hash !== null;
+  const draftTokenSymbol = symbol === "POOL_BTC" ? "Pool BTC (ERC-20)" : symbol;
   const reviewContextValid = review !== null && state.status === "connected" && from !== null &&
-    from.toLowerCase() === review.tx.from.toLowerCase() && state.chainId === network.chainId && isSupportedNetwork;
+    from.toLowerCase() === review.tx.from.toLowerCase() && state.chainId === network.chainId && isSupportedNetwork &&
+    doesSendReviewMatchDraft(review, { recipient, amountText, tokenSymbol: draftTokenSymbol });
   const balanceText = (view: typeof native.view | typeof musd.view | typeof mezo.view | typeof poolBtc.view, tokenSymbol: string) => {
     if (view.status !== "done") return view.status === "loading" ? "loading" : "not read";
     return view.result.status === "ok" ? `${view.result.formatted} ${tokenSymbol}` : "unavailable";
@@ -90,7 +96,7 @@ export function Send() {
     musd.view.status === "done" && musd.view.result.status !== "ok" ? `MUSD: ${balanceProblem(musd.view.result)}` : null,
     mezo.view.status === "done" && mezo.view.result.status !== "ok" ? `MEZO: ${balanceProblem(mezo.view.result)}` : null,
     poolBtc.view.status === "done" && poolBtc.view.result.status !== "ok" ? `Pool BTC (ERC-20): ${balanceProblem(poolBtc.view.result)}` : null,
-    poolBtc.view.status === "done" && poolBtc.view.result.status === "ok" && !poolBtcBalance ? "Pool BTC (ERC-20): the contract address, symbol or decimals did not match the expected Testnet token." : null,
+    poolBtc.view.status === "done" && poolBtc.view.result.status === "ok" && !poolBtcBalance ? "Pool BTC (ERC-20): the returned address, symbol or decimals did not match the configured Testnet asset." : null,
   ].filter((issue): issue is string => issue !== null);
 
   function tokenFor(sym: SendSymbol): { token: SendToken; balanceRaw: bigint | null; decimals: number } | string {
@@ -115,8 +121,18 @@ export function Send() {
     };
   }
 
+  function invalidateReviewForEdit() {
+    setErrors([]);
+    if (review !== null) {
+      setReviewNotice("Form details changed. The previous review was cleared; prepare a new review before continuing.");
+      setReview(null);
+    }
+  }
+
   async function prepare() {
     setErrors([]);
+    setFieldErrors({});
+    setReviewNotice(null);
     setReview(null);
     if (!from || !ready) return setErrors([`Connect a wallet on ${network.label} first.`]);
     const resolved = tokenFor(symbol);
@@ -127,6 +143,7 @@ export function Send() {
     if (recipientError) problems.push(recipientError);
     const amount = parseAmount(amountText, resolved.decimals);
     if (!amount.ok) problems.push(amount.error);
+    setFieldErrors({ recipient: recipientError ?? undefined, amount: amount.ok ? undefined : amount.error });
     const isPoolBtc = symbol === "POOL_BTC";
     if (!isPoolBtc && btcBalance === null) problems.push("Your BTC balance is not verified yet. Retry its read before preparing a transfer.");
     if (!isPoolBtc && resolved.token.kind !== "native" && resolved.balanceRaw === null) problems.push(`Your ${resolved.token.symbol} balance is not verified yet. Retry its read before preparing a transfer.`);
@@ -149,6 +166,7 @@ export function Send() {
         reviewedAmountText = prepared.amountText;
       } else {
         tx = buildTransfer(resolved.token, from, recipient as `0x${string}`, amount.raw);
+        if (resolved.token.kind === "erc20") await simulateErc20Transfer(rpc, tx);
         gasLimit = BigInt(await rpc.call<string>("eth_estimateGas", [{ ...tx }]));
         const gasPrice = BigInt(await rpc.call<string>("eth_gasPrice", []));
         feeWei = gasLimit * gasPrice;
@@ -230,6 +248,8 @@ export function Send() {
 
   function startOver() {
     setReview(null);
+    setFieldErrors({});
+    setReviewNotice(null);
     setHash(null);
     setOutcome(null);
     setReceiptLookupFailed(false);
@@ -260,20 +280,27 @@ export function Send() {
           ) : !isSupportedNetwork ? (
             <p className="text-sm text-mist-400">Switch your wallet to {network.label} to send.</p>
           ) : (
-            <>
-              <ChoiceGroup label="Token" value={symbol} options={options} onChange={(v) => { setSymbol(v); setReview(null); }} />
+            <form className="space-y-6" onSubmit={(event) => { event.preventDefault(); void prepare(); }}>
+              {reviewNotice && <p role="status" className="rounded-lg border border-gold-500/40 bg-gold-500/10 p-3 text-sm text-mist-200">{reviewNotice}</p>}
+              <ChoiceGroup label="Token" value={symbol} options={options} disabled={locked} onChange={(v) => { setSymbol(v); invalidateReviewForEdit(); setFieldErrors({}); }} />
               <div className="space-y-1.5">
                 <label htmlFor="send-to" className="text-sm font-medium text-mist-100">Recipient address</label>
                 <input
                   id="send-to"
                   value={recipient}
-                  onChange={(e) => setRecipient(e.target.value.trim())}
+                  onChange={(e) => { setRecipient(e.target.value.trim()); invalidateReviewForEdit(); setFieldErrors((current) => ({ ...current, recipient: undefined })); }}
+                  onBlur={() => { if (from) setFieldErrors((current) => ({ ...current, recipient: validateRecipient(recipient, from) ?? undefined })); }}
                   disabled={locked}
                   placeholder="0x…"
                   autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
                   spellCheck={false}
-                  className="w-full rounded-xl border border-line bg-ink-800 px-3 py-2.5 font-mono text-sm text-mist-100 outline-none focus:border-gold-500/60"
+                  aria-invalid={Boolean(fieldErrors.recipient)}
+                  aria-describedby={fieldErrors.recipient ? "send-to-error" : undefined}
+                  className={`min-h-11 w-full rounded-xl border bg-ink-800 px-3 py-2.5 font-mono text-base text-mist-100 outline-none focus:border-gold-500/60 sm:text-sm ${fieldErrors.recipient ? "border-risk-high" : "border-line"}`}
                 />
+                {fieldErrors.recipient && <p id="send-to-error" className="text-sm text-risk-high">{fieldErrors.recipient}</p>}
               </div>
               <div className="space-y-1.5">
                 <label htmlFor="send-amount" className="text-sm font-medium text-mist-100">Amount ({symbol === "BTC" ? "BTC (native gas)" : symbol === "POOL_BTC" ? "Pool BTC (ERC-20)" : symbol})</label>
@@ -281,15 +308,25 @@ export function Send() {
                   id="send-amount"
                   inputMode="decimal"
                   value={amountText}
-                  onChange={(e) => setAmountText(e.target.value)}
+                  onChange={(e) => { setAmountText(e.target.value); invalidateReviewForEdit(); setFieldErrors((current) => ({ ...current, amount: undefined })); }}
+                  onBlur={() => {
+                    const resolved = tokenFor(symbol);
+                    if (typeof resolved !== "string") {
+                      const amount = parseAmount(amountText, resolved.decimals);
+                      setFieldErrors((current) => ({ ...current, amount: amount.ok ? undefined : amount.error }));
+                    }
+                  }}
                   disabled={locked}
                   placeholder="0.00"
-                  className="w-full rounded-xl border border-line bg-ink-800 px-3 py-2.5 text-sm text-mist-100 outline-none focus:border-gold-500/60"
+                  aria-invalid={Boolean(fieldErrors.amount)}
+                  aria-describedby={fieldErrors.amount ? "send-amount-help send-amount-error" : "send-amount-help"}
+                  className={`min-h-11 w-full rounded-xl border bg-ink-800 px-3 py-2.5 text-base text-mist-100 outline-none focus:border-gold-500/60 sm:text-sm ${fieldErrors.amount ? "border-risk-high" : "border-line"}`}
                 />
-                <p className="text-xs text-mist-500">
-                  Available: {symbol === "BTC" ? balanceText(native.view, "BTC (native gas)") : symbol === "MUSD" ? balanceText(musd.view, "MUSD") : symbol === "POOL_BTC" ? (poolBtcBalance ? `${poolBtcBalance.formatted} Pool BTC (ERC-20)` : poolBtc.view.status === "loading" ? "loading" : poolBtc.view.status === "idle" ? "not read" : "unavailable (token not verified)") : balanceText(mezo.view, "MEZO")}
+                <p id="send-amount-help" className="text-xs text-mist-500">
+                  Available: {symbol === "BTC" ? balanceText(native.view, "BTC (native gas)") : symbol === "MUSD" ? balanceText(musd.view, "MUSD") : symbol === "POOL_BTC" ? (poolBtcBalance ? `${poolBtcBalance.formatted} Pool BTC (ERC-20)` : poolBtc.view.status === "loading" ? "loading" : poolBtc.view.status === "idle" ? "not read" : "unavailable (configured-token checks did not pass)") : balanceText(mezo.view, "MEZO")}
                 </p>
-                {symbol === "POOL_BTC" && <p className="text-xs leading-relaxed text-mist-500">This is the Testnet pool’s BTC ERC-20 at {TESTNET_POOL_BTC_TOKEN.address}. It is not native BTC and cannot pay gas; transaction fees use your separate native BTC balance.</p>}
+                {fieldErrors.amount && <p id="send-amount-error" className="text-sm text-risk-high">{fieldErrors.amount}</p>}
+                {symbol === "POOL_BTC" && <p className="text-xs leading-relaxed text-mist-500">Configured Testnet Pool BTC ERC-20: <span className="break-all font-mono">{TESTNET_POOL_BTC_TOKEN.address}</span>. This app checks its code, BTC symbol and 18 decimals; the <a className="text-gold-300 underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noopener noreferrer">official pool docs</a> do not list this token address, so those checks do not prove canonical identity. <a className="text-gold-300 underline" href={`${network.explorerUrl.replace(/\/?$/, "/")}address/${TESTNET_POOL_BTC_TOKEN.address}`} target="_blank" rel="noopener noreferrer">Review it on the Testnet explorer</a>. It is not native BTC and cannot pay gas; transaction fees use your separate native BTC balance.</p>}
               </div>
               {balanceIssues.length > 0 && (
                 <div className="space-y-2 rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3">
@@ -300,11 +337,11 @@ export function Send() {
               )}
               <FormErrors errors={errors} />
               {!review && (
-                <Button onClick={prepare} disabled={locked} className="min-h-11 w-full">
+                <Button type="submit" disabled={locked} className="min-h-11 w-full">
                   {busy === "estimating" ? "Estimating fee…" : "Review transaction"}
                 </Button>
               )}
-            </>
+            </form>
           )}
         </Card>
 
@@ -340,7 +377,7 @@ export function Send() {
               <a href={`${network.explorerUrl.replace(/\/?$/, "/")}tx/${hash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">
                 View on the {network.label} explorer
               </a>
-              {!outcome && !receiptLookupFailed && <DataStatus state="unverified" detail={busy === "checking" ? "checking receipt" : "waiting for confirmation"} />}
+              {!outcome && !receiptLookupFailed && <DataStatus state="unverified" detail={busy === "checking" ? "checking receipt" : "waiting for receipt"} />}
               {receiptLookupFailed && (
                 <div className="space-y-2" role="status">
                   <DataStatus state="unverified" detail="receipt lookup failed; transaction outcome unknown" />
@@ -350,8 +387,8 @@ export function Send() {
               )}
               {outcome?.status === "success" && (
                 <div className="space-y-2">
-                  <DataStatus state="live" detail="confirmed" />
-                  <p className="text-sm text-mist-300">Confirmed in block {outcome.blockNumber}. Refresh the balance on the Overview page to see the change.</p>
+                  <DataStatus state="live" detail={`execution succeeded · block ${outcome.blockNumber}`} />
+                  <p className="text-sm text-mist-300">The receipt reports successful execution in block {outcome.blockNumber}. The app has not checked finality. Refresh the balance on the Overview page to see the change.</p>
                 </div>
               )}
               {outcome?.status === "reverted" && (
@@ -362,7 +399,7 @@ export function Send() {
               )}
               {outcome?.status === "timeout" && (
                 <div className="space-y-2">
-                  <DataStatus state="unverified" detail="not yet confirmed" />
+                  <DataStatus state="unverified" detail="no receipt yet" />
                   <p className="text-sm text-mist-300">No confirmation yet. It may still complete. Check the explorer link before sending again.</p>
                   <Button variant="secondary" onClick={() => void checkReceipt(hash)} disabled={busy !== null} className="min-h-11">{busy === "checking" ? "Checking receipt…" : "Check receipt again"}</Button>
                 </div>

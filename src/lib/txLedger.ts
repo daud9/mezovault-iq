@@ -10,8 +10,10 @@ export interface LedgerEntry {
   chainId: number;
   from: string;
   to: string;
-  token: "BTC" | "MUSD" | "MEZO" | "Pool BTC (ERC-20)";
+  token: string;
   amount: string;
+  /** Human-readable action from the app flow, when known. Older entries omit it. */
+  action?: string;
   createdAt: string;
   status: LedgerStatus;
   blockNumber: number | null;
@@ -31,8 +33,10 @@ function isLedgerEntry(value: unknown): value is LedgerEntry {
   return typeof entry.hash === "string" && entry.hash.length > 0 &&
     Number.isSafeInteger(entry.chainId) &&
     typeof entry.from === "string" && typeof entry.to === "string" &&
-    (entry.token === "BTC" || entry.token === "MUSD" || entry.token === "MEZO" || entry.token === "Pool BTC (ERC-20)") &&
-    typeof entry.amount === "string" && typeof entry.createdAt === "string" &&
+    typeof entry.token === "string" && entry.token.length > 0 && entry.token.length <= 64 &&
+    typeof entry.amount === "string" && entry.amount.length <= 256 &&
+    (entry.action === undefined || (typeof entry.action === "string" && entry.action.length > 0 && entry.action.length <= 120)) &&
+    typeof entry.createdAt === "string" &&
     (entry.status === "pending" || entry.status === "success" || entry.status === "reverted" || entry.status === "unconfirmed") &&
     (entry.blockNumber === null || Number.isSafeInteger(entry.blockNumber));
 }
@@ -70,6 +74,22 @@ export function updateEntry(
     store,
     readLedger(store).map((e) => (e.hash.toLowerCase() === hash.toLowerCase() ? { ...e, ...patch } : e)),
   );
+}
+
+/** Only recognize a receipt with a valid status and safe block number; malformed RPC data stays unconfirmed. */
+export function parseLedgerReceipt(value: unknown): { status: "success" | "reverted"; blockNumber: number } | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const receipt = value as { status?: unknown; blockNumber?: unknown };
+  if (typeof receipt.status !== "string" || !/^0x[0-9a-fA-F]+$/.test(receipt.status) ||
+      typeof receipt.blockNumber !== "string" || !/^0x[0-9a-fA-F]+$/.test(receipt.blockNumber)) return null;
+  try {
+    const status = BigInt(receipt.status);
+    const block = BigInt(receipt.blockNumber);
+    if ((status !== 0n && status !== 1n) || block > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+    return { status: status === 1n ? "success" : "reverted", blockNumber: Number(block) };
+  } catch {
+    return null;
+  }
 }
 
 /** Entries for one sender on one chain, newest first. */

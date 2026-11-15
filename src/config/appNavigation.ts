@@ -24,6 +24,10 @@ export const APP_NAV = [
   { to: "/app/activity", label: "Activity", icon: ActivityIcon },
 ] as const;
 
+const MOBILE_PRIMARY_PATHS = new Set<string>(["/app", "/app/swap", "/app/send", "/app/activity"]);
+export const MOBILE_PRIMARY_NAV = APP_NAV.filter(({ to }) => MOBILE_PRIMARY_PATHS.has(to));
+export const MOBILE_MORE_NAV = APP_NAV.filter(({ to }) => !MOBILE_PRIMARY_PATHS.has(to));
+
 /** Keep only the bridge route alias; unknown app paths use the generic Overview fallback. */
 export const APP_ROUTE_REDIRECTS = [
   { path: "bridge-rescue", to: "/app/bridge-status" },

@@ -183,7 +183,7 @@ export function MusdPayLinks() {
         <Card className="space-y-3">
           <h2 className="text-sm font-semibold text-mist-100">What Mezo x402 does support</h2>
           <p className="text-sm leading-relaxed text-mist-400">On Mezo Testnet, a buyer signs an off-chain EIP-712 MUSD authorization in their wallet. The facilitator at <span className="font-mono text-mist-300">facilitator.vativ.io</span> verifies and settles the payment, paying native BTC gas. The buyer needs MUSD and a compatible signing wallet, but does not pay BTC gas for that x402 settlement.</p>
-          <p className="text-xs leading-relaxed text-mist-500">This is not a general gasless ERC-20 transfer, not an ERC-4337 paymaster, and not a claim that acquiring MUSD itself is gas-free. The documented browser flow is a payment for a server-backed resource.</p>
+          <p className="text-xs leading-relaxed text-mist-500">Gas sponsorship applies to this x402 payment flow. Other ERC-20 transfers and acquiring MUSD may require separate on-chain transactions and gas.</p>
           <a href={OFFICIAL_SOURCES.x402Payments} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Official Mezo x402 overview <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
         </Card>
 

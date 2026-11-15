@@ -4,6 +4,8 @@ import { resolveRpcUrl } from "../config/env";
 import { TESTNET_BASIC_POOLS } from "../config/pools";
 import { createRpcClient } from "../lib/rpc";
 import { readPoolMarket, type PoolMarketResult } from "../lib/pool";
+import { readSnapshotBlock } from "../lib/readSnapshotBlock";
+import { parseChainId } from "../lib/network";
 
 export type PoolMarketsView =
   | { status: "idle" }
@@ -25,9 +27,28 @@ export function usePoolMarkets(): { view: PoolMarketsView; refresh: () => void }
     setView({ status: "loading" });
     const rpc = createRpcClient({ url: resolveRpcUrl(network) });
     (async () => {
-      const results: { poolId: string; result: PoolMarketResult }[] = [];
-      for (const pool of TESTNET_BASIC_POOLS) {
-        results.push({ poolId: pool.id, result: await readPoolMarket({ network, pool, rpc }) });
+      let results: { poolId: string; result: PoolMarketResult }[];
+      try {
+        const chainId = parseChainId(await rpc.call<string>("eth_chainId"));
+        if (chainId !== network.chainId) {
+          results = TESTNET_BASIC_POOLS.map((pool) => ({
+            poolId: pool.id,
+            result: { status: "wrong-network", actualChainId: chainId, expectedChainId: network.chainId },
+          }));
+        } else {
+          const block = await readSnapshotBlock(rpc);
+          const snapshot = { ...block, chainId };
+          results = await Promise.all(TESTNET_BASIC_POOLS.map(async (pool) => ({
+            poolId: pool.id,
+            result: await readPoolMarket({ network, pool, rpc, snapshot }),
+          })));
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "A common pool snapshot could not be read.";
+        results = TESTNET_BASIC_POOLS.map((pool) => ({
+          poolId: pool.id,
+          result: { status: "error", kind: "snapshot", message },
+        }));
       }
       if (!cancelled) setView({ status: "done", results });
     })();

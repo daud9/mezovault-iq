@@ -16,6 +16,7 @@ import {
   type SimulatedClTransaction,
 } from "../../lib/clDeposit";
 import { createRpcClient } from "../../lib/rpc";
+import { addEntry, browserStore } from "../../lib/txLedger";
 import { describeSendError } from "../../lib/transfer";
 import type { ClPlannerPool } from "../../lib/clPlanner";
 import { Button } from "../ui/Button";
@@ -153,6 +154,7 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
         gas: simulation.transaction.gas,
       };
       const hash = await wallet.sendTransaction(transactionRequest, { account, chainId: TESTNET_CL_CONTRACTS.chainId });
+      recordClAction(hash, simulation, review);
       setSubmission({ hash, kind: simulation.kind });
       setReceiptState({ status: "not-checked" });
       setSimulationBundle(null);
@@ -331,7 +333,7 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
                 <h3 className="text-sm font-semibold text-mist-100">{submission.kind === "mint" ? "Mint transaction" : submission.kind === "approve" ? "Token approval" : "Allowance reset"}</h3>
                 <p className="mt-1 break-all font-mono text-xs text-mist-400">{submission.hash}</p>
               </div>
-              {receiptState.status === "confirmed" && <p role="status" className="text-sm text-risk-low">Receipt confirmed in block {receiptState.blockNumber.toLocaleString()}. {submission.kind === "mint" ? "The mint transaction succeeded; open the monitor to refresh your positions." : "The approval action succeeded. Prepare a fresh review before continuing."}</p>}
+              {receiptState.status === "confirmed" && <p role="status" className="text-sm text-risk-low">Receipt reports successful execution in block {receiptState.blockNumber.toLocaleString()}; finality is not independently checked. {submission.kind === "mint" ? "The mint transaction succeeded; open the monitor to refresh your positions." : "The approval action succeeded. Prepare a fresh review before continuing."}</p>}
               {receiptState.status === "reverted" && <p role="alert" className="text-sm text-risk-high">The receipt shows that this transaction reverted in block {receiptState.blockNumber.toLocaleString()}. No successful deposit or approval is claimed.</p>}
               {receiptState.status === "not-checked" && <p role="status" className="text-sm text-risk-medium">The wallet returned a transaction hash, but its receipt has not been checked. Treat it as unconfirmed until a receipt is observed.</p>}
               {receiptState.status === "pending" && <p role="status" className="text-sm text-risk-medium">No receipt is available yet. This is still unconfirmed; check again later.</p>}
@@ -350,6 +352,32 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
       )}
     </Card>
   );
+}
+
+function recordClAction(hash: string, simulation: SimulatedClTransaction, review: ClDepositReview) {
+  const approvalToken = simulation.approvalTokenIndex === undefined
+    ? null
+    : simulation.approvalTokenIndex === 0 ? review.pool.token0 : review.pool.token1;
+  const action = simulation.kind === "mint"
+    ? `Mint ${review.pool.token0.symbol}/${review.pool.token1.symbol} CL position`
+    : simulation.kind === "reset-approval"
+      ? `Reset ${approvalToken?.symbol ?? "token"} allowance for CL position`
+      : `Approve ${approvalToken?.symbol ?? "token"} for CL position`;
+  const amount = simulation.kind === "mint"
+    ? `${review.pool.token0.decimals === null ? `${review.amount0Desired} base units` : `${formatRawTokenAmount(review.amount0Desired, review.pool.token0.decimals)} ${review.pool.token0.symbol}`} + ${review.pool.token1.decimals === null ? `${review.amount1Desired} base units` : `${formatRawTokenAmount(review.amount1Desired, review.pool.token1.decimals)} ${review.pool.token1.symbol}`}`
+    : `${formatRawTokenAmount(simulation.approvalAmount ?? "0", approvalToken?.decimals ?? 0)} ${approvalToken?.symbol ?? "token"}`;
+  addEntry(browserStore(), {
+    hash,
+    chainId: review.chainId,
+    from: review.wallet,
+    to: simulation.transaction.to,
+    token: simulation.kind === "mint" ? "CL position" : approvalToken?.symbol ?? "token",
+    amount,
+    action,
+    createdAt: new Date().toISOString(),
+    status: "pending",
+    blockNumber: null,
+  });
 }
 
 function AmountBox({ token, desired, minimum, balance, allowance }: { token: ClPlannerPool["token0"]; desired: string; minimum: string; balance: string; allowance: string }) {

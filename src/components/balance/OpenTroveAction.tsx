@@ -14,6 +14,7 @@ import {
 import { formatBasisPoints, formatUnits18, MEZO_TESTNET_CHAIN_ID, OPEN_TROVE_SELECTOR, type OpenTroveLiveSnapshot } from "../../lib/openTrovePlanner";
 import { OpenTroveReceiptError, readOpenTroveReceipt } from "../../lib/openTroveReceipt";
 import { createRpcClient } from "../../lib/rpc";
+import { addEntry, browserStore } from "../../lib/txLedger";
 import { Button } from "../ui/Button";
 import { useWallet } from "../wallet/WalletProvider";
 
@@ -171,6 +172,18 @@ export function OpenTroveAction({
     setWalletRequestPending(true);
     void request.promise
       .then((hash) => {
+        addEntry(browserStore(), {
+          hash,
+          chainId: MEZO_TESTNET_CHAIN_ID,
+          from: ready.prepared.account,
+          to: ready.prepared.transaction.to,
+          token: "Trove",
+          amount: `${formatUnits18(ready.prepared.plan.collateralWei ?? 0n)} BTC collateral; ${formatUnits18(ready.prepared.plan.requestWei ?? 0n)} MUSD requested`,
+          action: "Open Trove",
+          createdAt: new Date().toISOString(),
+          status: "pending",
+          blockNumber: null,
+        });
         setSubmission({ hash, prepared: ready.prepared });
         setReceiptState({ status: "not-checked" });
         setNotice("");
@@ -219,6 +232,8 @@ export function OpenTroveAction({
         <p className="mt-1 text-sm leading-relaxed text-mist-400">Live checks run automatically. Your wallet opens only after they pass; you approve the transaction there.</p>
       </div>
 
+      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">Borrowing interest accrues separately from the one-time fee. This planner does not verify an ongoing interest rate from the deployed Testnet contracts, so it does not show total borrowing cost; the fee below is not the total cost. <a href="https://mezo.org/docs/users/borrow/mint-musd/" target="_blank" rel="noopener noreferrer" className="font-medium underline">Mezo borrowing guide</a>.</p>
+
       {gateMessage && <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">{gateMessage}</p>}
       {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200" role="alert">{error}</p>}
       {notice && <p className="rounded-lg border border-line bg-ink-800/60 p-3 text-sm text-mist-300" role="status">{notice}</p>}
@@ -254,7 +269,8 @@ export function OpenTroveAction({
             <dl className="grid gap-2 sm:grid-cols-2">
               <Detail label="Live system mode" value={ready.prepared.snapshot.mode === "normal" ? "Normal Mode" : "Recovery Mode"} />
               <Detail label="Open-time collateral ratio" value={formatBasisPoints(ready.prepared.plan.icrBasisPoints)} />
-              <Detail label="Requested MUSD + live fee" value={`${formatUnits18(ready.prepared.plan.requestWei ?? 0n)} + ${formatUnits18(ready.prepared.plan.feeWei ?? 0n)}`} />
+              <Detail label="Requested MUSD / one-time fee" value={`${formatUnits18(ready.prepared.plan.requestWei ?? 0n)} / ${formatUnits18(ready.prepared.plan.feeWei ?? 0n)}`} />
+              <Detail label="Composite debt used for collateral check" value={`${formatUnits18(ready.prepared.plan.compositeDebtWei ?? 0n)} MUSD, including reserve`} />
               <Detail label="BTC collateral sent" value={`${formatUnits18(ready.prepared.plan.collateralWei ?? 0n)} BTC`} />
               <Detail label="Gas estimate / limit" value={`${ready.prepared.gasEstimate.toLocaleString()} / ${ready.prepared.gasLimit.toLocaleString()}`} />
               <Detail label="BorrowerOperations" value={ready.prepared.transaction.to} />
@@ -275,7 +291,7 @@ export function OpenTroveAction({
           {receiptState.status === "not-checked" && <p role="status" className="text-sm text-amber-200">Your wallet returned a hash, but the receipt has not been checked. This is unconfirmed.</p>}
           {receiptState.status === "pending" && <p role="status" className="text-sm text-amber-200">No receipt is available yet. The transaction remains unconfirmed; check again later.</p>}
           {receiptState.status === "error" && <p role="alert" className="text-sm text-amber-200">{receiptState.message}</p>}
-          {receiptState.status === "confirmed" && <p role="status" className="text-sm text-emerald-300">The exact transaction, successful receipt, and matching TroveCreated event were verified in block {receiptState.blockNumber.toLocaleString()}. Refreshing the Trove read.</p>}
+          {receiptState.status === "confirmed" && <p role="status" className="text-sm text-emerald-300">The receipt shows successful execution and a matching TroveCreated event in block {receiptState.blockNumber.toLocaleString()}; finality is not independently checked. Refreshing the Trove read.</p>}
           {receiptState.status === "reverted" && <p role="alert" className="text-sm text-rose-300">The exact transaction receipt shows a revert in block {receiptState.blockNumber.toLocaleString()}. No successful Trove opening is claimed.</p>}
           {receiptState.status !== "confirmed" && receiptState.status !== "reverted" && (
             <Button variant="secondary" onClick={() => void checkReceipt()} disabled={receiptBusy} className="min-h-11">{receiptBusy ? "Checking receipt…" : "Check transaction receipt"}</Button>

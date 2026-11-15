@@ -8,13 +8,14 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { useLoan } from "../hooks/useLoan";
 import { isLoanPriceFresh, isLoanReadFresh, loanReadAgeMs } from "../lib/loan";
 import { formatTime, shortAddress } from "../lib/format";
-import { calculateCollateralRatioBps, calculateTroveRisk, classifyHistoricalTroveRisk, formatPercentBps, formatWad } from "../lib/troveRisk";
+import { calculateCollateralRatioBps, calculateTroveRisk, calculateTroveRiskAtDrop, classifyHistoricalTroveRisk, formatPercentBps, formatWad } from "../lib/troveRisk";
 import type { ClosedTroveHistory } from "../lib/closedTroveHistory";
 
 export function TroveRiskLab() {
   const { state, network } = useWallet();
   const { view: loanView, refresh } = useLoan();
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [stressDropPct, setStressDropPct] = useState(20);
   const isTestnet = network.key === "testnet";
   const walletConnected = state.status === "connected" && state.address !== null;
   const walletOnNetwork = walletConnected && state.chainId === network.chainId;
@@ -29,7 +30,10 @@ export function TroveRiskLab() {
   const readFresh = loan ? isLoanReadFresh(loan, nowMs) : false;
   const priceFresh = loan?.hasLoan ? isLoanPriceFresh(loan, nowMs) : false;
   const loanAgeMs = loan ? loanReadAgeMs(loan, nowMs) : null;
-  const historicalRiskLabel = loan ? classifyHistoricalTroveRisk(loan.troveStatus) : null;
+  const historicalRiskLabel = loan
+    ? classifyHistoricalTroveRisk(loan.troveStatus, loan.closedHistory?.closure !== null && loan.closedHistory?.closure !== undefined)
+    : null;
+  const closedByRedemption = loan?.troveStatus === 4;
   const ratioBps = loan && loan.hasLoan && readFresh && priceFresh && loan.btcUsdWei !== null
     ? calculateCollateralRatioBps({
         collateralBtcWei: loan.collateralRaw,
@@ -46,6 +50,16 @@ export function TroveRiskLab() {
       mcrWei: loan.mcrWei,
     });
   }, [loan, readFresh, priceFresh]);
+  const customScenario = useMemo(() => {
+    if (!loan || !loan.hasLoan || !readFresh || !priceFresh || loan.btcUsdWei === null || loan.mcrWei === null) return null;
+    return calculateTroveRiskAtDrop({
+      collateralBtcWei: loan.collateralRaw,
+      debtMusdWei: loan.debtRaw,
+      btcUsdWei: loan.btcUsdWei,
+      mcrWei: loan.mcrWei,
+      dropPct: stressDropPct,
+    });
+  }, [loan, readFresh, priceFresh, stressDropPct]);
 
   const collateralAddress = network.troveManager?.address;
   const thresholdAddress = network.borrowerOperations?.address;
@@ -86,7 +100,7 @@ export function TroveRiskLab() {
           <h2 className="text-base font-semibold text-mist-100">Refresh before using this risk read</h2>
           <p className="text-sm leading-relaxed text-mist-400">The pinned-block read at block {loan.blockNumber} is {loanAgeMs === null ? "not verifiably fresh" : `${Math.floor(loanAgeMs / 1_000)} seconds old`}. The last result {loan.hasLoan ? `recorded ${loan.collateralBtc} BTC collateral and ${loan.debtMusd} MUSD debt` : "found no active Trove"}, but no current ratio or scenario is shown.</p>
         </Card>
-      ) : loan && !loan.hasLoan && historicalRiskLabel ? (
+      ) : loan && !loan.hasLoan && closedByRedemption ? (
         <ClosedRedemptionRiskCard
           label={historicalRiskLabel}
           history={loan.closedHistory}
@@ -171,6 +185,34 @@ export function TroveRiskLab() {
               ))}
             </div>
           </section>
+          <Card className="space-y-4">
+            <div>
+              <h2 className="text-sm font-semibold text-mist-100">Custom BTC price scenario</h2>
+              <p className="mt-1 text-xs leading-relaxed text-mist-500">Choose a hypothetical BTC price decline. The calculation holds collateral, debt and the same-block MCR constant; it does not model future prices or liquidation events.</p>
+            </div>
+            <label htmlFor="trove-stress-drop" className="block text-sm font-medium text-mist-200">BTC price decline: {stressDropPct}%</label>
+            <input
+              id="trove-stress-drop"
+              type="range"
+              min={0}
+              max={80}
+              step={1}
+              value={stressDropPct}
+              onChange={(event) => setStressDropPct(Number(event.currentTarget.value))}
+              className="w-full accent-amber-400"
+              aria-valuetext={`${stressDropPct}% hypothetical decline`}
+            />
+            {customScenario && (
+              <div className="grid gap-3 sm:grid-cols-3">
+                <Metric label="Scenario BTC/USD" value={`$${formatWad(customScenario.scenarioPriceWei, 2)}`} />
+                <Metric label="Scenario collateral ratio" value={formatPercentBps(customScenario.ratioBps)} />
+                <div className="rounded-xl border border-line bg-ink-800/50 p-4">
+                  <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Compared with live MCR</p>
+                  <div className="mt-2"><ThresholdLabel below={customScenario.belowThreshold} /></div>
+                </div>
+              </div>
+            )}
+          </Card>
           <Card className="space-y-3">
             <h2 className="text-sm font-semibold text-mist-100">Evidence used</h2>
             <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-mist-400">
@@ -231,7 +273,7 @@ function ClosedRedemptionRiskCard({
   retrievedAt,
   explorerUrl,
 }: {
-  label: "RISK-ESCAPED";
+  label: "RISK-ESCAPED" | null;
   history: ClosedTroveHistory | null;
   blockNumber: number;
   retrievedAt: string;
@@ -245,14 +287,12 @@ function ClosedRedemptionRiskCard({
     <Card highlight className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <DataStatus state="live" detail={`status 4 · read at block ${blockNumber.toLocaleString()}`} />
-        <span className="inline-flex rounded-full border border-gold-500/40 bg-gold-500/10 px-2.5 py-1 text-xs font-semibold tracking-wide text-gold-300">
-          {label}
-        </span>
+        {label && <span className="inline-flex rounded-full border border-gold-500/40 bg-gold-500/10 px-2.5 py-1 text-xs font-semibold tracking-wide text-gold-300">{label}</span>}
       </div>
       <div className="space-y-2">
-        <h2 className="text-base font-semibold text-mist-100">Historical redemption</h2>
+        <h2 className="text-base font-semibold text-mist-100">Closed by redemption (status 4)</h2>
         <p className="text-sm leading-relaxed text-mist-300">
-          This label means the Trove's exposure ended through redemption. It does not mean the Trove was liquidated,
+          RISK-ESCAPED is an app-defined label for a verified redemption closure. It does not mean the Trove was liquidated,
           that it was safe, or that a minimum-collateral threshold was necessarily avoided.
         </p>
         <p className="text-sm leading-relaxed text-mist-400">

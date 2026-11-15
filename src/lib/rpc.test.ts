@@ -91,4 +91,40 @@ describe("RPC client: failure modes", () => {
     const rpc = createRpcClient({ url: "https://rpc.example", fetchImpl: wrongId });
     await expectRpcError(rpc.call("eth_chainId"), "invalid-response");
   });
+
+  it("rejects malformed JSON-RPC envelopes and error objects", async () => {
+    const payloads = [
+      { id: 1, result: "0x1" },
+      { jsonrpc: "1.0", id: 1, result: "0x1" },
+      { jsonrpc: "2.0", id: 1, result: "0x1", error: { code: -1, message: "bad" } },
+      { jsonrpc: "2.0", id: 1, error: { code: "-1", message: "bad" } },
+      { jsonrpc: "2.0", id: 1, error: { code: -1 } },
+    ];
+    for (const payload of payloads) {
+      const fetchImpl = (async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch;
+      await expectRpcError(createRpcClient({ url: "https://rpc.example", fetchImpl }).call("eth_chainId"), "invalid-response");
+    }
+  });
+
+  it("keeps the timeout active while reading the response body", async () => {
+    const slowBody = (async (_url: string | URL | Request, init?: RequestInit) => {
+      const signal = init?.signal;
+      const response = {
+        ok: true,
+        status: 200,
+        async json() {
+          return new Promise((_resolve, reject) => {
+            signal?.addEventListener("abort", () => {
+              const error = new Error("body aborted");
+              error.name = "AbortError";
+              reject(error);
+            }, { once: true });
+          });
+        },
+      };
+      return response as Response;
+    }) as typeof fetch;
+    const rpc = createRpcClient({ url: "https://rpc.example", fetchImpl: slowBody, timeoutMs: 5 });
+    await expectRpcError(rpc.call("eth_chainId"), "timeout");
+  });
 });

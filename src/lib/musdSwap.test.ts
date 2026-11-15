@@ -2,7 +2,7 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { toEventSelector } from "viem";
 import { MEZO_NETWORKS } from "../config/chains";
-import { TESTNET_BASIC_POOL_ROUTER, TESTNET_BASIC_POOLS } from "../config/pools";
+import { TESTNET_BASIC_POOL_ROUTER, TESTNET_BASIC_POOLS, TESTNET_POOL_BTC_TOKEN } from "../config/pools";
 import { createRpcClient } from "./rpc";
 import { encodeAddressWord } from "./abi";
 import { fakeFetch, encodeStringResult, encodeUintResult } from "./testHelpers";
@@ -15,7 +15,8 @@ const MUSD = NETWORK.musd!.address;
 const POOL = TESTNET_BASIC_POOLS.find((p) => p.id === "musd-btc")!.address;
 const ROUTER = TESTNET_BASIC_POOL_ROUTER.address;
 const FACTORY = TESTNET_BASIC_POOL_ROUTER.factory;
-const BTC_TOKEN = "0x7b7c000000000000000000000000000000000000" as const;
+const BTC_TOKEN = TESTNET_POOL_BTC_TOKEN.address;
+const WRONG_BTC_TOKEN = "0x4444444444444444444444444444444444444444" as const;
 const WAD = 10n ** 18n;
 const AMOUNT_IN = 2n * WAD;
 const QUOTED_OUT = 25_535_096_324_990n;
@@ -45,6 +46,7 @@ interface MockOptions {
   simulatedOut?: bigint;
   chainId?: string;
   outputSymbol?: string;
+  outputToken?: string;
   wrongFactory?: string;
   failEstimate?: boolean;
   failSwapSimulation?: boolean;
@@ -89,7 +91,7 @@ function handler(options: MockOptions = {}) {
       assert.equal(block, BLOCK_TAG, "contract calls stay pinned to the reviewed block");
       if (to === POOL.toLowerCase()) {
         if (data === S.token0) return addressResult(MUSD);
-        if (data === S.token1) return addressResult(BTC_TOKEN);
+        if (data === S.token1) return addressResult(options.outputToken ?? BTC_TOKEN);
         if (data === S.factory) return addressResult(options.wrongFactory ?? FACTORY);
         if (data === S.reserves) return reserves();
       }
@@ -230,6 +232,7 @@ describe("MUSD swap exact preflight and simulation", () => {
   it("blocks a pool/factory/token mismatch, unavailable BTC transfer, or non-Testnet network", async () => {
     for (const options of [
       { wrongFactory: "0x2222222222222222222222222222222222222222" },
+      { outputToken: WRONG_BTC_TOKEN },
       { outputSymbol: "NOT-BTC" },
       { outputTransferResult: 0n },
     ]) {

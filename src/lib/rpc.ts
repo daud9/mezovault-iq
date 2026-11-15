@@ -49,57 +49,58 @@ export function createRpcClient(options: RpcClientOptions): RpcClient {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-      let response: Response;
       try {
-        response = await fetchImpl(url, {
+        const response = await fetchImpl(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
           signal: controller.signal,
         });
+        if (!response.ok) {
+          throw new RpcError("http", `The RPC endpoint returned HTTP ${response.status}.`, response.status);
+        }
+
+        let payload: unknown;
+        try {
+          payload = await response.json();
+        } catch (err) {
+          if (isAbortError(err)) throw err;
+          throw new RpcError("invalid-response", "The RPC endpoint returned data that is not JSON.");
+        }
+
+        if (!isRecord(payload) || payload.jsonrpc !== "2.0" || payload.id !== id) {
+          throw new RpcError("invalid-response", "The RPC response has an invalid JSON-RPC version, id, or shape.");
+        }
+        const hasResult = Object.prototype.hasOwnProperty.call(payload, "result");
+        const hasError = Object.prototype.hasOwnProperty.call(payload, "error");
+        if (hasResult === hasError) {
+          throw new RpcError("invalid-response", "The RPC response must contain exactly one of result or error.");
+        }
+        if (hasError) {
+          const error = payload.error;
+          if (!isRecord(error) || !Number.isSafeInteger(error.code) || typeof error.message !== "string") {
+            throw new RpcError("invalid-response", "The RPC response contains a malformed error object.");
+          }
+          throw new RpcError("rpc", error.message, error.code as number);
+        }
+        return payload.result as T;
       } catch (err) {
-        if (isAbortError(err)) {
+        if (err instanceof RpcError) throw err;
+        if (isAbortError(err) || controller.signal.aborted) {
           throw new RpcError("timeout", `The RPC endpoint did not respond within ${timeoutMs} ms.`);
         }
         throw new RpcError("network", "The RPC endpoint could not be reached.");
       } finally {
         clearTimeout(timer);
       }
-
-      if (!response.ok) {
-        throw new RpcError("http", `The RPC endpoint returned HTTP ${response.status}.`, response.status);
-      }
-
-      let payload: unknown;
-      try {
-        payload = await response.json();
-      } catch {
-        throw new RpcError("invalid-response", "The RPC endpoint returned data that is not JSON.");
-      }
-
-      if (typeof payload !== "object" || payload === null) {
-        throw new RpcError("invalid-response", "The RPC response has an unexpected shape.");
-      }
-
-      const body = payload as { id?: unknown; result?: unknown; error?: { code?: number; message?: string } };
-
-      if (body.error) {
-        throw new RpcError("rpc", body.error.message ?? "The RPC endpoint returned an error.", body.error.code);
-      }
-
-      if (body.id !== id) {
-        throw new RpcError("invalid-response", "The RPC response id does not match the request.");
-      }
-
-      if (body.result === undefined) {
-        throw new RpcError("invalid-response", `The RPC response for ${method} has no result.`);
-      }
-
-      return body.result as T;
     },
   };
 }
 
 function isAbortError(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { name?: string }).name === "AbortError";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

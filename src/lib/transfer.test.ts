@@ -2,10 +2,12 @@ import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
   buildTransfer,
+  doesSendReviewMatchDraft,
   describeSendError,
   isTxHash,
   nativeTotalCost,
   parseAmount,
+  simulateErc20Transfer,
   TRANSFER_SELECTOR,
   validateRecipient,
   waitForReceipt,
@@ -56,6 +58,25 @@ describe("recipient validation", () => {
   });
 });
 
+describe("Send review draft integrity", () => {
+  const review = {
+    recipient: TO,
+    amountRaw: 1_500_000_000_000_000_000n,
+    token: { kind: "erc20", symbol: "MUSD", decimals: 18, address: TOKEN },
+  } as const;
+
+  it("accepts the same exact transfer even when decimal formatting differs", () => {
+    assert.equal(doesSendReviewMatchDraft(review, { recipient: TO, amountText: "1.5000", tokenSymbol: "MUSD" }), true);
+  });
+
+  it("invalidates a review when its recipient, token or amount changes", () => {
+    assert.equal(doesSendReviewMatchDraft(review, { recipient: FROM, amountText: "1.5", tokenSymbol: "MUSD" }), false);
+    assert.equal(doesSendReviewMatchDraft(review, { recipient: TO, amountText: "1.6", tokenSymbol: "MUSD" }), false);
+    assert.equal(doesSendReviewMatchDraft(review, { recipient: TO, amountText: "1.5", tokenSymbol: "MEZO" }), false);
+    assert.equal(doesSendReviewMatchDraft(review, { recipient: TO, amountText: "1e3", tokenSymbol: "MUSD" }), false);
+  });
+});
+
 describe("transaction building", () => {
   it("builds a native BTC transfer with value and no data", () => {
     const tx = buildTransfer({ kind: "native", symbol: "BTC", decimals: 18 }, FROM, TO, 10n ** 16n);
@@ -73,6 +94,21 @@ describe("transaction building", () => {
       `0xa9059cbb000000000000000000000000${TO.slice(2).toLowerCase()}${(1_500_000_000_000_000_000n).toString(16).padStart(64, "0")}`,
     );
     assert.equal(tx.data!.length, 2 + 8 + 64 + 64);
+  });
+
+  it("simulates the exact ERC-20 transfer and requires a true boolean result", async () => {
+    const tx = buildTransfer({ kind: "erc20", symbol: "MUSD", decimals: 18, address: TOKEN }, FROM, TO, 1n);
+    const mock = fakeFetch((method, params) => {
+      assert.equal(method, "eth_call");
+      assert.deepEqual(params, [{ from: FROM, to: TOKEN, data: tx.data, value: "0x0" }]);
+      return `0x${"0".repeat(63)}1`;
+    });
+    await simulateErc20Transfer(createRpcClient({ url: "https://rpc.example", fetchImpl: mock.fetchImpl }), tx);
+
+    for (const result of [`0x${"0".repeat(64)}`, "0x", `0x${"0".repeat(63)}2`]) {
+      const failed = createRpcClient({ url: "https://rpc.example", fetchImpl: fakeFetch(() => result).fetchImpl });
+      await assert.rejects(simulateErc20Transfer(failed, tx));
+    }
   });
 
   it("computes the total BTC a native send needs", () => {
@@ -112,6 +148,22 @@ describe("receipt polling", () => {
       sleep: noSleep,
     });
     assert.equal(out.status, "reverted");
+  });
+
+  it("does not call an unknown receipt status a revert", async () => {
+    await assert.rejects(waitForReceipt({
+      rpc: rpcFor(receiptHandler([{ status: "0x2", blockNumber: "0x10", gasUsed: "0x5208" }])),
+      hash: HASH,
+      sleep: noSleep,
+    }), /unknown transaction receipt status/);
+  });
+
+  it("rejects malformed receipt quantities instead of claiming a result", async () => {
+    await assert.rejects(waitForReceipt({
+      rpc: rpcFor(receiptHandler([{ status: "garbage", blockNumber: "0x10", gasUsed: "0x5208" }])),
+      hash: HASH,
+      sleep: noSleep,
+    }), /invalid receipt status/);
   });
 
   it("waits while the receipt is missing, then succeeds", async () => {

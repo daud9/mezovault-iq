@@ -177,6 +177,12 @@ describe("wallet state machine", () => {
     assert.equal(walletReducer(INITIAL_WALLET_STATE, { type: "chain-changed", chainId: 31612 }).chainId, null);
   });
 
+  it("clears a stale wallet error after a successful chain or account change", () => {
+    const withError = { ...connected, error: "Switch failed" };
+    assert.equal(walletReducer(withError, { type: "chain-changed", chainId: 31611 }).error, null);
+    assert.equal(walletReducer(withError, { type: "accounts-changed", address: ADDR }).error, null);
+  });
+
   it("follows an account change while connected", () => {
     const next = "0x2222222222222222222222222222222222222222" as const;
     assert.equal(walletReducer(connected, { type: "accounts-changed", address: next }).address, next);

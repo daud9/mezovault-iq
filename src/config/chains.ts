@@ -93,7 +93,7 @@ export const MEZO_NETWORKS: Record<MezoNetworkKey, MezoNetworkConfig> = {
     chainId: 31612,
     chainIdHex: "0x7b7c",
     nativeCurrency: { name: "Bitcoin", symbol: "BTC", decimals: 18 },
-    rpcUrl: "https://rpc-http.mezo.boar.network",
+    rpcUrl: "https://mezo-mainnet.boar.network",
     wssUrl: "wss://rpc-ws.mezo.boar.network",
     explorerUrl: "https://explorer.mezo.org",
     faucetUrl: null,

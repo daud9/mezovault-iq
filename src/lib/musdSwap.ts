@@ -1,6 +1,6 @@
 import { decodeAbiString, decodeUint256, encodeAddressWord, isAddress, SELECTORS } from "./abi";
 import type { MezoNetworkConfig } from "../config/chains";
-import { TESTNET_BASIC_POOL_ROUTER, TESTNET_BASIC_POOLS } from "../config/pools";
+import { TESTNET_BASIC_POOL_ROUTER, TESTNET_BASIC_POOLS, TESTNET_POOL_BTC_TOKEN } from "../config/pools";
 import { parseChainId } from "./network";
 import { readSnapshotBlock } from "./readSnapshotBlock";
 import type { RpcClient } from "./rpc";
@@ -152,6 +152,9 @@ export async function prepareMUSDAction(options: {
   }
   const tokenOut = token0.toLowerCase() === musd.toLowerCase() ? token1 : token0;
   if (tokenOut.toLowerCase() === musd.toLowerCase()) throw new Error("The pool returned a duplicate MUSD token address.");
+  if (tokenOut.toLowerCase() !== TESTNET_POOL_BTC_TOKEN.address.toLowerCase()) {
+    throw new Error("The live pool output-token address does not match the configured Testnet Pool BTC token. No swap is prepared.");
+  }
   if (poolFactory.toLowerCase() !== factory.toLowerCase() || routerFactory.toLowerCase() !== factory.toLowerCase()) {
     throw new Error("The pool, router and verified Testnet factory do not agree. No swap is prepared.");
   }
