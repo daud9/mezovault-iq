@@ -11,7 +11,7 @@ import {
   requestReadyOpenTrove,
   type ReadyOpenTrove,
 } from "../../lib/openTroveConfirmation";
-import { formatBasisPoints, formatUnits18, MEZO_TESTNET_CHAIN_ID, OPEN_TROVE_SELECTOR, type OpenTroveLiveSnapshot } from "../../lib/openTrovePlanner";
+import { formatBasisPoints, formatUnits18, MEZO_TESTNET_CHAIN_ID, OPEN_TROVE_SELECTOR } from "../../lib/openTrovePlanner";
 import { OpenTroveReceiptError, readOpenTroveReceipt } from "../../lib/openTroveReceipt";
 import { createRpcClient } from "../../lib/rpc";
 import { addEntry, browserStore } from "../../lib/txLedger";
@@ -38,7 +38,6 @@ export function OpenTroveAction({
   requestedMusd,
   onConfirmed,
   onExistingTroveDetected,
-  onFreshSnapshot,
   onRefreshMinimums,
 }: {
   enabled: boolean;
@@ -46,7 +45,6 @@ export function OpenTroveAction({
   requestedMusd: string;
   onConfirmed(): void;
   onExistingTroveDetected(): void;
-  onFreshSnapshot(snapshot: OpenTroveLiveSnapshot): void;
   onRefreshMinimums(): void;
 }) {
   const { state: walletState, network, checkWalletContext, sendReviewedTransaction } = useWallet();
@@ -95,7 +93,6 @@ export function OpenTroveAction({
         });
         await checkWalletContext({ account: prepared.account, chainId: MEZO_TESTNET_CHAIN_ID });
         if (cancelled || currentKeyRef.current !== currentKey) return;
-        onFreshSnapshot(prepared.snapshot);
         setReadyBundle({ key: currentKey, prepared, checkedAtMs: Date.now() });
         setError("");
         setNotice("");
@@ -131,7 +128,6 @@ export function OpenTroveAction({
     requestedMusd,
     currentKey,
     checkWalletContext,
-    onFreshSnapshot,
     onRefreshMinimums,
     onExistingTroveDetected,
     submissionHash,
@@ -149,7 +145,7 @@ export function OpenTroveAction({
       nowMs: Date.now(),
       send: sendReviewedTransaction,
       onProviderCall: () => {
-        setNotice(`Wallet request sent to ${walletState.walletName ?? "your selected wallet"}. Review and approve it there; the app has not signed or submitted automatically.`);
+        setNotice("Check your wallet to approve.");
       },
     });
 
@@ -157,18 +153,18 @@ export function OpenTroveAction({
       busyRef.current = false;
       setReadyBundle(null);
       if (request.status === "stale") {
-        setError("Live Testnet data was stale. No wallet request was made; refreshing automatically.");
+        setError("Live data expired. Refreshing; no wallet request was made.");
         onRefreshMinimums();
         setRefreshNonce((current) => current + 1);
       } else {
-        setError("The wallet, network, or form changed. No wallet request was made; checking again automatically.");
+        setError("Wallet, network, or amount changed. Rechecking; no request was made.");
         setRefreshNonce((current) => current + 1);
       }
       return;
     }
 
     setError("");
-    setNotice("Opening your wallet for approval…");
+    setNotice("Check your wallet to approve.");
     setWalletRequestPending(true);
     void request.promise
       .then((hash) => {
@@ -190,7 +186,7 @@ export function OpenTroveAction({
       })
       .catch((caught: unknown) => {
         setError(formatOpenTroveActionError(caught));
-        setNotice("No success is assumed. Check wallet activity before retrying.");
+        setNotice("No success confirmed. Check wallet activity before retrying.");
       })
       .finally(() => {
         busyRef.current = false;
@@ -217,22 +213,22 @@ export function OpenTroveAction({
   }
 
   const gateMessage = walletState.status !== "connected"
-    ? "Connect your wallet before opening a Trove."
+    ? "Connect a wallet to open a Trove."
     : !networkMatches
-      ? "Opening a Trove is available only on Mezo Testnet (chain 31611)."
+      ? "Open a Trove on Mezo Testnet (chain 31611)."
       : !chainMatches
-        ? "Switch your wallet to Mezo Testnet (chain 31611)."
+        ? "Switch your wallet to Mezo Testnet (31611)."
         : null;
 
   return (
     <section className="space-y-3 rounded-xl border border-gold-500/30 bg-gold-500/5 p-3 text-mist-100" aria-labelledby="open-trove-action-title">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wider text-gold-300">One wallet confirmation · Testnet only</p>
-        <h3 id="open-trove-action-title" className="mt-1 text-base font-semibold">Open your Trove</h3>
-        <p className="mt-1 text-sm leading-relaxed text-mist-400">Live checks run automatically. Your wallet opens only after they pass; you approve the transaction there.</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-gold-300">Mezo Testnet · one wallet confirmation</p>
+        <h3 id="open-trove-action-title" className="mt-1 text-base font-semibold">Open Trove</h3>
+        <p className="mt-1 text-sm leading-relaxed text-mist-400">Fresh checks gate wallet access.</p>
       </div>
 
-      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">Borrowing interest accrues separately from the one-time fee. This planner does not verify an ongoing interest rate from the deployed Testnet contracts, so it does not show total borrowing cost; the fee below is not the total cost. <a href="https://mezo.org/docs/users/borrow/mint-musd/" target="_blank" rel="noopener noreferrer" className="font-medium underline">Mezo borrowing guide</a>.</p>
+      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">Interest accrues; live rate and total borrowing cost are unavailable. <a href="https://mezo.org/docs/users/borrow/mint-musd/" target="_blank" rel="noopener noreferrer" className="font-medium underline">Borrowing guide</a>.</p>
 
       {gateMessage && <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">{gateMessage}</p>}
       {error && <p className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200" role="alert">{error}</p>}
@@ -248,37 +244,32 @@ export function OpenTroveAction({
             {walletRequestPending
               ? "Waiting for wallet approval…"
               : ready
-                ? "Open wallet to review and confirm"
+                ? "Open wallet to confirm"
                 : isChecking
-                  ? "Checking live Testnet conditions…"
+                  ? "Checking live conditions…"
                   : "Waiting for fresh checks…"}
           </Button>
-          <p className="text-xs leading-relaxed text-mist-500" role="status">
-            {ready
-              ? `Ready · block ${ready.prepared.snapshot.blockNumber.toLocaleString()}. Tap once to open your wallet.`
-              : "No wallet request is sent while checks are pending or unavailable. The app retries automatically."}
-          </p>
+          {ready && <p className="text-xs leading-relaxed text-mist-500" role="status">Ready · block {ready.prepared.snapshot.blockNumber.toLocaleString()}.</p>}
         </div>
       )}
 
       <details>
-        <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">Checks and transaction details</summary>
+        <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">Details</summary>
         <div className="space-y-2 pb-2 text-xs leading-relaxed text-mist-400">
-          <p>The app verifies the current account and network, live debt and collateral limits, oracle data, existing-Trove status, exact openTrove call simulation, and gas estimate. A failed or stale check never opens the wallet.</p>
           {ready && (
             <dl className="grid gap-2 sm:grid-cols-2">
-              <Detail label="Live system mode" value={ready.prepared.snapshot.mode === "normal" ? "Normal Mode" : "Recovery Mode"} />
-              <Detail label="Open-time collateral ratio" value={formatBasisPoints(ready.prepared.plan.icrBasisPoints)} />
-              <Detail label="Requested MUSD / one-time fee" value={`${formatUnits18(ready.prepared.plan.requestWei ?? 0n)} / ${formatUnits18(ready.prepared.plan.feeWei ?? 0n)}`} />
-              <Detail label="Composite debt used for collateral check" value={`${formatUnits18(ready.prepared.plan.compositeDebtWei ?? 0n)} MUSD, including reserve`} />
-              <Detail label="BTC collateral sent" value={`${formatUnits18(ready.prepared.plan.collateralWei ?? 0n)} BTC`} />
+              <Detail label="Mode" value={ready.prepared.snapshot.mode === "normal" ? "Normal Mode" : "Recovery Mode"} />
+              <Detail label="Opening ratio" value={formatBasisPoints(ready.prepared.plan.icrBasisPoints)} />
+              <Detail label="MUSD / one-time fee" value={`${formatUnits18(ready.prepared.plan.requestWei ?? 0n)} / ${formatUnits18(ready.prepared.plan.feeWei ?? 0n)}`} />
+              <Detail label="Debt incl. reserve" value={`${formatUnits18(ready.prepared.plan.compositeDebtWei ?? 0n)} MUSD`} />
+              <Detail label="BTC collateral" value={`${formatUnits18(ready.prepared.plan.collateralWei ?? 0n)} BTC`} />
               <Detail label="Gas estimate / limit" value={`${ready.prepared.gasEstimate.toLocaleString()} / ${ready.prepared.gasLimit.toLocaleString()}`} />
               <Detail label="BorrowerOperations" value={ready.prepared.transaction.to} />
               <Detail label="Call" value={`openTrove(uint256,address,address) · ${OPEN_TROVE_SELECTOR}`} />
-              <Detail label="Snapshot block" value={ready.prepared.snapshot.blockNumber.toLocaleString()} />
+              <Detail label="Block" value={ready.prepared.snapshot.blockNumber.toLocaleString()} />
             </dl>
           )}
-          <p>Network gas is paid separately in native BTC and is shown by your wallet. No transaction is signed or submitted unless you approve it in the wallet.</p>
+          <p>Gas is paid in native BTC.</p>
         </div>
       </details>
 
@@ -288,16 +279,16 @@ export function OpenTroveAction({
             <h4 className="text-sm font-semibold text-mist-100">Open-Trove transaction</h4>
             <p className="mt-1 break-all font-mono text-xs text-mist-400">{submission.hash}</p>
           </div>
-          {receiptState.status === "not-checked" && <p role="status" className="text-sm text-amber-200">Your wallet returned a hash, but the receipt has not been checked. This is unconfirmed.</p>}
-          {receiptState.status === "pending" && <p role="status" className="text-sm text-amber-200">No receipt is available yet. The transaction remains unconfirmed; check again later.</p>}
+          {receiptState.status === "not-checked" && <p role="status" className="text-sm text-amber-200">Receipt not checked; transaction unconfirmed.</p>}
+          {receiptState.status === "pending" && <p role="status" className="text-sm text-amber-200">No receipt yet; transaction unconfirmed.</p>}
           {receiptState.status === "error" && <p role="alert" className="text-sm text-amber-200">{receiptState.message}</p>}
-          {receiptState.status === "confirmed" && <p role="status" className="text-sm text-emerald-300">The receipt shows successful execution and a matching TroveCreated event in block {receiptState.blockNumber.toLocaleString()}; finality is not independently checked. Refreshing the Trove read.</p>}
-          {receiptState.status === "reverted" && <p role="alert" className="text-sm text-rose-300">The exact transaction receipt shows a revert in block {receiptState.blockNumber.toLocaleString()}. No successful Trove opening is claimed.</p>}
+          {receiptState.status === "confirmed" && <p role="status" className="text-sm text-emerald-300">Trove opened in block {receiptState.blockNumber.toLocaleString()}; finality is unchecked. Refreshing Trove.</p>}
+          {receiptState.status === "reverted" && <p role="alert" className="text-sm text-rose-300">Transaction reverted in block {receiptState.blockNumber.toLocaleString()}. No Trove was opened.</p>}
           {receiptState.status !== "confirmed" && receiptState.status !== "reverted" && (
-            <Button variant="secondary" onClick={() => void checkReceipt()} disabled={receiptBusy} className="min-h-11">{receiptBusy ? "Checking receipt…" : "Check transaction receipt"}</Button>
+            <Button variant="secondary" onClick={() => void checkReceipt()} disabled={receiptBusy} className="min-h-11">{receiptBusy ? "Checking receipt…" : "Check receipt"}</Button>
           )}
           {receiptState.status === "reverted" && (
-            <Button variant="secondary" onClick={() => { setSubmission(null); setReceiptState({ status: "not-checked" }); setError(""); setRefreshNonce((current) => current + 1); }} className="min-h-11">Prepare automatically after the revert</Button>
+            <Button variant="secondary" onClick={() => { setSubmission(null); setReceiptState({ status: "not-checked" }); setError(""); setRefreshNonce((current) => current + 1); }} className="min-h-11">Prepare a new review</Button>
           )}
           <a href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}tx/${submission.hash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">View on the Mezo Testnet explorer</a>
         </div>
@@ -316,8 +307,8 @@ function Detail({ label, value }: { label: string; value: string }) {
 }
 
 function preflightMessage(error: unknown): string {
-  if (error instanceof OpenTrovePreflightError && error.code === "existing-trove") return error.message;
-  if (error instanceof OpenTrovePreflightError) return `${error.message} Automatic retry is on.`;
+  if (error instanceof OpenTrovePreflightError && error.code === "existing-trove") return "This wallet already has a Trove. Use its position actions.";
+  if (error instanceof OpenTrovePreflightError) return error.message;
   const formatted = formatOpenTroveActionError(error, "preflight");
   return formatted;
 }

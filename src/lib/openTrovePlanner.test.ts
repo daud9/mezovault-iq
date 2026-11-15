@@ -38,12 +38,12 @@ const base = (overrides: Partial<OpenTroveLiveSnapshot> = {}): OpenTroveLiveSnap
 });
 
 describe("read-only open-trove planner", () => {
-  it("derives the smallest fee-adjusted debt and collateral that pass live Normal Mode checks", () => {
+  it("derives live minimum debt with an explicit 5% Normal Mode collateral buffer", () => {
     const result = calculateMinimumOpenTroveAmounts(base(), { nowMs: NOW });
     assert.equal(result.status, "ready");
     if (result.status !== "ready") return;
     assert.equal(result.requestedMusd, "1798.201798201798201799");
-    assert.equal(result.collateralBtc, "0.0275");
+    assert.equal(result.collateralBtc, "0.028875");
     const exact = calculateOpenTrovePlan(base(), result.collateralBtc, result.requestedMusd, { nowMs: NOW });
     assert.equal(exact.status, "calculated");
     if (exact.status === "calculated") {
@@ -53,10 +53,22 @@ describe("read-only open-trove planner", () => {
     }
     const oneWeiLessCollateral = calculateOpenTrovePlan(base(), formatUnits18Input(result.collateralWei - 1n), result.requestedMusd, { nowMs: NOW });
     assert.equal(oneWeiLessCollateral.status, "calculated");
-    if (oneWeiLessCollateral.status === "calculated") assert.equal(oneWeiLessCollateral.icrPass, false);
+    if (oneWeiLessCollateral.status === "calculated") assert.equal(oneWeiLessCollateral.icrPass, true);
     const oneWeiLessDebt = calculateOpenTrovePlan(base(), result.collateralBtc, formatUnits18Input(result.requestedMusdWei - 1n), { nowMs: NOW });
     assert.equal(oneWeiLessDebt.status, "calculated");
     if (oneWeiLessDebt.status === "calculated") assert.equal(oneWeiLessDebt.minDebtPass, false);
+  });
+
+  it("absorbs a modest oracle-price move with the prefill buffer but still blocks a larger move", () => {
+    const result = calculateMinimumOpenTroveAmounts(base(), { nowMs: NOW });
+    assert.equal(result.status, "ready");
+    if (result.status !== "ready") return;
+    const fourPercentDrop = calculateOpenTrovePlan(base({ btcUsdWei: 76_800n * WAD }), result.collateralBtc, result.requestedMusd, { nowMs: NOW });
+    assert.equal(fourPercentDrop.status, "calculated");
+    if (fourPercentDrop.status === "calculated") assert.equal(fourPercentDrop.allowed, true);
+    const sixPercentDrop = calculateOpenTrovePlan(base({ btcUsdWei: 75_200n * WAD }), result.collateralBtc, result.requestedMusd, { nowMs: NOW });
+    assert.equal(sixPercentDrop.status, "calculated");
+    if (sixPercentDrop.status === "calculated") assert.equal(sixPercentDrop.icrPass, false);
   });
 
   it("derives no-fee minimum debt for exempt accounts and Recovery Mode", () => {

@@ -4,6 +4,7 @@ import { resolveRpcUrl } from "../config/env";
 import { readErc20Balance, type Erc20BalanceResult } from "../lib/erc20";
 import { createRpcClient } from "../lib/rpc";
 import { selectReadView } from "../lib/readView";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type MezoView = { status: "idle" } | { status: "loading" } | { status: "done"; result: Erc20BalanceResult };
 
@@ -35,6 +36,7 @@ export function useMezoBalance(): { view: MezoView; refresh: () => void } {
   }, [connected, address, onNetwork, network, tick, key]);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  useAutoRefresh(refresh, 60_000, connected && onNetwork);
   return {
     view: selectReadView({ stored, currentKey: key, enabled: connected && onNetwork, loading: { status: "loading" }, idle: { status: "idle" } }),
     refresh,

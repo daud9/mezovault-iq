@@ -255,7 +255,7 @@ export async function prepareStabilityPoolAction(options: {
     if (action === "deposit" && simulated !== "0x") return fail("The Stability Pool deposit simulation returned unexpected data. No wallet request was made.");
   } catch (error) {
     if (error instanceof StabilityPoolError) throw error;
-    return fail("The exact Stability Pool call reverted or its fresh gas estimate/simulation failed. No wallet request was made.");
+    return fail("Stability Pool checks failed. Refresh and retry; no wallet request was made.");
   }
   const transaction: StabilityPoolTransaction = Object.freeze({ ...unsigned, data, gas: `0x${gasLimit.toString(16)}` });
   return {

@@ -330,9 +330,8 @@ export function Send() {
               </div>
               {balanceIssues.length > 0 && (
                 <div className="space-y-2 rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3">
-                  <p className="text-sm font-medium text-mist-200">Some balance reads failed. Refresh before preparing this transfer.</p>
+                  <p className="text-sm font-medium text-mist-200">Some balance reads are unavailable. Transfer preparation stays blocked until verified; automatic reads retry while this page is active and when you return.</p>
                   <ul className="list-inside list-disc space-y-1 text-xs text-mist-400">{balanceIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
-                  <Button variant="secondary" onClick={() => { native.refresh(); musd.refresh(); mezo.refresh(); poolBtc.refresh(); }} disabled={busy !== null} className="min-h-11">Retry balance reads</Button>
                 </div>
               )}
               <FormErrors errors={errors} />
@@ -388,7 +387,7 @@ export function Send() {
               {outcome?.status === "success" && (
                 <div className="space-y-2">
                   <DataStatus state="live" detail={`execution succeeded · block ${outcome.blockNumber}`} />
-                  <p className="text-sm text-mist-300">The receipt reports successful execution in block {outcome.blockNumber}. The app has not checked finality. Refresh the balance on the Overview page to see the change.</p>
+                  <p className="text-sm text-mist-300">The receipt reports successful execution in block {outcome.blockNumber}. The app has not checked finality. Overview balances update automatically while open and when you return.</p>
                 </div>
               )}
               {outcome?.status === "reverted" && (

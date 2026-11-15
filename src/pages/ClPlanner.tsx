@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
-import { Button } from "../components/ui/Button";
+import { ExternalLink } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { ClDepositPanel } from "../components/cl/ClDepositPanel";
 import { DataStatus } from "../components/ui/DataStatus";
@@ -17,7 +16,7 @@ const MAX_SNAPSHOT_AGE_MS = 120_000;
 
 export function ClPlanner() {
   const { network } = useWallet();
-  const { view, refresh } = useClPlanner();
+  const { view } = useClPlanner();
   const [selectedAddress, setSelectedAddress] = useState("");
   const [lowerPrice, setLowerPrice] = useState("");
   const [upperPrice, setUpperPrice] = useState("");
@@ -69,12 +68,7 @@ export function ClPlanner() {
       <SectionHeader
         eyebrow="Mezo Testnet · live pool data"
         title="CL Planner"
-        description="Estimate token amounts for a price range from live pool data."
-        actions={testnet ? (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2" disabled={view.status === "done" && view.refreshing}>
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        ) : undefined}
+        description="Estimate token amounts from live pool data; reads update automatically."
       />
 
       {!testnet ? (
@@ -85,13 +79,13 @@ export function ClPlanner() {
       ) : view.status === "loading" ? (
         <LoadingState label="Reading live pools…" />
       ) : view.status === "error" ? (
-        <ErrorState title="Live pool read unavailable" description={view.message} onRetry={refresh} />
+        <ErrorState title="Live pool read unavailable" description={`${view.message} Automatic reads retry while this page is active and when you return.`} />
       ) : snapshot && snapshot.pools.length === 0 ? (
         <Card className="space-y-3">
           <DataStatus state="unavailable" detail="No usable active pools" />
           <h2 className="text-base font-semibold text-mist-100">No active pool with readable token decimals was found</h2>
           <p className="text-sm text-mist-400">No active pool has readable token decimals at block {snapshot.blockNumber.toLocaleString()}.</p>
-          <Button variant="secondary" onClick={refresh}><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh</Button>
+          <p role="status" className="text-sm text-mist-400">Automatic reads retry while this page is active and when you return.</p>
         </Card>
       ) : snapshot && pool ? (
         <>

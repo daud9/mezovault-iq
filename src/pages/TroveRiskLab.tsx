@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
-import { Button } from "../components/ui/Button";
+import { ExternalLink } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { DataStatus } from "../components/ui/DataStatus";
 import { SectionHeader } from "../components/ui/SectionHeader";
@@ -13,13 +12,12 @@ import type { ClosedTroveHistory } from "../lib/closedTroveHistory";
 
 export function TroveRiskLab() {
   const { state, network } = useWallet();
-  const { view: loanView, refresh } = useLoan();
+  const { view: loanView } = useLoan();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [stressDropPct, setStressDropPct] = useState(20);
   const isTestnet = network.key === "testnet";
   const walletConnected = state.status === "connected" && state.address !== null;
   const walletOnNetwork = walletConnected && state.chainId === network.chainId;
-  const ready = walletOnNetwork && isTestnet;
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 5_000);
@@ -71,11 +69,6 @@ export function TroveRiskLab() {
         eyebrow="Read-only · Mezo Testnet"
         title="Trove Risk Lab"
         description="Current Trove ratio, live MCR, and hypothetical BTC price scenarios."
-        actions={ready ? (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh reads
-          </Button>
-        ) : undefined}
       />
 
       {!walletConnected ? (
@@ -97,13 +90,14 @@ export function TroveRiskLab() {
       ) : loan && !readFresh ? (
         <Card className="space-y-3">
           <DataStatus state="unverified" detail="Trove read is stale · risk withheld" />
-          <h2 className="text-base font-semibold text-mist-100">Refresh before using this risk read</h2>
-          <p className="text-sm leading-relaxed text-mist-400">The pinned-block read at block {loan.blockNumber} is {loanAgeMs === null ? "not verifiably fresh" : `${Math.floor(loanAgeMs / 1_000)} seconds old`}. The last result {loan.hasLoan ? `recorded ${loan.collateralBtc} BTC collateral and ${loan.debtMusd} MUSD debt` : "found no active Trove"}, but no current ratio or scenario is shown.</p>
+          <h2 className="text-base font-semibold text-mist-100">Waiting for a current read</h2>
+          <p className="text-sm leading-relaxed text-mist-400">The pinned-block read at block {loan.blockNumber} is {loanAgeMs === null ? "not verifiably fresh" : `${Math.floor(loanAgeMs / 1_000)} seconds old`}. No current ratio or scenario is shown; automatic reads retry while this tab is open and when you return.</p>
         </Card>
       ) : loan && !loan.hasLoan && closedByRedemption ? (
         <ClosedRedemptionRiskCard
           label={historicalRiskLabel}
           history={loan.closedHistory}
+          fresh={readFresh}
           blockNumber={loan.blockNumber}
           retrievedAt={loan.retrievedAt}
           explorerUrl={network.explorerUrl}
@@ -265,12 +259,14 @@ function EvidenceLink({ label, address, explorerUrl }: { label: string; address:
 function ClosedRedemptionRiskCard({
   label,
   history,
+  fresh,
   blockNumber,
   retrievedAt,
   explorerUrl,
 }: {
   label: "RISK-ESCAPED" | null;
   history: ClosedTroveHistory | null;
+  fresh: boolean;
   blockNumber: number;
   retrievedAt: string;
   explorerUrl: string;
@@ -290,33 +286,15 @@ function ClosedRedemptionRiskCard({
         <p className="text-sm leading-relaxed text-mist-300">RISK-ESCAPED is an app label, not a safety or liquidation status.</p>
         <p className="text-sm leading-relaxed text-mist-400">Closed history; no current ratio or scenario is shown.</p>
       </div>
-      {history?.closure ? (
-        <div className="space-y-2 rounded-lg border border-line bg-ink-800/50 p-3 text-sm text-mist-300">
-          <p>Verified redemption event at block <span className="font-semibold text-mist-100">{history.closure.blockNumber.toLocaleString()}</span>.</p>
-          <p className="break-all font-mono text-xs">{history.closure.transactionHash}</p>
-          {transactionUrl && (
-            <a href={transactionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">
-              Open redemption transaction <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-            </a>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm leading-relaxed text-amber-200">
-          The closure event could not be verified in the recent log window.{history?.closureUnavailableReason ? ` ${history.closureUnavailableReason}` : " Refresh or verify the network."}
-        </p>
-      )}
-      {!history || history.claimableSurplusRaw === null ? (
-        <p className="text-sm text-mist-400">
-          BTC surplus: unavailable.{history?.surplusUnavailableReason ? ` ${history.surplusUnavailableReason}` : ""}
-        </p>
+      <p className="text-sm text-mist-300">{history?.closure ? `Redemption event verified at block ${history.closure.blockNumber.toLocaleString()}.` : "Manager status says redemption; exact event not verified."} {transactionUrl && <a href={transactionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-9 items-center gap-1 font-medium text-gold-300 hover:underline">View event <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>}</p>
+      {!fresh || !history || history.claimableSurplusRaw === null ? (
+        <p className="text-sm text-mist-400">Current BTC surplus unavailable.</p>
       ) : history.claimableSurplusRaw > 0n ? (
-        <p className="text-sm text-mist-300">
-          Claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}: <span className="font-semibold text-mist-100">{history.claimableSurplusBtc} BTC</span>.
-        </p>
+        <p className="text-sm text-mist-300">Current claimable BTC surplus: <span className="font-semibold text-mist-100">{history.claimableSurplusBtc} BTC</span> · block {history.snapshotBlock.toLocaleString()}.</p>
       ) : (
-        <p className="text-sm text-mist-300">No claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}.</p>
+        <p className="text-sm text-mist-300">No claimable BTC surplus at block {history.snapshotBlock.toLocaleString()}.</p>
       )}
-      <p className="text-xs text-mist-500">Status and history were read {formatTime(retrievedAt)}. Refresh to read the latest chain snapshot.</p>
+      <p className="text-xs text-mist-500">No current ratio or claim action is available. Read {formatTime(retrievedAt)}.</p>
     </Card>
   );
 }

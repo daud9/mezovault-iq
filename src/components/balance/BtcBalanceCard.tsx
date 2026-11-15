@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { useWallet } from "../wallet/WalletProvider";
 import { useNativeBalance } from "../../hooks/useNativeBalance";
@@ -17,8 +15,8 @@ import {
 /** Native BTC gas balance for the connected wallet, read from the RPC. */
 export function BtcBalanceCard() {
   const { state, network, isSupportedNetwork } = useWallet();
-  const { view, refresh } = useNativeBalance();
-  const { view: priceView, refresh: refreshPrice, nowMs } = useBtcUsdPrice();
+  const { view } = useNativeBalance();
+  const { view: priceView, nowMs } = useBtcUsdPrice();
 
   let body: ReactNode;
   if (state.status !== "connected") {
@@ -96,18 +94,6 @@ export function BtcBalanceCard() {
           <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Wallet BTC · gas</p>
           <p className="mt-1 text-sm text-mist-400">Native balance · {network.label}</p>
         </div>
-        {state.status === "connected" && isSupportedNetwork && (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              refresh();
-              refreshPrice();
-            }}
-            className="min-h-11 px-2"
-          >
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        )}
       </div>
       {body}
       {btcEstimate}

@@ -92,6 +92,23 @@ export interface WalletExpectation {
   chainId: number;
 }
 
+export interface CachedWalletContext {
+  account: string | null;
+  chainId: number | null;
+}
+
+/** Matches the latest provider account/chain events to a prepared transaction. */
+export function isCachedWalletContextCurrent(
+  current: CachedWalletContext,
+  expected: WalletExpectation,
+  configuredChainId: number,
+): boolean {
+  return expected.chainId === configuredChainId
+    && current.chainId === expected.chainId
+    && typeof current.account === "string"
+    && current.account.toLowerCase() === expected.account.toLowerCase();
+}
+
 /** Re-checks the currently selected account and chain without opening a wallet prompt. */
 export async function assertWalletContext(provider: Eip1193Provider, expected: WalletExpectation): Promise<void> {
   const [accounts, rawChainId] = await Promise.all([
@@ -105,6 +122,26 @@ export async function assertWalletContext(provider: Eip1193Provider, expected: W
   if (!isAddress(selected) || selected.toLowerCase() !== expected.account.toLowerCase()) {
     throw new WalletError("no-account", "The connected wallet account changed and no longer matches the reviewed transaction.");
   }
+}
+
+/** Reads a coherent account/chain pair, retrying if provider events race the reads. */
+export async function readStableWalletContext(
+  provider: Eip1193Provider,
+  currentEventVersion: () => number,
+  attempts = 3,
+): Promise<{ account: `0x${string}`; chainId: number | null; eventVersion: number }> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const version = currentEventVersion();
+    const [accounts, rawChainId] = await Promise.all([
+      provider.request({ method: "eth_accounts" }),
+      provider.request({ method: "eth_chainId" }),
+    ]);
+    if (version !== currentEventVersion()) continue;
+    const first = Array.isArray(accounts) ? accounts[0] : undefined;
+    if (!isAddress(first)) throw new WalletError("no-account", "The wallet account could not be confirmed. Reconnect and try again.");
+    return { account: first, chainId: parseChainId(rawChainId), eventVersion: version };
+  }
+  throw new WalletError("unknown", "Wallet account or network changed while checking. Reconnect and try again.");
 }
 
 /** Rechecks the reviewed account/network, then hands the exact transaction to the injected wallet. */
@@ -158,6 +195,25 @@ export function requestReviewedWalletTransaction(
     if (!isTxHash(hash)) throw new Error("The wallet did not return a transaction hash.");
     return hash;
   });
+}
+
+/** Checks the latest provider-event context, then dispatches the exact reviewed call immediately. */
+export function requestCachedReviewedWalletTransaction(
+  provider: Eip1193Provider,
+  tx: Record<string, string | undefined>,
+  expected: WalletExpectation,
+  current: CachedWalletContext,
+  configuredChainId: number,
+  onProviderCall?: () => void,
+  contextPending = false,
+): Promise<string> {
+  if (contextPending) {
+    return Promise.reject(new Error("Wallet account or network is changing. Review again."));
+  }
+  if (!isCachedWalletContextCurrent(current, expected, configuredChainId)) {
+    return Promise.reject(new Error("Wallet account or network changed. Review again."));
+  }
+  return requestReviewedWalletTransaction(provider, tx, expected, configuredChainId, onProviderCall);
 }
 
 /** Turns an EIP-1193 or EIP-1474 error into a message that tells the user what to do. */

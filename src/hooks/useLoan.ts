@@ -3,6 +3,7 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { resolveRpcUrl } from "../config/env";
 import { readLoan, type LoanResult } from "../lib/loan";
 import { createRpcClient } from "../lib/rpc";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type LoanView =
   | { status: "idle" }
@@ -16,7 +17,7 @@ interface KeyedLoanView {
 }
 
 /** Shared, read-only current Trove read for the connected wallet and selected Mezo network. */
-export function useLoan(): { view: LoanView; refresh: () => void } {
+export function useLoan(autoRefreshEnabled = true): { view: LoanView; refresh: () => void } {
   const { state, network } = useWallet();
   const [tick, setTick] = useState(0);
   const address = state.address;
@@ -56,6 +57,7 @@ export function useLoan(): { view: LoanView; refresh: () => void } {
   }, [connected, address, state.chainId, network, readKey]);
 
   const refresh = useCallback(() => setTick((current) => current + 1), []);
+  useAutoRefresh(refresh, 60_000, autoRefreshEnabled && connected && state.chainId === network.chainId);
 
   let view: LoanView;
   if (!connected || !address) {

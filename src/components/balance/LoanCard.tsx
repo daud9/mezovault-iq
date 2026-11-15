@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { OpenTrovePlanner } from "./OpenTrovePlanner";
 import { OpenTroveAction } from "./OpenTroveAction";
@@ -19,15 +17,15 @@ import type { ClosedTroveHistory } from "../../lib/closedTroveHistory";
 /** Read-only Trove summary and separate wallet-confirmed Testnet actions. */
 export function LoanCard() {
   const { state, network, isSupportedNetwork } = useWallet();
-  const { view, refresh } = useLoan();
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [plannerExpanded, setPlannerExpanded] = useState(false);
+  const [noActiveTrove, setNoActiveTrove] = useState(false);
   const [openTroveConflictAccount, setOpenTroveConflictAccount] = useState<string | null>(null);
   const [plannerCollateralBtc, setPlannerCollateralBtc] = useState("");
   const [plannerRequestedMusd, setPlannerRequestedMusd] = useState("");
   const plannerCollateralTouched = useRef(false);
   const plannerRequestedTouched = useRef(false);
   const autoMinimums = useRef<{ accountKey: string; collateralBtc: string; requestedMusd: string } | null>(null);
+  const { view, refresh } = useLoan(!noActiveTrove);
   const accountKey = state.status === "connected" ? state.address?.toLowerCase() ?? "" : "";
   const previousAccountKey = useRef(accountKey);
   const openTroveConflict = Boolean(accountKey && openTroveConflictAccount === accountKey);
@@ -38,6 +36,7 @@ export function LoanCard() {
   useEffect(() => {
     if (previousAccountKey.current !== accountKey) {
       previousAccountKey.current = accountKey;
+      setNoActiveTrove(false);
       setOpenTroveConflictAccount(null);
       setPlannerCollateralBtc("");
       setPlannerRequestedMusd("");
@@ -47,13 +46,21 @@ export function LoanCard() {
     }
   }, [accountKey]);
 
+  useEffect(() => {
+    if (view.status === "done") {
+      setNoActiveTrove(view.result.status === "ok" && !view.result.hasLoan);
+    } else if (view.status === "idle" || view.status === "wrong-network") {
+      setNoActiveTrove(false);
+    }
+  }, [view]);
+
   const loan = view.status === "done" && view.result.status === "ok" ? view.result : null;
   const readFresh = loan ? isLoanReadFresh(loan, nowMs) : false;
   const priceFresh = loan?.hasLoan ? isLoanPriceFresh(loan, nowMs) : false;
   const ratioBps = loan?.hasLoan && priceFresh && loan.btcUsdWei !== null
     ? calculateCollateralRatioBps({ collateralBtcWei: loan.collateralRaw, debtMusdWei: loan.debtRaw, btcUsdWei: loan.btcUsdWei })
     : null;
-  const plannerEnabled = loan !== null && readFresh && !loan.hasLoan && plannerExpanded && !openTroveConflict;
+  const plannerEnabled = loan !== null && !loan.hasLoan && !openTroveConflict;
   const { view: plannerView, refresh: refreshPlanner } = useOpenTroveSnapshot(plannerEnabled);
   const plannerSnapshot = plannerView.status === "done" && plannerView.result.status === "ok"
     ? plannerView.result.snapshot
@@ -84,10 +91,6 @@ export function LoanCard() {
     plannerRequestedTouched.current = true;
     setPlannerRequestedMusd(value);
   }, []);
-  const refreshOpenTroveReads = useCallback(() => {
-    refresh();
-    refreshPlanner();
-  }, [refresh, refreshPlanner]);
   const handleTroveConfirmed = useCallback(() => {
     refresh();
     refreshPlanner();
@@ -98,7 +101,7 @@ export function LoanCard() {
     refreshPlanner();
   }, [state.address, refresh, refreshPlanner]);
   const plannerUnavailableReason = plannerView.status === "idle"
-    ? "Open this section to check current Mezo Testnet conditions."
+    ? "Live Mezo Testnet terms unavailable."
     : plannerView.status === "done" && plannerView.result.status !== "ok"
       ? plannerView.result.status === "error"
         ? plannerView.result.message
@@ -109,11 +112,11 @@ export function LoanCard() {
 
   let body: ReactNode;
   if (state.status !== "connected") {
-    body = <p className="text-sm text-mist-400">Connect a wallet to see whether it has a Trove.</p>;
+    body = <p className="text-sm text-mist-400">Connect a wallet to check for a Trove.</p>;
   } else if (!isSupportedNetwork) {
-    body = <p className="text-sm text-mist-400">Switch to {network.label} to read your Trove.</p>;
+    body = <p className="text-sm text-mist-400">Switch to {network.label} to view your Trove.</p>;
   } else if (view.status === "idle" || view.status === "loading") {
-    body = <p className="text-sm text-mist-400" role="status">Checking your Trove…</p>;
+    body = <p className="text-sm text-mist-400" role="status">Checking Trove…</p>;
   } else if (view.status === "wrong-network") {
     body = <DataStatus state="unverified" detail={`wallet chain ${view.actualChainId ?? "unknown"}; expected ${view.expectedChainId}`} />;
   } else {
@@ -122,27 +125,13 @@ export function LoanCard() {
       body = openTroveConflict ? (
         <div className="space-y-3">
           <DataStatus state="unavailable" detail="Trove reads disagree for this wallet" />
-          <p className="text-sm text-rose-200" role="alert">Open-Trove and summary reads disagree. Refresh before continuing.</p>
-          <Button variant="secondary" onClick={refreshOpenTroveReads} className="min-h-11">Refresh Trove read</Button>
-        </div>
-      ) : !readFresh ? (
-        <div className="space-y-3">
-          <DataStatus state="unverified" detail="the last read is out of date" />
-          <p className="text-sm text-mist-400">Snapshot may be stale. Refresh before acting.</p>
+          <p className="text-sm text-rose-200" role="alert">Trove reads disagree. Retrying; opening is blocked.</p>
         </div>
       ) : (
         <div className="space-y-3">
-          <DataStatus state="live" detail={`no active Trove · block ${result.blockNumber}`} />
-          <p className="text-base font-semibold text-mist-100">No active Trove was found for this wallet.</p>
-          <p className="text-sm text-mist-400">No active Trove for {state.address} at block {result.blockNumber.toLocaleString()}. Verify the owner account if unexpected.</p>
-          {result.troveStatus === 4 && result.closedHistory && <ClosedRedemptionHistory history={result.closedHistory} explorerUrl={network.explorerUrl} />}
-          <details
-            className="rounded-lg border border-line bg-ink-800/40 px-3"
-            onToggle={(event) => setPlannerExpanded(event.currentTarget.open)}
-          >
-            <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-gold-300">Open a new Trove</summary>
-            <div className="space-y-4 pb-4">
-              <p className="text-sm text-mist-400">Use the live protocol minimums, then confirm once in your wallet.</p>
+          <DataStatus state={readFresh ? "live" : "unverified"} detail={readFresh ? `no active Trove · block ${result.blockNumber}` : `last no-active read is stale · block ${result.blockNumber}`} />
+          <p className="text-base font-semibold text-mist-100">{readFresh ? "No active Trove was found for this wallet." : "The last verified read found no active Trove."}</p>
+          <div className="space-y-4" aria-label="Open a new Trove">
               <OpenTrovePlanner
                 live={plannerSnapshot}
                 loading={plannerView.status === "loading"}
@@ -153,16 +142,15 @@ export function LoanCard() {
                 onRequestedMusdChange={changePlannerRequested}
               />
               <OpenTroveAction
-                enabled={plannerExpanded}
+                enabled={plannerEnabled}
                 collateralBtc={plannerCollateralBtc}
                 requestedMusd={plannerRequestedMusd}
                 onConfirmed={handleTroveConfirmed}
                 onExistingTroveDetected={handleExistingTroveDetected}
-                onFreshSnapshot={applyMinimums}
                 onRefreshMinimums={refreshPlanner}
               />
-            </div>
-          </details>
+          </div>
+          {result.troveStatus === 4 && result.closedHistory && <ClosedRedemptionHistory history={result.closedHistory} explorerUrl={network.explorerUrl} fresh={readFresh} />}
         </div>
       );
     } else if (result.status === "ok") {
@@ -182,8 +170,7 @@ export function LoanCard() {
             <AddCollateralAction onConfirmed={() => { refresh(); refreshPlanner(); }} />
           ) : (
             <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
-              <p className="text-sm text-amber-200">Refresh to confirm this Trove before adding BTC.</p>
-              <Button variant="secondary" onClick={refresh} className="min-h-11">Refresh Trove</Button>
+              <p className="text-sm text-amber-200" role="status">Trove data is stale. Waiting for a fresh read before adding BTC.</p>
             </div>
           )}
           <details className="rounded-lg border border-line bg-ink-800/40 px-3">
@@ -191,11 +178,11 @@ export function LoanCard() {
             <div className="space-y-3 pb-4 text-sm text-mist-400">
               <p>Collateral ratio: <span className="text-mist-100">{!readFresh || !priceFresh || ratioBps === null ? "Unavailable" : formatPercentBps(ratioBps)}</span>. Not a safety verdict.</p>
               {priceFresh && result.collateralValueUsd !== null && <p>Testnet BTC estimate: <span className="text-mist-100">${result.collateralValueUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>.</p>}
-              {!priceFresh && <p>The BTC/USD price is stale or unavailable, so the collateral ratio is hidden. {result.riskInputsError ?? "Refresh after the oracle is healthy."}</p>}
+              {!priceFresh && <p>BTC/USD price is stale or unavailable; collateral ratio hidden. {result.riskInputsError ?? "Automatic reads will retry."}</p>}
               {priceFresh && result.mcrWei === null && result.riskInputsError && <p>Live MCR comparison is unavailable: {result.riskInputsError}</p>}
               <p>Block {result.blockNumber} · read {formatTime(result.retrievedAt)}{result.priceAgeSeconds === null ? "; oracle age unavailable" : ` · price ${result.priceAgeSeconds}s old`}.</p>
               <Link to="/app/trove-risk" className="inline-flex min-h-11 items-center font-medium text-gold-300 hover:underline">Open Trove Risk Lab</Link>
-              <p>Add collateral is the only Trove action available here; other management actions are not implemented.</p>
+              <p>Only add-collateral is available here.</p>
             </div>
           </details>
         </div>
@@ -221,11 +208,6 @@ export function LoanCard() {
           <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Your Trove</p>
           <p className="mt-1 text-sm text-mist-400">BTC collateral · MUSD debt</p>
         </div>
-        {state.status === "connected" && isSupportedNetwork && (
-          <Button variant="ghost" onClick={refreshOpenTroveReads} className="min-h-11 px-2" aria-label="Refresh Trove">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        )}
       </div>
       {body}
     </Card>
@@ -241,33 +223,25 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ClosedRedemptionHistory({ history, explorerUrl }: { history: ClosedTroveHistory; explorerUrl: string }) {
+function ClosedRedemptionHistory({ history, explorerUrl, fresh }: { history: ClosedTroveHistory; explorerUrl: string; fresh: boolean }) {
   const transactionUrl = history.closure
     ? `${explorerUrl.replace(/\/$/, "")}/tx/${history.closure.transactionHash}`
     : null;
   return (
-    <section aria-labelledby="closed-trove-history-title" className="space-y-3 rounded-xl border border-gold-500/30 bg-ink-800/60 p-4">
+    <section aria-labelledby="closed-trove-history-title" className="space-y-2 rounded-xl border border-gold-500/30 bg-ink-800/60 p-3">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">Closed Trove history</p>
-        <h3 id="closed-trove-history-title" className="mt-1 text-base font-semibold text-mist-100">Closed by redemption</h3>
+        <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">Closed Trove · no active position</p>
+        <h3 id="closed-trove-history-title" className="mt-1 text-sm font-semibold text-mist-100">Closed by redemption</h3>
       </div>
-      {history.closure ? (
-        <div className="space-y-2 text-sm text-mist-300">
-          <p>Closed at block <span className="font-semibold text-mist-100">{history.closure.blockNumber.toLocaleString()}</span>.</p>
-          <p className="break-all font-mono text-xs text-mist-300">{history.closure.transactionHash}</p>
-          {transactionUrl && <a href={transactionUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center font-medium text-gold-300 hover:underline">Open redemption transaction</a>}
-        </div>
-      ) : (
-        <p className="text-sm text-amber-200">The TroveManager reports closed by redemption, but its exact transaction and block could not be verified in the recent log window. {history.closureUnavailableReason ?? "Refresh the read or verify the network."}</p>
-      )}
-      {history.claimableSurplusRaw === null ? (
-        <p className="text-sm text-mist-400">BTC surplus unavailable. {history.surplusUnavailableReason ?? ""}</p>
+      <p className="text-xs text-mist-400">{history.closure ? `Redemption event verified at block ${history.closure.blockNumber.toLocaleString()}.` : "Manager status says redemption; exact event not verified."} {transactionUrl && <a href={transactionUrl} target="_blank" rel="noopener noreferrer" className="font-medium text-gold-300 hover:underline">View event</a>}</p>
+      {!fresh || history.claimableSurplusRaw === null ? (
+        <p className="text-sm text-mist-400">Current BTC surplus unavailable.</p>
       ) : history.claimableSurplusRaw > 0n ? (
-        <p className="text-sm text-mist-300">Claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}: <span className="font-semibold text-mist-100">{history.claimableSurplusBtc} BTC</span>.</p>
+        <p className="text-sm text-mist-300">Current claimable BTC surplus: <span className="font-semibold text-mist-100">{history.claimableSurplusBtc} BTC</span> · block {history.snapshotBlock.toLocaleString()}.</p>
       ) : (
-        <p className="text-sm text-mist-300">No claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}.</p>
+        <p className="text-sm text-mist-300">No claimable BTC surplus at block {history.snapshotBlock.toLocaleString()}.</p>
       )}
-      <p className="text-xs text-mist-500">Closed history; no current ratio or surplus-claim action.</p>
+      <p className="text-xs text-mist-500">Surplus claim action is not available here.</p>
     </section>
   );
 }

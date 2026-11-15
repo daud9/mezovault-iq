@@ -122,9 +122,6 @@ export function Landing() {
                 Open Trove
               </ButtonLink>
             </div>
-            <p className="mt-5 inline-flex min-h-10 items-center rounded-lg border border-line bg-ink-900/80 px-3 text-sm text-mist-300">
-              Testnet only <span aria-hidden="true" className="mx-2 text-mist-500">·</span> No real monetary value
-            </p>
           </div>
 
           <aside aria-label="MezoVault tool overview" className="relative overflow-hidden rounded-3xl border border-gold-500/20 bg-gradient-to-br from-ink-800/90 via-ink-900/95 to-ink-950 p-5 shadow-[0_24px_90px_-50px_rgba(212,175,106,0.35)] sm:p-7">

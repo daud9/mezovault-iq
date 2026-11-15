@@ -1,4 +1,11 @@
-import { MEZO_TESTNET_CHAIN_ID } from "./openTrovePlanner";
+import {
+  calculateOpenTrovePlan,
+  MEZO_TESTNET_BORROWER_OPERATIONS,
+  MEZO_TESTNET_CHAIN_ID,
+  OPEN_TROVE_SELECTOR,
+  parseUnits18,
+  UINT256_MAX,
+} from "./openTrovePlanner";
 import {
   OpenTrovePreflightError,
   sameOpenTroveReview,
@@ -19,6 +26,57 @@ export type ReadyOpenTroveRequestResult =
   | { status: "requested"; promise: Promise<string> };
 
 export const MAX_READY_OPEN_TROVE_AGE_MS = 60_000;
+const MAX_OPEN_TROVE_PRICE_AGE_SECONDS = 3_600;
+
+const ZERO_ADDRESS_WORD = "0".repeat(64);
+
+function priceAgeAtTapSeconds(prepared: PreparedOpenTrove, nowMs: number): number | null {
+  const snapshot = prepared.snapshot;
+  if (
+    !Number.isSafeInteger(snapshot.priceUpdatedAt) || snapshot.priceUpdatedAt <= 0 ||
+    !Number.isSafeInteger(snapshot.priceAgeSeconds) || snapshot.priceAgeSeconds < 0 ||
+    !Number.isFinite(snapshot.observedAtMs) || !Number.isFinite(nowMs)
+  ) return null;
+  const elapsedSinceBlockSeconds = Math.max(0, Math.ceil((nowMs - snapshot.observedAtMs) / 1_000));
+  const ageFromSnapshot = snapshot.priceAgeSeconds + elapsedSinceBlockSeconds;
+  const ageFromUpdateTime = Math.floor(nowMs / 1_000) - snapshot.priceUpdatedAt;
+  const age = Math.max(ageFromSnapshot, ageFromUpdateTime);
+  return Number.isSafeInteger(age) ? age : null;
+}
+
+function exactPreparedPayloadMatches(prepared: PreparedOpenTrove, nowMs: number): boolean {
+  try {
+    if (!Number.isFinite(nowMs)) return false;
+    const collateralWei = parseUnits18(prepared.collateralBtc);
+    const debtWei = parseUnits18(prepared.requestedMusd);
+    if (collateralWei === null || debtWei === null || collateralWei <= 0n || debtWei <= 0n) return false;
+
+    const recomputedPlan = calculateOpenTrovePlan(prepared.snapshot, prepared.collateralBtc, prepared.requestedMusd, {
+      nowMs,
+      maxSnapshotAgeMs: MAX_READY_OPEN_TROVE_AGE_MS,
+      maxPriceAgeSeconds: MAX_OPEN_TROVE_PRICE_AGE_SECONDS,
+    });
+    if (
+      prepared.plan.status !== "calculated" || prepared.plan.allowed !== true ||
+      prepared.plan.collateralWei !== collateralWei || prepared.plan.requestWei !== debtWei ||
+      !sameOpenTroveReview(prepared, { ...prepared, plan: recomputedPlan })
+    ) return false;
+
+    if (prepared.gasEstimate <= 0n || prepared.gasEstimate > UINT256_MAX) return false;
+    const expectedGasLimit = (prepared.gasEstimate * 120n + 99n) / 100n;
+    if (expectedGasLimit <= 0n || expectedGasLimit > UINT256_MAX || prepared.gasLimit !== expectedGasLimit) return false;
+
+    const expectedData = `${OPEN_TROVE_SELECTOR}${debtWei.toString(16).padStart(64, "0")}${ZERO_ADDRESS_WORD}${ZERO_ADDRESS_WORD}`;
+    const tx = prepared.transaction;
+    return tx.from.toLowerCase() === prepared.account.toLowerCase()
+      && tx.to.toLowerCase() === MEZO_TESTNET_BORROWER_OPERATIONS.toLowerCase()
+      && tx.data.toLowerCase() === expectedData.toLowerCase()
+      && tx.value.toLowerCase() === `0x${collateralWei.toString(16)}`
+      && tx.gas.toLowerCase() === `0x${expectedGasLimit.toString(16)}`;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Synchronous tap-time gate for an already-prepared request. It intentionally
@@ -43,15 +101,21 @@ export function requestReadyOpenTrove(options: {
   const checkedAgeMs = nowMs - ready.checkedAtMs;
   const snapshotAgeMs = nowMs - ready.prepared.snapshot.observedAtMs;
   if (
-    !Number.isFinite(ready.checkedAtMs) || !Number.isFinite(ready.prepared.snapshot.observedAtMs) ||
+    !Number.isFinite(nowMs) || !Number.isFinite(ready.checkedAtMs) || !Number.isFinite(ready.prepared.snapshot.observedAtMs) ||
     checkedAgeMs < -5_000 || snapshotAgeMs < -5_000 ||
     checkedAgeMs > MAX_READY_OPEN_TROVE_AGE_MS || snapshotAgeMs > MAX_READY_OPEN_TROVE_AGE_MS
   ) {
     return { status: "stale" };
   }
+  const priceAgeAtTap = priceAgeAtTapSeconds(ready.prepared, nowMs);
+  if (priceAgeAtTap === null || priceAgeAtTap < 0 || priceAgeAtTap > MAX_OPEN_TROVE_PRICE_AGE_SECONDS) {
+    return { status: "stale" };
+  }
   if (
     ready.prepared.snapshot.chainId !== MEZO_TESTNET_CHAIN_ID ||
-    ready.prepared.transaction.from.toLowerCase() !== ready.prepared.account.toLowerCase()
+    !Number.isSafeInteger(ready.prepared.snapshot.blockNumber) || ready.prepared.snapshot.blockNumber <= 0 ||
+    ready.prepared.transaction.from.toLowerCase() !== ready.prepared.account.toLowerCase() ||
+    !exactPreparedPayloadMatches(ready.prepared, nowMs)
   ) {
     return { status: "context-changed" };
   }

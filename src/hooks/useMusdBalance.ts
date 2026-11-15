@@ -4,6 +4,7 @@ import { resolveRpcUrl } from "../config/env";
 import { readMusdBalance, type MusdBalanceResult } from "../lib/musd";
 import { createRpcClient } from "../lib/rpc";
 import { selectReadView } from "../lib/readView";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type MusdView =
   | { status: "idle" }
@@ -45,6 +46,7 @@ export function useMusdBalance(): { view: MusdView; refresh: () => void } {
   }, [connected, address, onNetwork, network, tick, key]);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  useAutoRefresh(refresh, 60_000, connected && onNetwork);
   return {
     view: selectReadView({ stored, currentKey: key, enabled: connected && onNetwork, loading: { status: "loading" }, idle: { status: "idle" } }),
     refresh,

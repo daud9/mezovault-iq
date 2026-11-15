@@ -4,6 +4,7 @@ import { resolveRpcUrl } from "../config/env";
 import { readNativeBalance, type NativeBalanceResult } from "../lib/nativeBalance";
 import { createRpcClient } from "../lib/rpc";
 import { selectReadView } from "../lib/readView";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type NativeView = { status: "idle" } | { status: "loading" } | { status: "done"; result: NativeBalanceResult };
 
@@ -35,6 +36,7 @@ export function useNativeBalance(): { view: NativeView; refresh: () => void } {
   }, [connected, address, onNetwork, network, tick, key]);
 
   const refresh = useCallback(() => setTick((t) => t + 1), []);
+  useAutoRefresh(refresh, 60_000, connected && onNetwork);
   return {
     view: selectReadView({ stored, currentKey: key, enabled: connected && onNetwork, loading: { status: "loading" }, idle: { status: "idle" } }),
     refresh,

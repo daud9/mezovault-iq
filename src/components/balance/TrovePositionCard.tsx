@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
-import { RefreshCw } from "lucide-react";
 import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { isLoanPriceFresh, isLoanReadFresh, loanReadAgeMs } from "../../lib/loan";
 import { calculateCollateralRatioBps, formatPercentBps } from "../../lib/troveRisk";
 import { formatTime } from "../../lib/format";
-import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { DataStatus } from "../ui/DataStatus";
 
 /** A read-only summary for Overview; it never renders the open-Trove action. */
 export function TrovePositionCard() {
   const { state, network } = useWallet();
-  const { view, refresh } = useLoan();
+  const { view } = useLoan();
   const [nowMs, setNowMs] = useState(() => Date.now());
 
   useEffect(() => {
@@ -41,11 +39,6 @@ export function TrovePositionCard() {
           <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Current MUSD loan</p>
           <p className="mt-1 text-sm text-mist-400">Connected wallet · {network.label}</p>
         </div>
-        {walletOnNetwork && (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2" aria-label="Refresh Trove read">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        )}
       </div>
 
       {!connected ? (
@@ -75,7 +68,7 @@ export function TrovePositionCard() {
       ) : result && !readFresh ? (
         <div className="space-y-3">
           <DataStatus state="unverified" detail="Trove read is stale" />
-          <p className="text-sm text-mist-400">The last pinned-block read was {readAgeMs === null ? "at an unknown age" : `${Math.floor(readAgeMs / 1_000)} seconds ago`}, at block {result.blockNumber}. Refresh to confirm the current position; this card does not treat the cached result as current.</p>
+          <p className="text-sm text-mist-400">The last pinned-block read was {readAgeMs === null ? "at an unknown age" : `${Math.floor(readAgeMs / 1_000)} seconds ago`}, at block {result.blockNumber}. It is not treated as current; automatic reads are retrying.</p>
           {result.hasLoan && <LastReadPosition collateral={result.collateralBtc} debt={result.debtMusd} />}
           {!result.hasLoan && <p className="text-sm text-mist-300">That stale read found no active Trove, but current no-loan status is unverified.</p>}
         </div>
@@ -95,7 +88,7 @@ export function TrovePositionCard() {
             <Metric label="Live MCR" value={result.mcrWei === null ? "Unavailable" : formatPercentBps((result.mcrWei * 10_000n) / (10n ** 18n))} />
           </div>
           {!priceFresh && (
-            <p className="text-xs leading-relaxed text-mist-500">The BTC/USD oracle is stale or unavailable, so no current collateral ratio is shown. {result.riskInputsError ?? "Refresh after the oracle is healthy."}</p>
+            <p className="text-xs leading-relaxed text-mist-500">The BTC/USD oracle is stale or unavailable, so no current collateral ratio is shown. {result.riskInputsError ?? "Automatic reads will retry."}</p>
           )}
           {priceFresh && result.mcrWei === null && result.riskInputsError && (
             <p className="text-xs leading-relaxed text-mist-500">The collateral ratio uses the fresh Mezo BTC/USD price. The MCR comparison is unavailable: {result.riskInputsError}</p>

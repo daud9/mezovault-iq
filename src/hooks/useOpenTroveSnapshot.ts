@@ -3,6 +3,7 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { resolveRpcUrl } from "../config/env";
 import { readOpenTroveSnapshot, type OpenTroveSnapshotResult } from "../lib/openTroveRead";
 import { createRpcClient } from "../lib/rpc";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type OpenTroveSnapshotView =
   | { status: "idle" }
@@ -27,14 +28,19 @@ export function useOpenTroveSnapshot(enabled = true): { view: OpenTroveSnapshotV
     let cancelled = false;
     setView({ status: "loading" });
     const rpc = createRpcClient({ url: resolveRpcUrl(network) });
-    readOpenTroveSnapshot({ network, owner: address, rpc }).then((result) => {
-      if (!cancelled) setView({ status: "done", result });
-    });
+    readOpenTroveSnapshot({ network, owner: address, rpc })
+      .then((result) => {
+        if (!cancelled) setView({ status: "done", result });
+      })
+      .catch((caught: unknown) => {
+        if (!cancelled) setView({ status: "done", result: { status: "error", kind: "read", message: caught instanceof Error ? caught.message : "Live Open Trove terms could not be read." } });
+      });
     return () => {
       cancelled = true;
     };
   }, [enabled, connected, address, onNetwork, network, tick]);
 
   const refresh = useCallback(() => setTick((current) => current + 1), []);
+  useAutoRefresh(refresh, 60_000, enabled && connected && onNetwork && network.key === "testnet");
   return { view, refresh };
 }

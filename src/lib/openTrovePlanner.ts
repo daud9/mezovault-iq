@@ -7,6 +7,8 @@ import { MEZO_TESTNET_SELECTORS } from "./mezoAbi";
 
 export const WAD = 10n ** 18n;
 export const UINT256_MAX = (1n << 256n) - 1n;
+export const OPEN_TROVE_PREFILL_COLLATERAL_BUFFER_BPS = 500n;
+const BASIS_POINTS = 10_000n;
 export const MEZO_TESTNET_CHAIN_ID = MEZO_NETWORKS.testnet.chainId;
 export const MEZO_TESTNET_BORROWER_OPERATIONS = MEZO_NETWORKS.testnet.borrowerOperations!.address;
 export const OPEN_TROVE_SELECTOR = MEZO_TESTNET_SELECTORS.borrowerOperations.openTrove;
@@ -110,10 +112,10 @@ function ceilDiv(numerator: bigint, denominator: bigint): bigint {
 }
 
 /**
- * Find the smallest exact 18-decimal input pair that passes the live net-debt,
- * ICR, and (in Normal Mode) post-open TCR equations. The result is only a
- * prefill; prepareOpenTrove still repeats live reads, eligibility, simulation,
- * and gas estimation before a wallet request can be enabled.
+ * Find the live minimum net-debt amount and collateral requirement, with a 5%
+ * BTC cushion to absorb small oracle movement between reads. The result is only
+ * a prefill; prepareOpenTrove repeats live eligibility, simulation, and gas
+ * estimation before a wallet request can be enabled.
  */
 export function calculateMinimumOpenTroveAmounts(
   snapshot: OpenTroveLiveSnapshot | null,
@@ -171,6 +173,7 @@ export function calculateMinimumOpenTroveAmounts(
         : ceilDiv(requiredSystemValue - currentSystemValue, live.btcUsdWei);
     }
   }
+  collateralWei = ceilDiv(collateralWei * (BASIS_POINTS + OPEN_TROVE_PREFILL_COLLATERAL_BUFFER_BPS), BASIS_POINTS);
   if (collateralWei <= 0n || collateralWei > UINT256_MAX) {
     return { status: "unavailable", reason: "A safe minimum BTC collateral amount could not be calculated from the live terms." };
   }

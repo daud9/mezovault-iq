@@ -1,4 +1,3 @@
-import { RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
 import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
@@ -13,7 +12,7 @@ import { FaucetPanel } from "./FaucetPanel";
  */
 export function MusdBalanceCard() {
   const { state, network, isSupportedNetwork, connect, switchNetwork } = useWallet();
-  const { view, refresh } = useMusdBalance();
+  const { view } = useMusdBalance();
 
   return (
     <Card highlight className="space-y-5">
@@ -39,7 +38,6 @@ export function MusdBalanceCard() {
         supported={isSupportedNetwork}
         chainId={state.chainId}
         view={view}
-        onRetry={refresh}
       />
 
       <FaucetPanel />
@@ -57,9 +55,8 @@ function Body(props: {
   supported: boolean;
   chainId: number | null;
   view: ReturnType<typeof useMusdBalance>["view"];
-  onRetry: () => void;
 }) {
-  const { state, walletFound, error, onConnect, onSwitch, networkLabel, supported, chainId, view, onRetry } = props;
+  const { state, walletFound, error, onConnect, onSwitch, networkLabel, supported, chainId, view } = props;
 
   if (walletFound === false && state !== "connected") {
     return (
@@ -121,9 +118,6 @@ function Body(props: {
             <p className="mt-1 text-xs text-mist-500">Retrieved {formatTime(r.retrievedAt)} from {networkLabel}.</p>
             {r.formatted === "0" && <p className="mt-2 text-sm text-mist-400">This wallet holds no MUSD on {networkLabel}.</p>}
           </div>
-          <Button variant="ghost" onClick={onRetry} className="px-0">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
         </div>
       );
     case "not-configured":
@@ -135,8 +129,7 @@ function Body(props: {
     case "error":
       return (
         <div className="space-y-4">
-          <Message title="MUSD balance unavailable" body={`${r.message} No demonstration balance is shown in its place.`} status="unavailable" />
-          <Button variant="secondary" onClick={onRetry}>Retry</Button>
+          <Message title="MUSD balance unavailable" body={`${r.message} No demonstration balance is shown in its place. Automatic reads will retry while this page is active and when you return.`} status="unavailable" />
         </div>
       );
   }

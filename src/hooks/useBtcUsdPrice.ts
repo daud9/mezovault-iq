@@ -3,6 +3,7 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { resolveRpcUrl } from "../config/env";
 import { readBtcUsdPrice, type BtcUsdPriceResult } from "../lib/portfolioPrice";
 import { createRpcClient } from "../lib/rpc";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type BtcUsdPriceView = { status: "idle" } | { status: "loading" } | { status: "done"; result: BtcUsdPriceResult };
 
@@ -45,5 +46,6 @@ export function useBtcUsdPrice(): { view: BtcUsdPriceView; refresh: () => void; 
   }, [connected, onNetwork, network, tick]);
 
   const refresh = useCallback(() => setTick((value) => value + 1), []);
+  useAutoRefresh(refresh, 60_000, connected && onNetwork);
   return { view, refresh, nowMs };
 }

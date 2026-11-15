@@ -109,7 +109,7 @@ export async function prepareOpenTrove(options: {
     throw new OpenTrovePreflightError(`${plan.reason ?? "The live open-Trove calculation is unavailable."} No wallet request was made.`);
   }
   if (plan.allowed !== true || plan.collateralWei === undefined || plan.requestWei === undefined) {
-    throw new OpenTrovePreflightError("The fresh live collateral, minimum-debt, ICR, or system-mode checks do not pass for these planner values. No wallet request was made.");
+    throw new OpenTrovePreflightError("These amounts do not meet live Trove checks. Adjust BTC or MUSD and retry; no wallet request was made.");
   }
 
   const troveManager = network.troveManager;
@@ -171,7 +171,7 @@ export async function prepareOpenTrove(options: {
     }
   } catch (error) {
     if (error instanceof OpenTrovePreflightError) throw error;
-    throw new OpenTrovePreflightError("The exact openTrove call reverted or its fresh gas estimate/simulation failed. No wallet request was made.");
+    throw new OpenTrovePreflightError("Live Trove checks failed. Refresh and retry; no wallet request was made.");
   }
 
   return {
@@ -193,7 +193,7 @@ export async function prepareOpenTrove(options: {
  */
 export function sameOpenTroveReview(a: PreparedOpenTrove, b: PreparedOpenTrove): boolean {
   const snapshotKeys = [
-    "chainId", "mode", "minNetDebtWei", "borrowingRateWei", "gasCompensationWei",
+    "chainId", "blockNumber", "mode", "minNetDebtWei", "borrowingRateWei", "gasCompensationWei",
     "mcrWei", "ccrWei", "btcUsdWei", "feeExempt", "systemCollateralBtcWei", "systemDebtWei",
   ] as const;
   if (!snapshotKeys.every((key) => a.snapshot[key] === b.snapshot[key])) return false;

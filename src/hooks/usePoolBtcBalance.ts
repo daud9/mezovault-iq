@@ -5,6 +5,7 @@ import { TESTNET_POOL_BTC_TOKEN } from "../config/pools";
 import { readErc20Balance, type Erc20BalanceResult } from "../lib/erc20";
 import { createRpcClient } from "../lib/rpc";
 import { selectReadView } from "../lib/readView";
+import { useAutoRefresh } from "./useAutoRefresh";
 export type PoolBtcView = { status: "idle" } | { status: "loading" } | { status: "done"; result: Erc20BalanceResult };
 /** Reads only the Mezo Testnet pool BTC ERC-20; it never treats the token as native BTC gas. */
 export function usePoolBtcBalance(): { view: PoolBtcView; refresh: () => void } {
@@ -36,6 +37,7 @@ export function usePoolBtcBalance(): { view: PoolBtcView; refresh: () => void } 
     };
   }, [connected, address, onNetwork, network, tick, key]);
   const refresh = useCallback(() => setTick((current) => current + 1), []);
+  useAutoRefresh(refresh, 60_000, connected && onNetwork);
   return {
     view: selectReadView({ stored, currentKey: key, enabled: connected && onNetwork, loading: { status: "loading" }, idle: { status: "idle" } }),
     refresh,

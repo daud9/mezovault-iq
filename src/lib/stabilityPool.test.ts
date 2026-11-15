@@ -5,6 +5,8 @@ import { MEZO_NETWORKS } from "../config/chains";
 import { TESTNET_STABILITY_POOL as C } from "../config/stabilityPool";
 import { createRpcClient } from "./rpc";
 import { encodeUintResult, fakeFetch, OWNER, type Handler } from "./testHelpers";
+import { requestReadyStabilityPoolAction } from "./stabilityPoolConfirmation";
+import { requestReviewedWalletTransaction, type Eip1193Provider } from "./wallet";
 import {
   prepareStabilityPoolAction,
   readStabilityPoolReceipt,
@@ -200,6 +202,54 @@ describe("Mezo Testnet Stability Pool read and guarded action preparation", () =
     assert.equal(sameStabilityPoolReview(a, laterBlock), true);
     const changed = { ...a, snapshot: { ...a.snapshot, allowance: a.snapshot.allowance + 1n } };
     assert.equal(sameStabilityPoolReview(a, changed), false);
+  });
+
+  it("dispatches only the exact prepared approval or deposit synchronously after preflight", async () => {
+    for (const allowance of [0n, 3n * WAD]) {
+      const { review } = await prepare({ allowance });
+      const methods: string[] = [];
+      const provider: Eip1193Provider = {
+        request: ({ method, params }) => {
+          methods.push(method);
+          assert.equal(method, "eth_sendTransaction");
+          assert.deepEqual(params, [{ ...review.transaction }]);
+          return Promise.resolve(HASH);
+        },
+      };
+      const result = requestReadyStabilityPoolAction({
+        ready: { key: "wallet|amount", review, checkedAtMs: NOW_MS },
+        currentKey: "wallet|amount",
+        connectedAccount: ACCOUNT,
+        walletChainId: NETWORK.chainId,
+        nowMs: NOW_MS,
+        send: (tx, expected, onProviderCall) => requestReviewedWalletTransaction(provider, tx, expected, NETWORK.chainId, onProviderCall),
+      });
+
+      assert.equal(result.status, "requested");
+      assert.deepEqual(methods, ["eth_sendTransaction"]);
+      if (result.status === "requested") assert.equal(await result.promise, HASH);
+      assert.equal(review.action, allowance === 0n ? "approve" : "deposit");
+    }
+  });
+
+  it("blocks changed key/account/chain, expired review, or mismatched source block before wallet dispatch", async () => {
+    const { review } = await prepare({ allowance: 3n * WAD });
+    const methods: string[] = [];
+    const provider: Eip1193Provider = { request: ({ method }) => { methods.push(method); return Promise.resolve(HASH); } };
+    const send = (tx: Record<string, string | undefined>, expected: { account: `0x${string}`; chainId: number }, onProviderCall?: () => void) =>
+      requestReviewedWalletTransaction(provider, tx, expected, NETWORK.chainId, onProviderCall);
+    const ready = { key: "wallet|amount", review, checkedAtMs: NOW_MS };
+    const base = { ready, currentKey: ready.key, connectedAccount: ACCOUNT, walletChainId: NETWORK.chainId, nowMs: NOW_MS, send };
+
+    assert.equal(requestReadyStabilityPoolAction({ ...base, currentKey: "changed" }).status, "context-changed");
+    assert.equal(requestReadyStabilityPoolAction({ ...base, connectedAccount: "0x2222222222222222222222222222222222222222" }).status, "context-changed");
+    assert.equal(requestReadyStabilityPoolAction({ ...base, walletChainId: 1 }).status, "context-changed");
+    assert.equal(requestReadyStabilityPoolAction({ ...base, ready: { ...ready, checkedAtMs: NOW_MS - 60_001 } }).status, "stale");
+    const wrongBlock = { ...ready, review: { ...review, snapshot: { ...review.snapshot, blockTag: "0x101" as const } } };
+    assert.equal(requestReadyStabilityPoolAction({ ...base, ready: wrongBlock }).status, "context-changed");
+    const alteredCall = { ...ready, review: { ...review, transaction: { ...review.transaction, data: "0xdeadbeef" as const } } };
+    assert.equal(requestReadyStabilityPoolAction({ ...base, ready: alteredCall }).status, "context-changed");
+    assert.deepEqual(methods, []);
   });
 });
 

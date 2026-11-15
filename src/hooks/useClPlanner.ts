@@ -3,6 +3,7 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { resolveRpcUrl } from "../config/env";
 import { readClPlannerSnapshot, type ClPlannerSnapshot } from "../lib/clPlanner";
 import { createRpcClient } from "../lib/rpc";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type ClPlannerView =
   | { status: "loading" }
@@ -41,19 +42,7 @@ export function useClPlanner(): { view: ClPlannerView; refresh: () => void } {
     return () => { cancelled = true; };
   }, [network, tick]);
 
-  useEffect(() => {
-    if (network.key !== "testnet") return;
-    const timer = window.setInterval(() => setTick((value) => value + 1), 60_000);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") setTick((value) => value + 1);
-    };
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-  }, [network]);
-
   const refresh = useCallback(() => setTick((value) => value + 1), []);
+  useAutoRefresh(refresh, 60_000, network.key === "testnet" && network.chainId === 31_611);
   return { view, refresh };
 }

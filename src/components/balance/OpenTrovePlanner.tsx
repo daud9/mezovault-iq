@@ -32,9 +32,9 @@ export function OpenTrovePlanner({
   return (
     <section className="space-y-3 rounded-xl border border-line bg-ink-900 p-3 text-mist-100" aria-labelledby="open-trove-planner-title">
       <div>
-        <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Mezo Testnet only</p>
-        <h2 id="open-trove-planner-title" className="mt-1 text-base font-semibold">Open a new Trove</h2>
-        <p className="mt-1 text-sm text-mist-400">Both fields start at the current protocol minimum. Change either amount if you want.</p>
+        <p className="text-xs font-medium uppercase tracking-wider text-mist-500">{live && minimum.status === "ready" ? "Live estimates" : "Trove amounts"}</p>
+        <h2 id="open-trove-planner-title" className="mt-1 text-base font-semibold">Amounts to open</h2>
+        <p className="mt-1 text-sm text-mist-400">Live MUSD minimum; edit the 5% BTC cushion or debt.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -70,21 +70,19 @@ export function OpenTrovePlanner({
         </label>
       </div>
 
-      {loading && !prefillReady ? (
-        <p className="text-sm text-mist-400" role="status">Getting live Testnet minimums…</p>
-      ) : !live && !prefillReady ? (
+      {!live ? (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">
-          {unavailableReason ?? "Live Testnet terms are unavailable. No fallback amounts are used."}
+          {loading ? "Loading live terms…" : unavailableReason ?? "Live Testnet terms unavailable."}
         </p>
-      ) : minimum.status === "unavailable" && !prefillReady ? (
+      ) : minimum.status === "unavailable" ? (
         <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-200" role="status">{minimum.reason}</p>
       ) : (
-        <p className="text-xs leading-relaxed text-amber-200">Protocol minimums · Testnet only. Minimum BTC collateral leaves a thin safety buffer.</p>
+        null
       )}
 
       <details>
-        <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">How the minimums are calculated</summary>
-        <p className="pb-2 text-xs leading-relaxed text-mist-400">MUSD is calculated from the live minimum net debt and borrowing fee. BTC is calculated from the live oracle price and collateral requirements. The app repeats fresh account, network, protocol, exact-call simulation and gas checks automatically before enabling the wallet button.</p>
+        <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">Amount details</summary>
+        <p className="pb-2 text-xs leading-relaxed text-mist-400">MUSD uses live minimum debt and any one-time fee; BTC uses the live price and collateral limits.</p>
       </details>
     </section>
   );

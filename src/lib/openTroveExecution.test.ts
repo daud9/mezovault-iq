@@ -44,6 +44,7 @@ interface MockOptions {
   existingCollateral?: bigint;
   existingDebt?: bigint;
   minNetDebtWei?: bigint;
+  systemDebtWei?: bigint;
   oracleAgeSeconds?: number;
   wrongRpcChain?: boolean;
   failEstimate?: boolean;
@@ -95,7 +96,7 @@ function handler(options: MockOptions = {}): Handler {
         if (data === S.borrowerOperations.mcr) return encodeUintResult(11n * WAD / 10n);
         if (data === S.borrowerOperations.ccr) return encodeUintResult(15n * WAD / 10n);
         if (data === S.borrowerOperations.getEntireSystemColl) return encodeUintResult(100n * WAD);
-        if (data === S.borrowerOperations.getEntireSystemDebt) return encodeUintResult(1_000_000n * WAD);
+        if (data === S.borrowerOperations.getEntireSystemDebt) return encodeUintResult(options.systemDebtWei ?? 1_000_000n * WAD);
         if (data === S.borrowerOperations.governableVariables) return addressResult(GOVERNABLE);
       }
       if (to === GOVERNABLE.toLowerCase() && data === `${S.governableVariables.feeExemptAccounts}${ACCOUNT.slice(2).toLowerCase().padStart(64, "0")}`) {
@@ -215,14 +216,25 @@ describe("general Mezo Testnet openTrove preflight", () => {
     }
   });
 
-  it("blocks if planner values are unsafe or live debt/ICR/TCR checks fail", async () => {
+  it("blocks unsafe amounts and live eligibility failures", async () => {
     const tooLargeForProtocolMath = run({}, { collateralBtc: "1", requestedMusd: "100000000000000000000000000000000000000" });
     await assert.rejects(tooLargeForProtocolMath.prepared, OpenTrovePreflightError);
     assert.equal(tooLargeForProtocolMath.calls.some((call) => call.method === "eth_estimateGas"), false);
 
     const minDebtFail = run({ minNetDebtWei: 4_000n * WAD });
-    await assert.rejects(minDebtFail.prepared, OpenTrovePreflightError);
+    await assert.rejects(minDebtFail.prepared, (error: unknown) => error instanceof OpenTrovePreflightError && /These amounts do not meet live Trove checks/.test(error.message));
     assert.equal(minDebtFail.calls.some((call) => call.method === "eth_estimateGas"), false);
+
+    const icrFail = run({}, { collateralBtc: "0.001", requestedMusd: "2500" });
+    await assert.rejects(icrFail.prepared, (error: unknown) => error instanceof OpenTrovePreflightError && /These amounts do not meet live Trove checks/.test(error.message));
+    assert.equal(icrFail.calls.some((call) => call.method === "eth_estimateGas"), false);
+
+    const systemRatioFail = run({ systemDebtWei: 6_000_000n * WAD });
+    await assert.rejects(systemRatioFail.prepared, (error: unknown) => error instanceof OpenTrovePreflightError && /These amounts do not meet live Trove checks/.test(error.message));
+    assert.equal(systemRatioFail.calls.some((call) => call.method === "eth_estimateGas"), false);
+    for (const blocked of [minDebtFail, icrFail, systemRatioFail]) {
+      assert.equal(blocked.calls.some((call) => call.method === "eth_sendTransaction"), false);
+    }
   });
 
   it("blocks stale oracle data and a stale same-block snapshot", async () => {
@@ -274,6 +286,7 @@ describe("general Mezo Testnet openTrove preflight", () => {
     assert.equal(sameOpenTroveReview(a, b), true);
     assert.equal(sameOpenTroveReview({ ...a, reviewedAtMs: a.reviewedAtMs - 60_000 }, b), true);
     assert.equal(sameOpenTroveReview({ ...a, gasEstimate: a.gasEstimate + 1n }, b), false);
+    assert.equal(sameOpenTroveReview({ ...a, snapshot: { ...a.snapshot, blockNumber: a.snapshot.blockNumber + 1 } }, b), false);
     assert.equal(
       sameOpenTroveReview({ ...a, snapshot: { ...a.snapshot, systemDebtWei: a.snapshot.systemDebtWei + 1n } }, b),
       false,
@@ -377,10 +390,69 @@ describe("single-tap open-Trove readiness gate", () => {
     const stale = requestReadyOpenTrove({ ready, currentKey: ready.key, connectedAccount: ACCOUNT, nowMs: NOW_MS + 60_001, send });
     const failed = requestReadyOpenTrove({ ready: null, currentKey: ready.key, connectedAccount: ACCOUNT, nowMs: NOW_MS, send });
     const changed = requestReadyOpenTrove({ ready, currentKey: "other", connectedAccount: ACCOUNT, nowMs: NOW_MS, send });
+    const invalidSourceBlock = requestReadyOpenTrove({
+      ready: { ...ready, prepared: { ...prepared, snapshot: { ...prepared.snapshot, blockNumber: 0 } } },
+      currentKey: ready.key,
+      connectedAccount: ACCOUNT,
+      nowMs: NOW_MS,
+      send,
+    });
 
     assert.equal(stale.status, "stale");
     assert.equal(failed.status, "not-ready");
     assert.equal(changed.status, "context-changed");
+    assert.equal(invalidSourceBlock.status, "context-changed");
     assert.deepEqual(methods, []);
   });
+
+  it("blocks a pinned oracle price that crosses the one-hour limit before the tap", async () => {
+    const prepared = await run().prepared;
+    const nearExpiry = {
+      ...prepared,
+      snapshot: {
+        ...prepared.snapshot,
+        priceUpdatedAt: NOW_SECONDS - 3_599,
+        priceAgeSeconds: 3_599,
+      },
+    };
+    const methods: string[] = [];
+    const provider: Eip1193Provider = { request: ({ method }) => { methods.push(method); return Promise.resolve(`0x${"a".repeat(64)}`); } };
+    const send = (tx: Record<string, string | undefined>, expected: { account: `0x${string}`; chainId: number }, onProviderCall?: () => void) =>
+      requestReviewedWalletTransaction(provider, tx, expected, NETWORK.chainId, onProviderCall);
+    const ready = { key: "wallet|amounts", prepared: nearExpiry, checkedAtMs: NOW_MS };
+    const atLimit = requestReadyOpenTrove({ ready, currentKey: ready.key, connectedAccount: ACCOUNT, nowMs: NOW_MS + 1_000, send });
+    const expired = requestReadyOpenTrove({ ready, currentKey: ready.key, connectedAccount: ACCOUNT, nowMs: NOW_MS + 2_000, send });
+
+    assert.equal(atLimit.status, "requested");
+    assert.equal(expired.status, "stale");
+    assert.deepEqual(methods, ["eth_sendTransaction"]);
+    if (atLimit.status === "requested") await atLimit.promise;
+  });
+
+  it("blocks a forged Trove recipient, calldata, value, gas limit, or amount plan", async () => {
+    const prepared = await run().prepared;
+    const methods: string[] = [];
+    const provider: Eip1193Provider = { request: ({ method }) => { methods.push(method); return Promise.resolve(`0x${"f".repeat(64)}`); } };
+    const send = (tx: Record<string, string | undefined>, expected: { account: `0x${string}`; chainId: number }, onProviderCall?: () => void) =>
+      requestReviewedWalletTransaction(provider, tx, expected, NETWORK.chainId, onProviderCall);
+    const ready = { key: "wallet|amounts", prepared, checkedAtMs: NOW_MS };
+    const forged = [
+      { ...prepared, transaction: { ...prepared.transaction, to: "0x2222222222222222222222222222222222222222" as const } },
+      { ...prepared, transaction: { ...prepared.transaction, data: "0xdeadbeef" } },
+      { ...prepared, transaction: { ...prepared.transaction, value: "0x1" } },
+      { ...prepared, transaction: { ...prepared.transaction, gas: "0x1" } },
+      { ...prepared, plan: { ...prepared.plan, requestWei: (prepared.plan.requestWei ?? 0n) + 1n } },
+    ];
+    const results = forged.map((candidate) => requestReadyOpenTrove({
+      ready: { ...ready, prepared: candidate },
+      currentKey: ready.key,
+      connectedAccount: ACCOUNT,
+      nowMs: NOW_MS,
+      send,
+    }));
+
+    assert.deepEqual(results.map((result) => result.status), forged.map(() => "context-changed"));
+    assert.deepEqual(methods, []);
+  });
+
 });

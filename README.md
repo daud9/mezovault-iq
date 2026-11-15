@@ -4,12 +4,14 @@ A Mezo Testnet console focused on Trove management, risk analysis, and protocol 
 
 ## Primary tools
 
-- **Trove** — inspect collateral and debt, open a supported position, add BTC collateral, and use the Stability Pool. Borrowing more, repayment, withdrawal, and closure are not available.
+- **Trove** — inspect collateral and debt, open a supported position, add BTC collateral, and use the Stability Pool. With a connected wallet that has no active Trove, the prefilled form is visible by default. It starts at the live minimum debt plus a 5% BTC collateral buffer; fresh eligibility, exact-call simulation, and gas checks must pass before one wallet confirmation is enabled. Borrowing more, repayment, withdrawal, and closure are not available.
 - **Trove Risk Lab** — compare a live Trove ratio with the current minimum collateral ratio and explore hypothetical BTC price declines. Scenarios are not predictions.
 
 ## Overview and protocol data
 
 Overview shows native BTC, MUSD, MEZO, and configured Pool BTC balances separately. **There is no combined portfolio total.** A USD estimate is shown only for native BTC and only while the Mezo Testnet BTC/USD oracle is fresh. MUSD, MEZO, Pool BTC, Trove collateral and debt, Stability Pool deposits, and concentrated-liquidity positions are not included in that estimate.
+
+Safe wallet and pool snapshots update automatically while their page is visible and when you return; explicit address, transaction-hash, and receipt lookups remain user-triggered.
 
 - **Pool Watch** reads reserve ratios for configured Testnet pools; these are not trade quotes or USD liquidity.
 - **CL Positions** reads wallet-held and gauge-staked positions. Collect values are simulations, not payouts.

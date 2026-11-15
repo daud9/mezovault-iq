@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
 import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { useWallet } from "../wallet/WalletProvider";
 import { useMezoBalance } from "../../hooks/useMezoBalance";
@@ -10,7 +8,7 @@ import { formatTime, shortAddress } from "../../lib/format";
 /** MEZO token balance, read from the contract after its code, symbol and decimals are checked on-chain. */
 export function MezoBalanceCard() {
   const { state, network, isSupportedNetwork } = useWallet();
-  const { view, refresh } = useMezoBalance();
+  const { view } = useMezoBalance();
 
   let body: ReactNode;
   if (state.status !== "connected") {
@@ -54,7 +52,7 @@ export function MezoBalanceCard() {
         body = (
           <div className="space-y-3">
             <DataStatus state="unavailable" />
-            <p className="text-sm text-mist-400">{r.message} No substitute value is shown.</p>
+            <p className="text-sm text-mist-400">{r.message} No substitute value is shown; automatic reads will retry.</p>
           </div>
         );
         break;
@@ -68,11 +66,6 @@ export function MezoBalanceCard() {
           <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Wallet MEZO</p>
           <p className="mt-1 text-sm text-mist-400">Token balance on {network.label}</p>
         </div>
-        {state.status === "connected" && isSupportedNetwork && (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        )}
       </div>
       {body}
     </Card>

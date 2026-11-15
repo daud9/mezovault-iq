@@ -1,5 +1,4 @@
-import { ExternalLink, RefreshCw } from "lucide-react";
-import { Button } from "../components/ui/Button";
+import { ExternalLink } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { DataStatus } from "../components/ui/DataStatus";
 import { EmptyState, ErrorState, LoadingState } from "../components/ui/StateViews";
@@ -14,7 +13,7 @@ import { shortAddress } from "../lib/format";
 
 export function ClPositionMonitor() {
   const { state, network } = useWallet();
-  const { view, refresh } = useClPositions();
+  const { view } = useClPositions();
   const testnet = network.key === "testnet" && network.chainId === TESTNET_CL_CONTRACTS.chainId;
   const connected = state.status === "connected" && state.address !== null;
   const walletOnNetwork = connected && state.chainId === TESTNET_CL_CONTRACTS.chainId;
@@ -24,12 +23,7 @@ export function ClPositionMonitor() {
       <SectionHeader
         eyebrow="Mezo Testnet · read-only"
         title="CL Positions"
-        description="Wallet-held and gauge-staked concentrated-liquidity positions."
-        actions={testnet && walletOnNetwork ? (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        ) : undefined}
+        description="Wallet-held and gauge-staked concentrated-liquidity positions; reads update automatically."
       />
 
       {!testnet ? (
@@ -52,12 +46,11 @@ export function ClPositionMonitor() {
       ) : view.status === "loading" || view.status === "idle" ? (
         <LoadingState label="Reading CL positions…" />
       ) : view.status === "error" ? (
-        <ErrorState title="Live position read unavailable" description={view.message} onRetry={refresh} />
+        <ErrorState title="Live position read unavailable" description={`${view.message} Automatic reads retry while this page is active and when you return.`} />
       ) : view.snapshot.positions.length === 0 ? (
         <EmptyState
           title="No CL positions found for this wallet"
-          description={`No wallet-held or gauge-staked position at block ${view.snapshot.blockNumber}.`}
-          action={<Button variant="secondary" onClick={refresh}><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh live reads</Button>}
+          description={`No wallet-held or gauge-staked position at block ${view.snapshot.blockNumber}. Automatic reads update while this page is active and when you return.`}
         />
       ) : (
         <>

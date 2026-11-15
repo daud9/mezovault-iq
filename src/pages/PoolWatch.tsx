@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, RefreshCw } from "lucide-react";
-import { Button } from "../components/ui/Button";
+import { ExternalLink } from "lucide-react";
 import { Card } from "../components/ui/Card";
 import { DataStatus } from "../components/ui/DataStatus";
 import { SectionHeader } from "../components/ui/SectionHeader";
@@ -12,7 +11,7 @@ import { TESTNET_BASIC_POOLS } from "../config/pools";
 
 export function PoolWatch() {
   const { network } = useWallet();
-  const { view, refresh } = usePoolMarkets();
+  const { view } = usePoolMarkets();
   const [nowMs, setNowMs] = useState(() => Date.now());
   const testnet = network.key === "testnet";
   useEffect(() => {
@@ -24,12 +23,7 @@ export function PoolWatch() {
       <SectionHeader
         eyebrow="Mezo Testnet · Read-only market data"
         title="Pool Watch"
-        description="Shared-block reserve ratios for configured Mezo Testnet pools."
-        actions={testnet ? (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        ) : undefined}
+        description="Shared-block reserve ratios for configured Mezo Testnet pools; reads update automatically."
       />
       {!testnet ? (
         <Card className="space-y-2">
@@ -55,7 +49,7 @@ export function PoolWatch() {
                     <h2 className="text-base font-semibold text-mist-100">{poolLabel} · read unavailable</h2>
                     <DataStatus state="unavailable" />
                   </div>
-                  <p className="text-sm text-mist-400">{message}</p>
+                  <p className="text-sm text-mist-400">{message} Automatic reads retry while this page is active and when you return.</p>
                   <p className="break-all font-mono text-xs text-mist-500">{result.status === "no-contract" ? result.poolAddress : pool?.address}</p>
                 </Card>
               );

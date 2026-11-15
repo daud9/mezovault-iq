@@ -6,6 +6,7 @@ import { createRpcClient } from "../lib/rpc";
 import { readPoolMarket, type PoolMarketResult } from "../lib/pool";
 import { readSnapshotBlock } from "../lib/readSnapshotBlock";
 import { parseChainId } from "../lib/network";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type PoolMarketsView =
   | { status: "idle" }
@@ -58,5 +59,6 @@ export function usePoolMarkets(): { view: PoolMarketsView; refresh: () => void }
   }, [network, tick]);
 
   const refresh = useCallback(() => setTick((current) => current + 1), []);
+  useAutoRefresh(refresh, 120_000, network.key === "testnet");
   return { view, refresh };
 }

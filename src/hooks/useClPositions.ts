@@ -4,6 +4,7 @@ import { resolveRpcUrl } from "../config/env";
 import { createRpcClient } from "../lib/rpc";
 import { readClPositionSnapshot, type ClPositionSnapshot } from "../lib/clPositions";
 import { selectReadView } from "../lib/readView";
+import { useAutoRefresh } from "./useAutoRefresh";
 
 export type ClPositionsView =
   | { status: "idle" }
@@ -47,6 +48,7 @@ export function useClPositions(): { view: ClPositionsView; refresh: () => void }
   }, [connected, address, onNetwork, network, tick, key]);
 
   const refresh = useCallback(() => setTick((value) => value + 1), []);
+  useAutoRefresh(refresh, 120_000, enabled);
   return {
     view: selectReadView({ stored, currentKey: key, enabled, loading: { status: "loading" }, idle: { status: "idle" } }),
     refresh,

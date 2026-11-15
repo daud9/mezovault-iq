@@ -1,15 +1,13 @@
 import type { ReactNode } from "react";
-import { RefreshCw } from "lucide-react";
 import { usePoolBtcBalance } from "../../hooks/usePoolBtcBalance";
 import { formatTime, shortAddress } from "../../lib/format";
 import { Card } from "../ui/Card";
-import { Button } from "../ui/Button";
 import { DataStatus } from "../ui/DataStatus";
 import { useWallet } from "../wallet/WalletProvider";
 
 export function PoolBtcBalanceCard() {
   const { state, network } = useWallet();
-  const { view, refresh } = usePoolBtcBalance();
+  const { view } = usePoolBtcBalance();
   const testnetConfigured = network.key === "testnet" && network.chainId === 31_611;
 
   let body: ReactNode;
@@ -42,7 +40,7 @@ export function PoolBtcBalanceCard() {
     body = (
       <div className="space-y-2">
         <DataStatus state={view.result.status === "not-configured" ? "not-configured" : "unavailable"} />
-        <p className="text-sm text-mist-400">{detail}</p>
+        <p className="text-sm text-mist-400">{detail}{view.result.status === "error" ? " Automatic reads will retry." : ""}</p>
       </div>
     );
   }
@@ -54,11 +52,6 @@ export function PoolBtcBalanceCard() {
           <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Pool BTC · ERC-20</p>
           <p className="mt-1 text-sm text-mist-400">Mezo Testnet token balance</p>
         </div>
-        {testnetConfigured && state.status === "connected" && state.chainId === 31_611 && (
-          <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
-            <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
-          </Button>
-        )}
       </div>
       {body}
       <p className="text-xs leading-relaxed text-mist-500">Configured token identity is unverified. No USD value is included.</p>

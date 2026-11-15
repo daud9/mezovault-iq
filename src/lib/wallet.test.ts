@@ -6,6 +6,8 @@ import {
   INITIAL_WALLET_STATE,
   NO_WALLET_MESSAGE,
   requestAccount,
+  requestCachedReviewedWalletTransaction,
+  readStableWalletContext,
   requestReviewedWalletTransaction,
   requestWalletTransaction,
   switchToNetwork,
@@ -58,6 +60,33 @@ describe("assertWalletContext", () => {
     const changedChain = provider((method) => method === "eth_accounts" ? [ADDR] : "0x1");
     await assert.rejects(assertWalletContext(changedChain.p, { account: ADDR, chainId: 31611 }), (e: unknown) => e instanceof WalletError && e.code === "unsupported");
     assert.equal([...changedAccount.calls, ...changedChain.calls].includes("eth_sendTransaction"), false);
+  });
+});
+
+describe("readStableWalletContext", () => {
+  it("retries when account/chain events race provider reads", async () => {
+    let version = 0;
+    let accountReads = 0;
+    const methods: string[] = [];
+    const latest = "0x2222222222222222222222222222222222222222" as const;
+    const p: Eip1193Provider = {
+      request: async ({ method }) => {
+        methods.push(method);
+        if (method === "eth_accounts") {
+          accountReads += 1;
+          if (accountReads === 1) {
+            return new Promise((resolve) => setTimeout(() => { version += 1; resolve([ADDR]); }, 5));
+          }
+          return [latest];
+        }
+        if (method === "eth_chainId") return "0x7b7b";
+        throw new Error(`unexpected ${method}`);
+      },
+    };
+
+    const context = await readStableWalletContext(p, () => version);
+    assert.deepEqual(context, { account: latest, chainId: 31_611, eventVersion: 1 });
+    assert.deepEqual(methods, ["eth_accounts", "eth_chainId", "eth_accounts", "eth_chainId"]);
   });
 });
 
@@ -276,5 +305,35 @@ describe("requestReviewedWalletTransaction", () => {
     await assert.rejects(requestReviewedWalletTransaction(p, { ...tx, from: "0x2222222222222222222222222222222222222222" }, { account: ADDR, chainId: 31_611 }, 31_611));
     await assert.rejects(requestReviewedWalletTransaction(p, tx, { account: ADDR, chainId: 31_611 }, 1));
     assert.deepEqual(calls, []);
+  });
+});
+
+describe("requestCachedReviewedWalletTransaction", () => {
+  it("blocks changed account or chain events and dispatches a matching review immediately", async () => {
+    let resolveSend: ((value: unknown) => void) | undefined;
+    const { p, calls } = provider((method) => {
+      if (method !== "eth_sendTransaction") throw new Error(`unexpected ${method}`);
+      return new Promise((resolve) => { resolveSend = resolve; });
+    });
+    const tx = { from: ADDR, to: "0x2222222222222222222222222222222222222222", value: "0x0", data: "0x1234" };
+    const expected = { account: ADDR, chainId: 31_611 };
+
+    await assert.rejects(requestCachedReviewedWalletTransaction(
+      p, tx, expected, { account: "0x3333333333333333333333333333333333333333", chainId: 31_611 }, 31_611,
+    ), /account or network changed/);
+    await assert.rejects(requestCachedReviewedWalletTransaction(
+      p, tx, expected, { account: ADDR, chainId: 1 }, 31_611,
+    ), /account or network changed/);
+    await assert.rejects(requestCachedReviewedWalletTransaction(
+      p, tx, expected, { account: ADDR, chainId: 31_611 }, 31_611, undefined, true,
+    ), /network is changing/);
+    assert.deepEqual(calls, []);
+
+    const pending = requestCachedReviewedWalletTransaction(
+      p, tx, expected, { account: ADDR, chainId: 31_611 }, 31_611,
+    );
+    assert.deepEqual(calls, ["eth_sendTransaction"]);
+    resolveSend?.(`0x${"b".repeat(64)}`);
+    assert.equal(await pending, `0x${"b".repeat(64)}`);
   });
 });
