@@ -1,6 +1,6 @@
 # MezoVault IQ feature audit
 
-The audit found and fixed safety, data-labeling and usability gaps across the project. The public deployment remains at `d3e4cd7`; these worktree changes are not committed or deployed. No wallet transaction was signed or submitted. The competition rubric was not provided, so this review makes no score or judging-criteria claims.
+The audit found and fixed safety, data-labeling and usability gaps across the project. Commit `142bae5` is on `main` and deployed. No wallet transaction was signed or submitted. The competition rubric was not provided, so this review makes no score or judging-criteria claims.
 
 ## Changes made
 
@@ -91,7 +91,7 @@ The page compares a live Trove ratio with the live MCR and now lets the user cho
 
 ## Build and validation
 
-`npm test` passes 386 tests across 86 suites. `npm run typecheck`, `npm run build` and `git diff --check` pass. The tests use local or mocked data; they do not test a live wallet popup, facilitator settlement or a real transaction. Chromium checks at 320×640, 375×812, 768×1024, 812×375 and 1440×900 found no horizontal overflow. The 375px More menu exposes all eight secondary routes, route changes focus the main region, and the skip link becomes visible on focus. Reduced motion was enabled for the screenshots. The [phone capture](../submission-assets/pool-watch-mobile-375.png) and [desktop capture](../submission-assets/pool-watch-desktop-1440.png) show a live Pool Watch read at block 16793573 from the local worktree, not the public deployment.
+`npm test` passes 386 tests across 86 suites. `npm run typecheck`, `npm run build` and `git diff --check` pass. The tests use local or mocked data; they do not test a live wallet popup, facilitator settlement or a real transaction. Chromium checks at 320×640, 375×812, 768×1024, 812×375 and 1440×900 found no horizontal overflow. The 375px More menu exposes all eight secondary routes, route changes focus the main region, and the skip link becomes visible on focus. Reduced motion was enabled for the screenshots. The [phone capture](../submission-assets/pool-watch-mobile-375.png) and [desktop capture](../submission-assets/pool-watch-desktop-1440.png) show a live Pool Watch read at block 16793573 from the local build used for `142bae5`, now deployed.
 
 Vite emits separate route chunks. The shared entry chunk is 314.18 KB (98.67 KB gzip); the x402 buyer chunk is 397.59 KB (120.38 KB gzip) and is loaded separately from the main entry. Route splitting reduces the code initially shared by every page, but the x402 path remains the largest chunk and deserves dependency/import review. The build also reports non-fatal `@__PURE__` annotation warnings from the installed Zod dependency. No browser timing or Lighthouse measurement was taken.
 

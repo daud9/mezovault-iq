@@ -6,7 +6,7 @@
 
 MezoVault IQ is a Mezo Testnet console for checking balances and protocol positions, preparing wallet actions, and reading transaction receipts. Public reads, simulations and wallet-confirmed writes are shown as separate steps.
 
-> **Audit status (2026-11-15):** the public deployment remains at commit `d3e4cd7`. Local audit changes are uncommitted and have not been deployed. No wallet transaction was signed or submitted. See [the feature audit](docs/FEATURE_AUDIT.md) for fixes, source-backed risks and remaining release checks.
+> **Release status (2026-11-15):** commit `142bae5` is on `main` and deployed. The local audit and no-ai-slop review passed 386 tests, typecheck, production build, and responsive checks. Remaining risks are listed in [the feature audit](docs/FEATURE_AUDIT.md). No wallet transaction was signed or submitted.
 
 ## A short demo
 
@@ -49,7 +49,7 @@ The current worktree passes:
 - `npm run build`.
 - `git diff --check`.
 
-Tests use local and mocked data. Chromium spot checks at 320×640, 375×812, 768×1024, 812×375 and 1440×900 found no horizontal overflow. The phone menu shows all eight secondary routes, and route changes focus the main content. These checks do not cover a live wallet popup, live x402 settlement or a real transaction. The two local-worktree screenshots show Pool Watch at Testnet block 16793573; the public site remains at the earlier deployed commit.
+Tests use local and mocked data. Chromium spot checks at 320×640, 375×812, 768×1024, 812×375 and 1440×900 found no horizontal overflow. The phone menu shows all eight secondary routes, and route changes focus the main content. These checks do not cover a live wallet popup, live x402 settlement or a real transaction. The screenshots show Pool Watch at Testnet block 16793573 from the local build used for `142bae5`, which is now deployed.
 
 - [Phone, 375×812](submission-assets/pool-watch-mobile-375.png)
 - [Desktop, 1440×900](submission-assets/pool-watch-desktop-1440.png)
