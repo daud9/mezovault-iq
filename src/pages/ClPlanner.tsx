@@ -67,9 +67,9 @@ export function ClPlanner() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Mezo Testnet · live pool state · read-only"
-        title="CL Range Planner"
-        description="Choose a factory-listed active Slipstream pool, enter a price range and a token1-valued budget, and preview the token composition at the current on-chain price."
+        eyebrow="Mezo Testnet · live pool data"
+        title="CL Planner"
+        description="Estimate token amounts for a price range from live pool data."
         actions={testnet ? (
           <Button variant="ghost" onClick={refresh} className="min-h-11 px-2" disabled={view.status === "done" && view.refreshing}>
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
@@ -80,18 +80,18 @@ export function ClPlanner() {
       {!testnet ? (
         <Card className="space-y-3">
           <DataStatus state="not-configured" detail="Mezo Testnet only" />
-          <p className="text-sm leading-relaxed text-mist-400">This planner reads only the official Mezo Testnet CL Factory. This app build is configured for {network.label}; changing the wallet network alone cannot change the app’s configured network, and no other chain is queried.</p>
+          <p className="text-sm text-mist-400">This planner is configured for Mezo Testnet; the app is set to {network.label}.</p>
         </Card>
       ) : view.status === "loading" ? (
-        <LoadingState label="Reading factory-listed pools and live CL state from Mezo Testnet" />
+        <LoadingState label="Reading live pools…" />
       ) : view.status === "error" ? (
         <ErrorState title="Live pool read unavailable" description={view.message} onRetry={refresh} />
       ) : snapshot && snapshot.pools.length === 0 ? (
         <Card className="space-y-3">
           <DataStatus state="unavailable" detail="No usable active pools" />
           <h2 className="text-base font-semibold text-mist-100">No active pool with readable token decimals was found</h2>
-          <p className="text-sm leading-relaxed text-mist-400">The factory listed {snapshot.factoryPoolCount} pool(s) at block {snapshot.blockNumber.toLocaleString()}, but none had both nonzero current liquidity and readable on-chain token decimals. No sample pools or assumed decimal values are substituted.</p>
-          <Button variant="secondary" onClick={refresh}><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh live reads</Button>
+          <p className="text-sm text-mist-400">No active pool has readable token decimals at block {snapshot.blockNumber.toLocaleString()}.</p>
+          <Button variant="secondary" onClick={refresh}><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh</Button>
         </Card>
       ) : snapshot && pool ? (
         <>
@@ -99,7 +99,7 @@ export function ClPlanner() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-mist-100">Live pool and range inputs</h2>
-                <p className="mt-1 text-sm leading-relaxed text-mist-400">The pool list comes from the official factory. Only pools with nonzero live liquidity and readable token decimals are selectable.</p>
+                <p className="mt-1 text-sm text-mist-400">Selectable pools have live liquidity and readable token decimals.</p>
               </div>
               <DataStatus
                 state={fresh ? "live" : "unavailable"}
@@ -108,7 +108,7 @@ export function ClPlanner() {
             </div>
 
             {view.refreshError && <p role="alert" className="rounded-xl border border-risk-high/30 bg-risk-high/5 p-3 text-sm text-risk-high">The latest refresh failed: {view.refreshError}. The previous snapshot is retained for reference, but calculations are paused until a fresh read succeeds.</p>}
-            {!fresh && !view.refreshError && <p role="status" className="rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm text-risk-medium">A fresh pool snapshot is required before the token split can be shown. Refreshing takes about a minute automatically; you can also refresh now.</p>}
+            {!fresh && !view.refreshError && <p role="status" className="rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm text-risk-medium">Calculations pause until a fresh pool read succeeds.</p>}
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Field id="cl-planner-pool" label="Active factory pool" hint={`${snapshot.pools.length} selectable · ${snapshot.factoryPoolCount} factory-listed · ${snapshot.excludedPoolCount} excluded (zero liquidity or unreadable decimals)`}>
@@ -166,10 +166,10 @@ export function ClPlanner() {
                   <MiniStat label="Aligned upper bound" value={`${formatPrice(calculation.result.alignedUpperPrice)} ${pool.token1.symbol}`} detail={`Tick ${calculation.result.upperTick.toLocaleString()}`} />
                   <MiniStat label="Current price" value={`${formatPrice(calculation.result.currentPrice)} ${pool.token1.symbol}`} detail={`1 ${pool.token0.symbol}`} />
                 </div>
-                <p className="text-xs leading-relaxed text-mist-500">Approximate composition only. User-entered prices are rounded outward to the pool’s tick spacing. This preview uses the live spot price and standard CL amount equations; it excludes fees, slippage, gas, token transfer behavior, exact integer rounding and future price movement. Amounts are not a quote or transaction instruction.</p>
+                <p className="text-xs leading-relaxed text-mist-500">Estimate only; excludes fees, gas, slippage, and price movement. Not a quote.</p>
               </div>
             ) : (
-              <p className="rounded-xl border border-line bg-ink-800/40 p-4 text-sm leading-relaxed text-mist-400">Enter a positive lower price, upper price and total budget to calculate a split. Prices are denominated as token1 per token0; no values are filled in or inferred.</p>
+              <p className="rounded-xl border border-line bg-ink-800/40 p-4 text-sm text-mist-400">Enter a positive range and token1 budget to estimate the split.</p>
             )}
           </Card>
 
@@ -184,9 +184,7 @@ export function ClPlanner() {
           />
 
           <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
-            <h2 className="font-medium text-mist-200">Read-only planner safety and data notes</h2>
-            <p>The planner card reads public pool state from the official Mezo Testnet CL Factory at chain 31611 and uses token symbols/decimals returned on-chain. Snapshot block and age are shown above; if the read is unavailable or older than two minutes, planner calculations are withheld. A pool is selectable only when its factory listing, contract code, live liquidity and both token decimals are readable. Range status means the current tick is inside the hypothetical bounds; pool-wide active liquidity is not a promise of liquidity available to this exact range.</p>
-            <p>The planner card itself remains read-only and does not calculate APY, returns, fees earned or USD valuation. The separate deposit panel above requires its own current review and explicit wallet actions; it is Testnet-only and does not add collection, stake or reward controls.</p>
+            <p>Estimates use current pool state and exclude fees, gas, and price movement. Minting is separate and requires wallet confirmation.</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
               <a href={OFFICIAL_SOURCES.mezoPools} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">Mezo Pools docs <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
               <a href={OFFICIAL_SOURCES.contractsReference} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">Official contract reference <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>

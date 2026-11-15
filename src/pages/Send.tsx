@@ -261,9 +261,9 @@ export function Send() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Standard wallet transfer"
-        title="Send BTC, Pool BTC, MUSD or MEZO"
-        description="BTC (native gas) and Pool BTC (ERC-20) are different assets. Pool BTC is a Testnet token and cannot pay fees. Review every transfer and approve it in your wallet; on-chain transfers need native BTC for network fees."
+        eyebrow="Wallet action"
+        title="Send"
+        description="Review the recipient and fee, then confirm in your wallet."
       />
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
@@ -271,8 +271,8 @@ export function Send() {
           {prefill.request && (
             <div className="rounded-lg border border-gold-500/40 bg-gold-500/10 p-3 text-xs leading-relaxed text-mist-200">
               {prefill.request.amount
-                ? "Filled in from a payment link. Check the recipient, token and amount against what you expect before you review."
-                : "Recipient and token filled in. Enter the amount, then review."}
+                ? "Payment request filled in. Review every field."
+                : "Recipient and token filled in. Add an amount."}
             </div>
           )}
           {!from || state.status !== "connected" ? (
@@ -326,11 +326,11 @@ export function Send() {
                   Available: {symbol === "BTC" ? balanceText(native.view, "BTC (native gas)") : symbol === "MUSD" ? balanceText(musd.view, "MUSD") : symbol === "POOL_BTC" ? (poolBtcBalance ? `${poolBtcBalance.formatted} Pool BTC (ERC-20)` : poolBtc.view.status === "loading" ? "loading" : poolBtc.view.status === "idle" ? "not read" : "unavailable (configured-token checks did not pass)") : balanceText(mezo.view, "MEZO")}
                 </p>
                 {fieldErrors.amount && <p id="send-amount-error" className="text-sm text-risk-high">{fieldErrors.amount}</p>}
-                {symbol === "POOL_BTC" && <p className="text-xs leading-relaxed text-mist-500">Configured Testnet Pool BTC ERC-20: <span className="break-all font-mono">{TESTNET_POOL_BTC_TOKEN.address}</span>. This app checks its code, BTC symbol and 18 decimals; the <a className="text-gold-300 underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noopener noreferrer">official pool docs</a> do not list this token address, so those checks do not prove canonical identity. <a className="text-gold-300 underline" href={`${network.explorerUrl.replace(/\/?$/, "/")}address/${TESTNET_POOL_BTC_TOKEN.address}`} target="_blank" rel="noopener noreferrer">Review it on the Testnet explorer</a>. It is not native BTC and cannot pay gas; transaction fees use your separate native BTC balance.</p>}
+                {symbol === "POOL_BTC" && <p className="text-xs leading-relaxed text-mist-500">Pool BTC is a configured Testnet ERC-20, not native BTC. Its canonical identity is unverified; <a className="text-gold-300 underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noopener noreferrer">Mezo’s pool docs</a> do not list this address. <a className="text-gold-300 underline" href={`${network.explorerUrl.replace(/\/?$/, "/")}address/${TESTNET_POOL_BTC_TOKEN.address}`} target="_blank" rel="noopener noreferrer">Inspect token</a>. Native BTC pays gas.</p>}
               </div>
               {balanceIssues.length > 0 && (
                 <div className="space-y-2 rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3">
-                  <p className="text-sm font-medium text-mist-200">Some balance reads are unavailable; a transfer that needs an unverified balance cannot be prepared.</p>
+                  <p className="text-sm font-medium text-mist-200">Some balance reads failed. Refresh before preparing this transfer.</p>
                   <ul className="list-inside list-disc space-y-1 text-xs text-mist-400">{balanceIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul>
                   <Button variant="secondary" onClick={() => { native.refresh(); musd.refresh(); mezo.refresh(); poolBtc.refresh(); }} disabled={busy !== null} className="min-h-11">Retry balance reads</Button>
                 </div>
@@ -408,11 +408,6 @@ export function Send() {
             </Card>
           )}
 
-          <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
-            <p className="font-medium text-mist-200">How this works</p>
-            <p>BTC (native gas) is sent as Mezo’s native asset. Pool BTC (ERC-20), MUSD and MEZO are token transfers to their respective contracts. The Pool BTC option is Testnet-only; all token transfers need separate native BTC for network fees.</p>
-            <p>Success is shown only when the network receipt reports success. Until then the transaction is shown as waiting.</p>
-          </Card>
         </div>
       </div>
     </div>

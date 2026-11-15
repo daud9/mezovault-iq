@@ -70,7 +70,7 @@ export function TroveRiskLab() {
       <SectionHeader
         eyebrow="Read-only · Mezo Testnet"
         title="Trove Risk Lab"
-        description="Compare an active Trove's collateral ratio with the live MCR and hypothetical BTC price drops. A status-4 redemption is shown as historical RISK-ESCAPED with verified closure evidence, never as an active position or current ratio. All reads use one pinned block; no transaction controls are available here."
+        description="Current Trove ratio, live MCR, and hypothetical BTC price scenarios."
         actions={ready ? (
           <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh reads
@@ -112,7 +112,7 @@ export function TroveRiskLab() {
         <Card className="space-y-3">
           <DataStatus state="live" detail={`no active Trove · block ${loan.blockNumber}`} />
           <h2 className="text-base font-semibold text-mist-100">No active Trove was read</h2>
-          <p className="text-sm leading-relaxed text-mist-400">The pinned-block status and zero collateral/debt indicate there is no current position to stress-test for this wallet. This lab is read-only and does not open or change positions.</p>
+          <p className="text-sm leading-relaxed text-mist-400">No position is available to stress-test.</p>
           <p className="text-xs text-mist-500">Read {formatTime(loan.retrievedAt)} · block {loan.blockNumber}</p>
         </Card>
       ) : loan && !priceFresh ? (
@@ -143,7 +143,7 @@ export function TroveRiskLab() {
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-semibold text-mist-100">Current position</h2>
-                <p className="mt-1 text-xs text-mist-500">Risk metrics are arithmetic comparisons, not a safety guarantee or liquidation forecast.</p>
+                <p className="mt-1 text-xs text-mist-500">Arithmetic comparison; not a liquidation forecast.</p>
               </div>
               <DataStatus state="live" detail={`same-block MCR comparison · block ${loan.blockNumber}`} />
               <ThresholdLabel below={risk.belowThreshold} />
@@ -188,7 +188,7 @@ export function TroveRiskLab() {
           <Card className="space-y-4">
             <div>
               <h2 className="text-sm font-semibold text-mist-100">Custom BTC price scenario</h2>
-              <p className="mt-1 text-xs leading-relaxed text-mist-500">Choose a hypothetical BTC price decline. The calculation holds collateral, debt and the same-block MCR constant; it does not model future prices or liquidation events.</p>
+              <p className="mt-1 text-xs leading-relaxed text-mist-500">Collateral, debt, and MCR stay constant. Scenarios are not predictions.</p>
             </div>
             <label htmlFor="trove-stress-drop" className="block text-sm font-medium text-mist-200">BTC price decline: {stressDropPct}%</label>
             <input
@@ -220,14 +220,10 @@ export function TroveRiskLab() {
               {thresholdAddress && <EvidenceLink label="BorrowerOperations · MCR()" address={thresholdAddress} explorerUrl={network.explorerUrl} />}
               {priceFeedAddress && <EvidenceLink label="PriceFeed" address={priceFeedAddress} explorerUrl={network.explorerUrl} />}
             </div>
-            <p className="text-xs leading-relaxed text-mist-500">Trove status, collateral, debt, BTC/USD price, oracle freshness metadata, and MCR were read from these configured contracts at the displayed block. No cached or assumed threshold is substituted.</p>
+            <p className="text-xs leading-relaxed text-mist-500">Inputs were read from the linked contracts at block {loan.blockNumber}.</p>
           </Card>
         </>
       )}
-      <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
-        <p className="font-medium text-mist-200">Read-only boundary</p>
-        <p>This page never builds, signs, submits, or automates a transaction. It does not add collateral, withdraw, repay, borrow, close a Trove, or manage a vault.</p>
-      </Card>
     </div>
   );
 }
@@ -291,14 +287,8 @@ function ClosedRedemptionRiskCard({
       </div>
       <div className="space-y-2">
         <h2 className="text-base font-semibold text-mist-100">Closed by redemption (status 4)</h2>
-        <p className="text-sm leading-relaxed text-mist-300">
-          RISK-ESCAPED is an app-defined label for a verified redemption closure. It does not mean the Trove was liquidated,
-          that it was safe, or that a minimum-collateral threshold was necessarily avoided.
-        </p>
-        <p className="text-sm leading-relaxed text-mist-400">
-          This is a closed historical position, not an active Trove. No current collateral ratio, live MCR comparison,
-          or price-stress scenario is calculated for it.
-        </p>
+        <p className="text-sm leading-relaxed text-mist-300">RISK-ESCAPED is an app label, not a safety or liquidation status.</p>
+        <p className="text-sm leading-relaxed text-mist-400">Closed history; no current ratio or scenario is shown.</p>
       </div>
       {history?.closure ? (
         <div className="space-y-2 rounded-lg border border-line bg-ink-800/50 p-3 text-sm text-mist-300">
@@ -312,13 +302,12 @@ function ClosedRedemptionRiskCard({
         </div>
       ) : (
         <p className="text-sm leading-relaxed text-amber-200">
-          The current TroveManager status is 4, but the matching redemption transaction could not be verified in the recent log window.
-          {history?.closureUnavailableReason ? ` ${history.closureUnavailableReason}` : " Refresh the read or verify the network."}
+          The closure event could not be verified in the recent log window.{history?.closureUnavailableReason ? ` ${history.closureUnavailableReason}` : " Refresh or verify the network."}
         </p>
       )}
       {!history || history.claimableSurplusRaw === null ? (
         <p className="text-sm text-mist-400">
-          Claimable BTC collateral surplus: unavailable.{history?.surplusUnavailableReason ? ` ${history.surplusUnavailableReason}` : " No verified value is shown."}
+          BTC surplus: unavailable.{history?.surplusUnavailableReason ? ` ${history.surplusUnavailableReason}` : ""}
         </p>
       ) : history.claimableSurplusRaw > 0n ? (
         <p className="text-sm text-mist-300">

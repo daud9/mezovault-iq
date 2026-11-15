@@ -1,10 +1,9 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Link, Route, Routes } from "react-router-dom";
 import { lazy, Suspense } from "react";
 import { AppShell } from "./components/layout/AppShell";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { WalletProvider } from "./components/wallet/WalletProvider";
 import { Landing } from "./pages/Landing";
-import { APP_ROUTE_REDIRECTS } from "./config/appNavigation";
 
 const Overview = lazy(() => import("./pages/Overview").then(({ Overview }) => ({ default: Overview })));
 const MusdSwap = lazy(() => import("./pages/MusdSwap").then(({ MusdSwap }) => ({ default: MusdSwap })));
@@ -26,34 +25,43 @@ export default function App() {
     <BrowserRouter>
       <WalletProvider>
         <ErrorBoundary>
-          <Suspense fallback={<div className="p-8 text-sm text-mist-300" role="status">Loading page…</div>}>
+          <Suspense fallback={<div className="p-8 text-sm text-mist-300" role="status">Loading…</div>}>
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/pay" element={<X402Checkout />} />
               <Route path="/app" element={<AppShell />}>
                 <Route index element={<Overview />} />
-                <Route path="send" element={<Send />} />
-                <Route path="swap" element={<MusdSwap />} />
-                <Route path="pay" element={<Pay />} />
-                <Route path="pay-links" element={<MusdPayLinks />} />
-                <Route path="bridge-status" element={<BridgeStatusTracker />} />
-                {APP_ROUTE_REDIRECTS.map(({ path, to }) => (
-                  <Route key={path} path={path} element={<Navigate to={to} replace />} />
-                ))}
                 <Route path="trove" element={<Trove />} />
                 <Route path="trove-risk" element={<TroveRiskLab />} />
-                <Route path="chain-watch" element={<ChainWatch />} />
+                <Route path="pools" element={<PoolWatch />} />
                 <Route path="cl-positions" element={<ClPositionMonitor />} />
                 <Route path="cl-planner" element={<ClPlanner />} />
-                <Route path="pools" element={<PoolWatch />} />
+                <Route path="chain-watch" element={<ChainWatch />} />
+                <Route path="bridge-status" element={<BridgeStatusTracker />} />
                 <Route path="activity" element={<Activity />} />
-                <Route path="*" element={<Navigate to="/app" replace />} />
+                <Route path="swap" element={<MusdSwap />} />
+                <Route path="send" element={<Send />} />
+                <Route path="pay-links" element={<MusdPayLinks />} />
+                <Route path="pay" element={<Pay />} />
+                <Route path="*" element={<NotFound inApp />} />
               </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFound />} />
             </Routes>
           </Suspense>
         </ErrorBoundary>
       </WalletProvider>
     </BrowserRouter>
+  );
+}
+
+function NotFound({ inApp = false }: { inApp?: boolean }) {
+  return (
+    <section aria-labelledby="not-found-title" className="mx-auto flex min-h-[40vh] max-w-xl flex-col justify-center gap-3">
+      <p className="text-xs font-semibold uppercase tracking-wider text-gold-400">404</p>
+      <h1 id="not-found-title" className="text-2xl font-semibold text-mist-100">Page not found</h1>
+      <Link to={inApp ? "/app" : "/"} className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">
+        {inApp ? "Open Overview" : "Back to home"}
+      </Link>
+    </section>
   );
 }

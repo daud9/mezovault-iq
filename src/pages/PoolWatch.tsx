@@ -5,7 +5,6 @@ import { Card } from "../components/ui/Card";
 import { DataStatus } from "../components/ui/DataStatus";
 import { SectionHeader } from "../components/ui/SectionHeader";
 import { useWallet } from "../components/wallet/WalletProvider";
-import { OFFICIAL_SOURCES } from "../config/chains";
 import { usePoolMarkets } from "../hooks/usePoolMarkets";
 import { explorerAddressUrl } from "../lib/explorer";
 import { formatTime, shortAddress } from "../lib/format";
@@ -25,7 +24,7 @@ export function PoolWatch() {
       <SectionHeader
         eyebrow="Mezo Testnet · Read-only market data"
         title="Pool Watch"
-        description="Reads the official basic pools at one shared block. Cards show native-unit reserve ratios and data age."
+        description="Shared-block reserve ratios for configured Mezo Testnet pools."
         actions={testnet ? (
           <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
@@ -78,12 +77,12 @@ export function PoolWatch() {
                   <div className="rounded-xl border border-line bg-ink-800/50 p-4">
                     <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Reserve ratio · token1 per token0</p>
                     <p className="mt-2 text-lg font-semibold text-mist-100">{result.spotPrice === null ? "Unavailable" : `${result.spotPrice} ${quote.symbol} / ${base.symbol}`}</p>
-                    <p className="mt-1 text-xs text-mist-500">Reserve ratio only. It does not include the pool curve, trade impact or fees.</p>
+                    <p className="mt-1 text-xs text-mist-500">Reserve ratio only; excludes curve, trade impact, and fees.</p>
                   </div>
                   <div className="rounded-xl border border-line bg-ink-800/50 p-4">
                     <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Fee tier</p>
                     <p className="mt-2 text-lg font-semibold text-mist-100">Not verified</p>
-                    <p className="mt-1 text-xs text-mist-500">Fee values require a verified source; a pool name or router address does not establish a fee.</p>
+                    <p className="mt-1 text-xs text-mist-500">No verified fee source.</p>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -97,7 +96,7 @@ export function PoolWatch() {
                       </div>
                     ))}
                   </div>
-                  <p className="text-sm text-mist-400">USD liquidity requires verified prices for both assets; this view has not confirmed both sources.</p>
+                  <p className="text-sm text-mist-400">USD liquidity is unavailable without verified prices for both assets.</p>
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4">
                   <div className="space-y-1 text-xs text-mist-500">
@@ -118,13 +117,6 @@ export function PoolWatch() {
           })}
         </div>
       )}
-      <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
-        <p className="font-medium text-mist-200">How to read this page</p>
-        <p>All cards share a checked block. Reserve ratios use native token units. A stable-pool ratio does not represent the curve-derived price. Reads older than two minutes are marked stale.</p>
-        <a href={OFFICIAL_SOURCES.mezoPools} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">
-          Mezo Pools documentation <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
-        </a>
-      </Card>
     </div>
   );
 }

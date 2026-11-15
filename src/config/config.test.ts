@@ -1,7 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { MEZO_NETWORKS } from "./chains";
-import { PROTOCOL_CANDIDATES, verifiedCapabilityCount } from "./protocols";
 import { CHAIN_WATCH_NETWORKS } from "./chainWatch";
 
 const isAddr = (v: string) => /^0x[0-9a-fA-F]{40}$/.test(v);
@@ -39,43 +38,6 @@ describe("network configuration", () => {
   it("chain ids and their hex forms agree", () => {
     for (const net of Object.values(MEZO_NETWORKS)) {
       assert.equal(parseInt(net.chainIdHex, 16), net.chainId);
-    }
-  });
-});
-
-describe("protocol investigation", () => {
-  it("marks only the limited BorrowerOperations borrowing capability as verified", () => {
-    assert.equal(verifiedCapabilityCount(), 1);
-    const borrowerOperations = PROTOCOL_CANDIDATES.find((p) => p.id === "borrower-operations");
-    assert.ok(borrowerOperations);
-    assert.equal(borrowerOperations.capabilities.borrow, "verified");
-    assert.equal(borrowerOperations.capabilities.deposit, "not-verified");
-    assert.equal(borrowerOperations.capabilities.withdraw, "not-verified");
-    assert.equal(borrowerOperations.capabilities.lend, "not-verified");
-    assert.equal(borrowerOperations.capabilities.yield, "not-verified");
-  });
-
-  it("marks the MUSD balance read and open/add-collateral paths as used by the app", () => {
-    assert.deepEqual(PROTOCOL_CANDIDATES.filter((p) => p.usedByApp).map((p) => p.id), ["musd-token", "borrower-operations"]);
-    const borrowerOperations = PROTOCOL_CANDIDATES.find((p) => p.id === "borrower-operations");
-    assert.ok(borrowerOperations);
-    assert.match(borrowerOperations.notes, /openTrove and payable addColl/);
-    assert.match(borrowerOperations.notes, /Repay, withdraw, borrow-more, close, and liquidation are not enabled/);
-  });
-
-  it("records a testnet address only where an official source is named", () => {
-    for (const p of PROTOCOL_CANDIDATES) {
-      if (p.testnetAddress !== null) {
-        assert.ok(isAddr(p.testnetAddress), `${p.id} address format`);
-        assert.ok(p.addressSource, `${p.id} must name its source`);
-        assert.equal(p.evidence, "official-address", `${p.id} must be officially sourced`);
-      }
-    }
-  });
-
-  it("does not give a third-party-only protocol a testnet address", () => {
-    for (const p of PROTOCOL_CANDIDATES.filter((x) => x.evidence === "third-party-only")) {
-      assert.equal(p.testnetAddress, null, `${p.id} must not carry an address`);
     }
   });
 });

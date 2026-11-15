@@ -15,11 +15,12 @@ import { MEZO_NETWORKS } from "../src/config/chains.ts";
 import { buildLinkAuthorizationMessage, normalizeMUSDLinkAmount, normalizeMUSDRecipient, X402_TESTNET_NETWORK } from "../src/lib/x402PayLinks.ts";
 import { isPayLinkSecretConfigured, mintPayLinkToken, verifyPayLinkToken } from "./payLinkToken.ts";
 
+/** Facilitator endpoint listed in Mezo's x402 documentation; this does not assert its operator ownership. */
 export const X402_FACILITATOR_URL = "https://facilitator.vativ.io";
 const LINK_QUERY_PARAMETER = "link";
 const RESOURCE_PATH = "/api/x402/pay";
 const CHECKOUT_PATH = "/pay";
-const LINK_TTL_DESCRIPTION = "Links expire 30 days after creation.";
+const LINK_TTL_DESCRIPTION = "This link is reusable until it expires 30 days after creation; the server does not track paid status.";
 const CREATE_WINDOW_MS = 60_000;
 const CREATE_PER_IP_LIMIT = 10;
 const CREATE_PER_RECIPIENT_LIMIT = 10;
@@ -66,7 +67,7 @@ export class FixedWindowLimiter {
 export interface MerchantAppOptions {
   /** Required for creation and checkout; it is never returned to the client. */
   payLinkSecret?: string;
-  /** Injection seam for tests; production always uses the documented facilitator. */
+  /** Injection seam for tests; production uses the endpoint listed in Mezo's x402 documentation. */
   facilitator?: FacilitatorClient;
   /** Optional static directory; set to null in tests. */
   staticDir?: string | null;
@@ -239,7 +240,7 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
         return sendError(res, 401, "recipient_not_controlled", "Sign the link-creation message with the wallet receiving this payment.");
       }
       if (!rateLimiter.consume(`create-nonce:${recipient}:${req.body.nonce}`, 1, CREATE_AUTH_REPLAY_WINDOW_MS, now())) {
-        return sendError(res, 409, "authorization_replayed", "This signed link-creation message was already used. Sign a fresh message to create another link.");
+        return sendError(res, 409, "authorization_replayed", "This nonce was recently seen on this server instance. Sign a fresh message to create another link.");
       }
       if (!rateLimiter.consume(`create-recipient:${recipient}`, CREATE_PER_RECIPIENT_LIMIT, 60 * 60_000, now())) {
         return sendError(res, 429, "recipient_rate_limited", "This wallet has created many links recently. Try again later.");
@@ -309,6 +310,7 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
         }
 
         const requirements = result.paymentRequirements;
+        // processHTTPRequest verifies the authorization; it does not settle it. Check terms before the separate settlement call below.
         if (requirements.scheme !== "exact" || requirements.network !== X402_TESTNET_NETWORK ||
             requirements.asset.toLowerCase() !== MEZO_NETWORKS.testnet.musd!.address.toLowerCase() ||
             requirements.payTo.toLowerCase() !== claims.recipient || requirements.amount !== expectedAtomicAmount) {
@@ -317,7 +319,7 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
 
         const body = {
           ok: true,
-          message: "Payment settled by the Mezo x402 facilitator.",
+          message: "Payment settled by the facilitator endpoint listed in Mezo's x402 documentation.",
           network: X402_TESTNET_NETWORK,
         };
         const responseBody = Buffer.from(JSON.stringify(body), "utf8");
@@ -335,10 +337,16 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
         );
         if (!settlement.success) return sendX402Response(res, settlement.response);
 
+        // A successful facilitator settlement may already have caused an on-chain payment; mismatches are ambiguous and must not invite a retry.
         if (settlement.network !== X402_TESTNET_NETWORK ||
             (settlement.amount !== undefined && settlement.amount !== expectedAtomicAmount) ||
             !/^0x[0-9a-fA-F]{64}$/.test(settlement.transaction)) {
-          return sendError(res, 502, "settlement_receipt_mismatch", "The facilitator receipt did not match this Testnet MUSD payment. Check wallet activity before retrying.");
+          return res.status(502).json({
+            error: "settlement_receipt_mismatch",
+            message: "The facilitator receipt did not match this payment. It may already have settled; check wallet activity before taking any further action.",
+            network: settlement.network,
+            ...( /^0x[0-9a-fA-F]{64}$/.test(settlement.transaction) ? { transaction: settlement.transaction } : {}),
+          });
         }
 
         for (const [name, value] of Object.entries(settlement.headers)) res.setHeader(name, value);
@@ -349,6 +357,13 @@ export function createMerchantApp(options: MerchantAppOptions = {}) {
       }
     },
   );
+
+  app.use((req, res, next) => {
+    if (/^\/api(?:\/|$)/i.test(req.path)) {
+      return sendError(res, 404, "not_found", "The requested API route was not found.");
+    }
+    next();
+  });
 
   if (options.staticDir !== null) {
     const staticDir = options.staticDir ?? "dist";

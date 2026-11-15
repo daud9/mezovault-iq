@@ -170,10 +170,10 @@ export function MusdSwap() {
       <SectionHeader
         eyebrow="Mezo Testnet · MUSD"
         title="Swap MUSD for Pool BTC"
-        description="Review a fresh quote, then choose Swap MUSD to open your wallet. If allowance is short, you will confirm an exact approval first; after it verifies, the app refreshes the quote. The swap remains a separate wallet-confirmed transaction."
+        description="Review a fresh quote and simulation. Approve each wallet action separately."
       />
 
-      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">Mezo documents a 0.30% fee for volatile basic pools, but this review does not separate the pool fee from price impact. The configured Pool BTC token is <span className="break-all font-mono">{TESTNET_POOL_BTC_TOKEN.address}</span>; Mezo’s <a className="underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noopener noreferrer">pool documentation</a> does not list that token address. Code, symbol and decimal checks do not prove canonical identity. <a className="underline" href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}address/${TESTNET_POOL_BTC_TOKEN.address}`} target="_blank" rel="noopener noreferrer">Inspect the contract on the Testnet explorer</a> before swapping.</p>
+      <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">The quote does not separate the documented 0.30% pool fee from price impact. Pool BTC is a configured Testnet ERC-20; its canonical identity is unverified. <a className="underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noopener noreferrer">Pool docs</a> · <a className="underline" href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}address/${TESTNET_POOL_BTC_TOKEN.address}`} target="_blank" rel="noopener noreferrer">Inspect token</a>.</p>
 
       <Card className="space-y-4">
         {!testnet ? (
@@ -217,9 +217,7 @@ export function MusdSwap() {
               </select>
             </div>
 
-            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-              You can swap only MUSD held in this wallet; MUSD deposited in the Stability Pool is not available here. The output is the pool’s BTC token (an ERC-20), not native BTC and not usable for gas. Keep native BTC in this wallet for network fees; use Send to transfer the pool BTC token.
-            </p>
+            <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">Only wallet-held MUSD is available. Pool BTC is an ERC-20, not native BTC; gas requires native BTC.</p>
 
             {error && <p role="alert" className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">{error}</p>}
 
@@ -249,7 +247,7 @@ export function MusdSwap() {
                 {prepared.kind === "approve" ? (
                   <div className="space-y-3 rounded-lg border border-line bg-ink-900/70 p-3">
                     <p className="text-sm font-semibold text-mist-100">Step 1 · exact MUSD approval needed</p>
-                    <p className="text-sm text-mist-300">The wallet currently allows less than this swap. The prepared approval is exactly {formatMUSDTokenAmount(prepared.quote.amountInRaw)} MUSD for the configured router. It does not request unlimited allowance.</p>
+                    <p className="text-sm text-mist-300">Approve exactly {formatMUSDTokenAmount(prepared.quote.amountInRaw)} MUSD for the configured router. No unlimited allowance.</p>
                   </div>
                 ) : (
                   <p className="rounded-lg border border-line bg-ink-900/70 p-3 text-sm text-mist-300">
@@ -261,8 +259,8 @@ export function MusdSwap() {
                   {busy === "wallet" ? "Opening wallet…" : prepared.kind === "approve" ? "Approve exact MUSD" : "Swap MUSD"}
                 </Button>
                 <p className="text-xs text-mist-500" role="status">
-                  {providerCalled ? "Wallet provider was called for this reviewed request." : "Wallet provider has not been called. The primary action opens your wallet immediately with the reviewed request."}
-                  {!reviewFresh && " This review has expired; prepare again."}
+                  {providerCalled ? "Request sent to wallet." : "No wallet request sent."}
+                  {!reviewFresh && " Review expired; prepare again."}
                 </p>
                 <details className="rounded-lg border border-line bg-ink-900/50 px-3">
                   <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-mist-300">Contract and gas details</summary>
@@ -307,9 +305,7 @@ export function MusdSwap() {
           </div>
         )}
 
-        <p className="text-xs leading-relaxed text-mist-500">
-          The route is locked to the configured Mezo Testnet MUSD/BTC basic pool. Quotes can change before execution; the wallet shows the final request. No transaction is signed or sent automatically. See <Link to="/app/pools" className="text-gold-300 hover:underline">Pool Watch</Link> for read-only reserve data.
-        </p>
+        <p className="text-xs leading-relaxed text-mist-500">Each action requires wallet confirmation. See <Link to="/app/pools" className="text-gold-300 hover:underline">Pool Watch</Link> for reserve data.</p>
       </Card>
     </div>
   );

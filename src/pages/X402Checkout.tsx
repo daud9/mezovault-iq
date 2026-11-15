@@ -5,6 +5,7 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { useWallet } from "../components/wallet/WalletProvider";
 import { MEZO_NETWORKS } from "../config/chains";
+import { clearX402PendingAttempt, readX402PendingAttempt, saveX402PendingAttempt } from "../lib/x402CheckoutState";
 import {
   createMezoTestnetX402HttpClient,
   decodeMUSDRequirementsHeader,
@@ -47,6 +48,7 @@ export function X402Checkout() {
   const [receipt, setReceipt] = useState<CheckoutReceipt | null>(null);
   const [paymentStatusUnknown, setPaymentStatusUnknown] = useState(false);
   const [paymentTxHash, setPaymentTxHash] = useState<string | null>(null);
+  const [pendingStorageReady, setPendingStorageReady] = useState(false);
 
   const token = useMemo(() => {
     const fragment = new URLSearchParams(location.hash.replace(/^#/, ""));
@@ -67,6 +69,7 @@ export function X402Checkout() {
     setReceipt(null);
     setPaymentStatusUnknown(false);
     setPaymentTxHash(null);
+    setPendingStorageReady(false);
     setLoading(true);
 
     if (!token) {
@@ -76,6 +79,23 @@ export function X402Checkout() {
     }
 
     void (async () => {
+      let pendingAttempt;
+      try {
+        pendingAttempt = await readX402PendingAttempt(token);
+      } catch {
+        if (active) setLoadError("This browser cannot safely check saved payment-attempt state. No new payment authorization is available from this link.");
+        if (active) setLoading(false);
+        return;
+      }
+      if (!active) return;
+      setPendingStorageReady(true);
+      if (pendingAttempt) {
+        setPaymentStatusUnknown(true);
+        setPaymentTxHash(pendingAttempt.transaction ?? null);
+        setPaymentError("A previous payment attempt for this link is still unresolved in this browser. It may not have reached the server, and the app cannot query its status automatically. Check wallet activity and the Mezo Testnet explorer before authorizing anything else.");
+        setLoading(false);
+        return;
+      }
       try {
         const response = await fetch(resourceUrl, {
           method: "POST",
@@ -107,15 +127,25 @@ export function X402Checkout() {
   }, [resourceUrl, token]);
 
   async function pay() {
-    if (!details || paymentStatusUnknown || !wallet.address || wallet.status !== "connected" || wallet.chainId !== MEZO_NETWORKS.testnet.chainId) return;
+    if (!details || paymentStatusUnknown || !pendingStorageReady || !token || !wallet.address || wallet.status !== "connected" || wallet.chainId !== MEZO_NETWORKS.testnet.chainId) return;
     setWorking(true);
     setPaymentError(null);
     setReceipt(null);
     setPaymentTxHash(null);
     let paymentRequestSubmitted = false;
+    let pendingAttemptAt: number | null = null;
     let reconciliationMessage: string | null = null;
     let reconciliationTxHash: string | null = null;
     try {
+      const existingPendingAttempt = await readX402PendingAttempt(token);
+      if (existingPendingAttempt) {
+        setPaymentStatusUnknown(true);
+        setPaymentTxHash(existingPendingAttempt.transaction ?? null);
+        setPaymentError("A previous payment attempt for this link is still unresolved in this browser. It may not have reached the server. Check wallet activity and the explorer before authorizing anything else.");
+        return;
+      }
+      pendingAttemptAt = Date.now();
+      await saveX402PendingAttempt(token, { attemptedAt: pendingAttemptAt });
       const signer = await createX402Signer({ account: wallet.address, chainId: MEZO_NETWORKS.testnet.chainId });
       const httpClient = createMezoTestnetX402HttpClient(signer);
       const payload = await httpClient.createPaymentPayload(details.required);
@@ -138,15 +168,23 @@ export function X402Checkout() {
           const failureReceipt = httpClient.getPaymentSettleResponse((name) => response.headers.get(name));
           if (failureReceipt && failureReceipt.success === false) {
             setPaymentStatusUnknown(true);
-            setPaymentTxHash(paymentReceiptTransaction(failureReceipt));
+            const transaction = failureReceipt.network === X402_TESTNET_NETWORK ? paymentReceiptTransaction(failureReceipt) : null;
+            setPaymentTxHash(transaction);
+            if (transaction && pendingAttemptAt !== null) {
+              await saveX402PendingAttempt(token, { attemptedAt: pendingAttemptAt, transaction }).catch(() => undefined);
+            }
             setPaymentError("The facilitator did not confirm successful settlement. Check wallet activity and the explorer before making another payment.");
             return;
           }
         }
-        const body = await response.json().catch(() => null) as { message?: unknown; error?: unknown; transaction?: unknown } | null;
+        const body = await response.json().catch(() => null) as { message?: unknown; error?: unknown; transaction?: unknown; network?: unknown } | null;
         if (body?.error === "settlement_status_unknown" || body?.error === "settlement_receipt_mismatch" || response.status === 402 || response.status >= 500) {
           setPaymentStatusUnknown(true);
-          setPaymentTxHash(paymentReceiptTransaction(body));
+          const transaction = body?.network === X402_TESTNET_NETWORK ? paymentReceiptTransaction(body) : null;
+          setPaymentTxHash(transaction);
+          if (transaction && pendingAttemptAt !== null) {
+            await saveX402PendingAttempt(token, { attemptedAt: pendingAttemptAt, transaction }).catch(() => undefined);
+          }
           setPaymentError(typeof body?.message === "string" ? body.message : "No final settlement status was returned. Check wallet activity and the explorer before making another payment.");
           return;
         }
@@ -169,7 +207,7 @@ export function X402Checkout() {
         validateMUSDSettlementReceipt(settlement, details.atomicAmount);
       } catch (error) {
         reconciliationMessage = error instanceof Error ? error.message : "The settlement receipt could not be verified.";
-        reconciliationTxHash = paymentReceiptTransaction(settlement);
+        reconciliationTxHash = settlement.network === X402_TESTNET_NETWORK ? paymentReceiptTransaction(settlement) : null;
         throw error;
       }
       if (typeof settlement.payer !== "string" || settlement.payer.toLowerCase() !== wallet.address.toLowerCase()) {
@@ -183,13 +221,18 @@ export function X402Checkout() {
         reconciliationTxHash = paymentReceiptTransaction(settlement);
         throw new Error("The merchant confirmation did not match the Testnet payment. Check wallet activity before retrying.");
       }
+      await clearX402PendingAttempt(token).catch(() => undefined);
       setReceipt({ transaction: settlement.transaction, payer: settlement.payer });
     } catch (error) {
       if (paymentRequestSubmitted) {
         setPaymentStatusUnknown(true);
         if (reconciliationTxHash) setPaymentTxHash(reconciliationTxHash);
+        if (reconciliationTxHash && pendingAttemptAt !== null) {
+          await saveX402PendingAttempt(token, { attemptedAt: pendingAttemptAt, transaction: reconciliationTxHash }).catch(() => undefined);
+        }
         setPaymentError(reconciliationMessage ?? "No final settlement confirmation was received. Check wallet activity and the explorer before making another payment.");
       } else {
+        if (pendingAttemptAt !== null) await clearX402PendingAttempt(token).catch(() => undefined);
         setPaymentError(friendlyError(error));
       }
     } finally {
@@ -206,14 +249,27 @@ export function X402Checkout() {
 
         <header className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">x402 · Mezo Testnet</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-mist-50">MUSD payment checkout</h1>
-          <p className="text-sm leading-relaxed text-mist-400">Review the exact recipient and amount before signing. This page will never submit an on-chain buyer transaction.</p>
+          <h1 className="text-3xl font-semibold tracking-tight text-mist-50">MUSD checkout</h1>
+          <p className="text-sm text-mist-400">Check recipient and amount. The wallet signs an off-chain authorization, not a buyer transaction.</p>
         </header>
 
         {loading ? (
           <div role="status">
             <Card className="flex items-center gap-3 py-8 text-sm text-mist-300">
-              <LoaderCircle className="h-5 w-5 animate-spin text-gold-400" aria-hidden="true" /> Preparing the secure checkout…
+              <LoaderCircle className="h-5 w-5 animate-spin text-gold-400" aria-hidden="true" /> Loading checkout…
+            </Card>
+          </div>
+        ) : paymentStatusUnknown && !details ? (
+          <div role="alert">
+            <Card className="space-y-3">
+              <h2 className="font-semibold text-amber-200">Previous payment attempt needs checking</h2>
+              <p className="text-sm leading-relaxed text-mist-300">{paymentError ?? "A previous checkout attempt is unresolved."} Do not sign again from this link until you confirm the earlier attempt did not settle.</p>
+              {paymentTxHash ? (
+                <a href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}tx/${paymentTxHash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 break-all text-sm font-medium text-gold-300 hover:underline">Check transaction {paymentTxHash} <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
+              ) : (
+                <a href={MEZO_NETWORKS.testnet.explorerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Open Mezo Testnet explorer to check wallet activity <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
+              )}
+              <p className="text-xs text-mist-500">This pending marker is saved only in this browser; it is not a server-side payment record and cannot be checked automatically.</p>
             </Card>
           </div>
         ) : loadError ? (
@@ -253,8 +309,8 @@ export function X402Checkout() {
               </div>
 
               <div className="space-y-2 rounded-xl border border-gold-500/20 bg-gold-500/5 p-4 text-sm leading-relaxed text-mist-300">
-                <p>The facilitator verifies and settles the signed MUSD authorization and pays the Mezo Testnet BTC gas for this x402 payment. A compatible wallet may show one or more typed-data signature prompts; review each before approving.</p>
-                <p className="text-xs text-mist-400">If your wallet asks to send an on-chain transaction or pay BTC gas for this checkout, cancel. This integration does not send buyer transactions. The link can be used more than once; confirm before making another payment.</p>
+                <p>The facilitator settles the signed authorization and pays BTC gas. Review every wallet prompt.</p>
+                <p className="text-xs text-mist-400">This link can accept multiple separately authorized payments until its 30-day expiry; the app does not track a paid status. Confirm the sender intends this reuse. Cancel if asked to send a transaction or pay gas.</p>
               </div>
 
               {wallet.status !== "connected" ? (
@@ -268,18 +324,20 @@ export function X402Checkout() {
               ) : receipt ? (
                 <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4" role="status">
                   <div className="flex items-center gap-2 text-emerald-300"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /><h2 className="font-semibold">Payment settled</h2></div>
-                  <p className="text-sm text-mist-300">The facilitator reported successful settlement of {details.amount} MUSD on Mezo Testnet. This does not establish transaction finality.</p>
+                  <p className="text-sm text-mist-300">Facilitator reports settlement; finality is not verified.</p>
                   <a href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}tx/${receipt.transaction}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 break-all font-mono text-xs text-gold-300 hover:underline">Transaction: {receipt.transaction} <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></a>
                   <p className="break-all font-mono text-xs text-mist-500">Buyer: {receipt.payer}</p>
                 </div>
               ) : paymentStatusUnknown ? (
                 <div className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4" role="alert">
                   <h2 className="font-semibold text-amber-200">Payment status needs checking</h2>
-                  <p className="text-sm leading-relaxed text-mist-300">{paymentError ?? "No final settlement confirmation was received."} Do not authorize another payment until you have checked the existing attempt.</p>
+                  <p className="text-sm leading-relaxed text-mist-300">{paymentError ?? "No final settlement confirmation was received."} Do not authorize another payment until you have checked the existing attempt. The server does not store a settlement history.</p>
                   {paymentTxHash && <a href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}tx/${paymentTxHash}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 break-all text-sm font-medium text-gold-300 hover:underline">Check transaction {paymentTxHash} <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></a>}
+                  {!paymentTxHash && <a href={MEZO_NETWORKS.testnet.explorerUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Open Mezo Testnet explorer to check wallet activity <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>}
+                  <p className="text-xs text-mist-500">The pending marker is stored only in this browser; clearing it or using another device removes this local warning.</p>
                 </div>
               ) : (
-                <Button onClick={() => { void pay(); }} disabled={working || !details} className="min-h-12 w-full text-base">
+                <Button onClick={() => { void pay(); }} disabled={working || !details || !pendingStorageReady} className="min-h-12 w-full text-base">
                   {working ? <><LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" /> Waiting for wallet and settlement…</> : `Pay ${details.amount} MUSD`}
                 </Button>
               )}
@@ -289,14 +347,6 @@ export function X402Checkout() {
               {paymentError && !paymentStatusUnknown && <p className="rounded-xl border border-risk-high/30 bg-risk-high/5 p-3 text-sm leading-relaxed text-risk-high" role="alert">{paymentError}</p>}
             </Card>
 
-            <Card className="space-y-2 text-sm text-mist-400">
-              <p className="font-semibold text-mist-200">Before continuing</p>
-              <ul className="list-disc space-y-1 pl-5">
-                <li>Only sign if the wallet shows the same MUSD amount and Mezo Testnet.</li>
-                <li>Buyer authorizations are signed in your wallet; this app never receives your private key.</li>
-                <li>After signing, wait for a valid facilitator receipt before treating the payment as complete.</li>
-              </ul>
-            </Card>
           </>
         ) : null}
 

@@ -214,7 +214,7 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
         <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Separate wallet flow · Testnet only</p>
           <h2 className="mt-1 text-base font-semibold text-mist-100">Create a CL position</h2>
-          <p className="mt-1 text-sm leading-relaxed text-mist-400">The planner above stays read-only. This separate step prepares a new NFT position from its pool, range and budget. No request is sent until you open your wallet from an explicit action button and approve there.</p>
+          <p className="mt-1 text-sm text-mist-400">Separate Testnet mint flow. Confirm each wallet action.</p>
         </div>
       </div>
 
@@ -222,7 +222,7 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
         <p className="rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm text-risk-medium">This deposit flow is locked to Mezo Testnet (chain 31611).</p>
       ) : !connected ? (
         <div className="space-y-3 rounded-xl border border-line bg-ink-800/50 p-4">
-          <p className="text-sm leading-relaxed text-mist-300">Connect a wallet to read its balances and allowances. Connecting alone will not request a transaction.</p>
+          <p className="text-sm text-mist-300">Connect a wallet to read balances and allowances.</p>
           <Button onClick={() => void wallet.connect()} disabled={wallet.state.status === "connecting"} className="min-h-11">
             <Wallet className="h-4 w-4" aria-hidden="true" /> {wallet.state.status === "connecting" ? "Connecting…" : "Connect wallet"}
           </Button>
@@ -246,7 +246,7 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
               <select id="cl-deposit-slippage" value={slippageBps} onChange={(event) => setSlippageBps(Number(event.target.value))} className="min-h-12 w-full rounded-xl border border-line bg-ink-800 px-3 text-sm text-mist-100">
                 {SLIPPAGE_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
               </select>
-              <span className="block text-xs font-normal leading-relaxed text-mist-500">Used to calculate the minimum token amounts for the mint call.</span>
+              <span className="block text-xs font-normal text-mist-500">Sets minimum mint amounts.</span>
             </label>
           </div>
 
@@ -257,7 +257,6 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
             <Button onClick={() => void prepareReview()} disabled={!canPrepare} className="min-h-11">
               {busy ? "Checking live state…" : "Prepare exact deposit review"}
             </Button>
-            <p className="text-xs leading-relaxed text-mist-500">Read-only checks only; no wallet prompt opens here.</p>
           </div>
 
           {review && (
@@ -293,19 +292,19 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
               <div className="rounded-xl border border-line bg-ink-900/80 p-4">
                 <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Contract call</p>
                 <p className="mt-2 break-all font-mono text-xs leading-relaxed text-mist-200">{"mint((address,address,int24,int24,int24,uint256,uint256,uint256,uint256,address,uint256,uint160))"}</p>
-                <p className="mt-2 text-xs leading-relaxed text-mist-400">token0/token1 in canonical pool order; signed tickSpacing and bounds; exact raw desired and minimum token amounts above; recipient is your connected wallet; <span className="font-mono">sqrtPriceX96 = 0</span> so this call cannot create a pool; native value is <span className="font-mono">0</span>. The live fee is displayed for context and is not a mint argument.</p>
+                <p className="mt-2 text-xs text-mist-400">Pool creation disabled (<span className="font-mono">sqrtPriceX96 = 0</span>); native value 0. The displayed fee is not a mint argument.</p>
                 <details className="mt-3">
                   <summary className="min-h-11 cursor-pointer py-2 text-xs font-medium text-gold-300">Show exact mint calldata</summary>
                   <p className="break-all font-mono text-[11px] leading-relaxed text-mist-400">{review.mintTransaction.data}</p>
                 </details>
               </div>
 
-              <p className="text-xs leading-relaxed text-mist-500">Desired amounts are max token inputs derived from the planner estimate and rounded down to base units; unused tokens stay in your wallet. Minimums apply the chosen tolerance. Fees, gas and exact execution amounts can change; the mint is simulated again before the wallet prompt. A successful simulation is not a transaction receipt.</p>
+              <p className="text-xs text-mist-500">Desired amounts are rounded maximum inputs; unused tokens stay in your wallet. Minimums apply the chosen tolerance. Simulation is not a receipt.</p>
 
               {nextApproval !== null ? (
                 <div className="space-y-3 rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-4">
                   <h4 className="text-sm font-semibold text-mist-100">A separate token approval is required</h4>
-                  <p className="text-sm leading-relaxed text-mist-300">Only one token approval is prepared at a time. Its exact allowance amount is the desired maximum shown above; no unlimited approval is used. After a confirmed receipt, prepare a fresh review before the next step.</p>
+                  <p className="text-sm text-mist-300">One exact token approval at a time; no unlimited allowance. Prepare a fresh review after confirmation.</p>
                   {simulation && simulation.kind !== "mint" ? <SimulationDetails simulation={simulation} review={review} /> : null}
                   {simulation && simulation.kind !== "mint" ? (
                     <Button onClick={() => void openWalletForPreparedCall()} disabled={busy || hasPendingSubmission} className="min-h-11">{busy ? "Waiting…" : simulation.kind === "reset-approval" ? "Open wallet to reset this allowance" : "Open wallet to approve exact amount"}</Button>
@@ -333,10 +332,10 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
                 <h3 className="text-sm font-semibold text-mist-100">{submission.kind === "mint" ? "Mint transaction" : submission.kind === "approve" ? "Token approval" : "Allowance reset"}</h3>
                 <p className="mt-1 break-all font-mono text-xs text-mist-400">{submission.hash}</p>
               </div>
-              {receiptState.status === "confirmed" && <p role="status" className="text-sm text-risk-low">Receipt reports successful execution in block {receiptState.blockNumber.toLocaleString()}; finality is not independently checked. {submission.kind === "mint" ? "The mint transaction succeeded; open the monitor to refresh your positions." : "The approval action succeeded. Prepare a fresh review before continuing."}</p>}
-              {receiptState.status === "reverted" && <p role="alert" className="text-sm text-risk-high">The receipt shows that this transaction reverted in block {receiptState.blockNumber.toLocaleString()}. No successful deposit or approval is claimed.</p>}
-              {receiptState.status === "not-checked" && <p role="status" className="text-sm text-risk-medium">The wallet returned a transaction hash, but its receipt has not been checked. Treat it as unconfirmed until a receipt is observed.</p>}
-              {receiptState.status === "pending" && <p role="status" className="text-sm text-risk-medium">No receipt is available yet. This is still unconfirmed; check again later.</p>}
+              {receiptState.status === "confirmed" && <p role="status" className="text-sm text-risk-low">Execution succeeded in block {receiptState.blockNumber.toLocaleString()}; finality is not checked. {submission.kind === "mint" ? "Position event and token ID are not verified; refresh CL Positions." : "Approval succeeded; prepare again."}</p>}
+              {receiptState.status === "reverted" && <p role="alert" className="text-sm text-risk-high">Transaction reverted in block {receiptState.blockNumber.toLocaleString()}.</p>}
+              {receiptState.status === "not-checked" && <p role="status" className="text-sm text-risk-medium">Hash received; receipt not checked.</p>}
+              {receiptState.status === "pending" && <p role="status" className="text-sm text-risk-medium">No receipt yet; transaction unconfirmed.</p>}
               {receiptState.status === "error" && <p role="alert" className="text-sm text-risk-medium">{receiptState.message}</p>}
               {receiptState.status !== "confirmed" && receiptState.status !== "reverted" ? (
                 <Button variant="secondary" onClick={() => void checkReceipt()} disabled={busy} className="min-h-11">{busy ? "Checking receipt…" : "Check transaction receipt"}</Button>
@@ -347,7 +346,7 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
             </div>
           )}
 
-          <p className="text-xs leading-relaxed text-mist-500">This flow uses the connected wallet only; the app never receives private keys or seed phrases and has no backend signer. No transaction is requested on connection, page load or refresh. Approvals and mint are separate explicit wallet actions. See the <a className="text-gold-300 hover:underline" href="https://explorer.test.mezo.org/address/0x9B753e11bFEd0D88F6e1D2777E3c7dac42F96062?tab=contract" target="_blank" rel="noreferrer">verified manager source</a> and <a className="text-gold-300 hover:underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noreferrer">Mezo Pools documentation</a>.</p>
+          <p className="text-xs text-mist-500">Wallet actions are explicit; no backend signer. Sources: <a className="text-gold-300 hover:underline" href="https://explorer.test.mezo.org/address/0x9B753e11bFEd0D88F6e1D2777E3c7dac42F96062?tab=contract" target="_blank" rel="noreferrer">manager</a> · <a className="text-gold-300 hover:underline" href="https://mezo.org/docs/developers/features/mezo-pools/" target="_blank" rel="noreferrer">Mezo Pools</a>.</p>
         </>
       )}
     </Card>

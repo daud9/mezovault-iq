@@ -8,9 +8,9 @@ export function Trove() {
   return (
     <div className="space-y-5">
       <SectionHeader
-        eyebrow="Mezo Testnet · Trove"
-        title="Your Trove"
-        description="See your BTC collateral and MUSD debt. If you already have a Trove, add BTC to it below."
+        eyebrow="Mezo Testnet"
+        title="Trove"
+        description="Collateral, debt, and supported position actions."
       />
       <LoanCard />
 
@@ -19,14 +19,11 @@ export function Trove() {
         onToggle={(event) => setStabilityPoolOpen(event.currentTarget.open)}
       >
         <summary className="min-h-12 cursor-pointer py-3 text-sm font-semibold text-gold-300">
-          Optional: deposit borrowed MUSD
+          Stability Pool
         </summary>
         <div className="space-y-4 pb-4">
-          <p className="text-sm text-mist-400">
-            This is separate from adding BTC to your Trove. If the Pool needs a new MUSD approval, you’ll confirm twice: approve the exact amount, then approve the deposit. If your current approval is enough, only the deposit confirmation is needed.
-          </p>
           <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
-            Risk: liquidations can reduce or use up deposited MUSD; withdrawals can be blocked or delayed; BTC gains are uncertain; this does not protect your own Trove; and no APY is promised.
+            Liquidations can use deposited MUSD. Withdrawals may be delayed; no APY is guaranteed.
           </p>
           {stabilityPoolOpen && <StabilityPoolPanel />}
         </div>

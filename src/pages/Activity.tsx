@@ -205,8 +205,8 @@ export function Activity() {
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Activity"
-        title="Your transactions"
-        description="App-submitted transactions from this browser and loaded MUSD or MEZO Transfer events. Coverage depends on the displayed block ranges; native BTC transfers are not included."
+        title="Activity"
+        description="App-submitted hashes and loaded MUSD/MEZO transfer logs."
         actions={
           ready ? (
             <Button variant="ghost" onClick={() => setTick((value) => value + 1)} className="min-h-11 px-2">
@@ -229,7 +229,7 @@ export function Activity() {
           <section className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">Submitted by this app</h2>
             <Card className="space-y-3">
-              <p className="text-xs leading-relaxed text-mist-500">App-submitted transaction records are kept in this browser; only the newest 200 are retained. A successful receipt means execution succeeded in the displayed block, not that finality was independently checked.</p>
+              <p className="text-xs leading-relaxed text-mist-500">Up to 200 hashes are stored in this browser. Success means execution in the displayed block; finality is not checked.</p>
               {mine.length === 0 ? (
                 <p className="text-sm text-mist-400">No transactions have been sent from this app on {network.label} from this browser.</p>
               ) : (
@@ -270,7 +270,7 @@ export function Activity() {
               {!loadingTransfers && transferError && (
                 <div className="space-y-2">
                   <DataStatus state="unavailable" />
-                  <p className="text-sm text-mist-400">{transferError} The RPC may be unavailable or may limit log queries.</p>
+                  <p className="text-sm text-mist-400">Could not read token transfers: {transferError}</p>
                 </div>
               )}
               {!loadingTransfers && !transferError && transfers && transfers.length === 0 && transferCoverage && (
@@ -304,7 +304,7 @@ export function Activity() {
               {!loadingTransfers && !transferError && transferCoverage && (
                 <div className="space-y-3 border-t border-line pt-3">
                   <p className="text-xs leading-relaxed text-mist-500">
-                    Loaded token-log range: blocks {transferCoverage.fromBlock.toLocaleString()}–{transferCoverage.toBlock.toLocaleString()} (snapshot at block {transferCoverage.snapshotBlock.toLocaleString()}). This covers only standard Transfer events for the configured MUSD and, when verified, MEZO contracts; it excludes native BTC transfers and other wallet or contract activity.
+                    Blocks {transferCoverage.fromBlock.toLocaleString()}–{transferCoverage.toBlock.toLocaleString()} · snapshot {transferCoverage.snapshotBlock.toLocaleString()}.
                   </p>
                   {olderError && <p className="text-sm text-risk-high">Could not load the older page: {olderError}</p>}
                   <div className="flex flex-wrap items-center gap-2">
@@ -313,7 +313,7 @@ export function Activity() {
                         {loadingOlder ? "Loading older transfers…" : `Load older transfers (${Math.max(0, transferCoverage.fromBlock - PAGE_BLOCKS).toLocaleString()}–${(transferCoverage.fromBlock - 1).toLocaleString()})`}
                       </Button>
                     ) : (
-                      <p className="text-xs text-mist-500">Reached block 0 for these token logs; this still is not a complete wallet history.</p>
+                      <p className="text-xs text-mist-500">Reached block 0 for these token logs.</p>
                     )}
                     <Button variant="secondary" onClick={exportLoadedTransfers} className="min-h-11">
                       <Download className="h-4 w-4" aria-hidden="true" /> Export loaded rows CSV
@@ -326,16 +326,7 @@ export function Activity() {
         </>
       )}
 
-      <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
-        <p className="font-medium text-mist-200">What this page does not show</p>
-        <ul className="list-disc space-y-1.5 pl-5">
-          <li>Incoming or outgoing native BTC transfers, which are not ERC-20 Transfer events.</li>
-          <li>Transactions sent from other apps or wallets, except MUSD and MEZO token Transfer events in the block ranges loaded above.</li>
-          <li>Token transfers older than the pages you have loaded. Use “Load older transfers” to request another bounded range.</li>
-          <li>Transaction timestamps for token log rows; they show block numbers instead.</li>
-        </ul>
-        <p className="text-xs text-mist-500">Transactions submitted from this app are stored only in this browser. Activity checks the RPC receipt status; the individual action pages perform any operation-specific event checks. The public explorer's usual address-history API routes were not available during integration checks, so this view does not claim comprehensive indexed history.</p>
-      </Card>
+      <p className="text-xs leading-relaxed text-mist-500">No native BTC or complete wallet history. CSV exports loaded MUSD/MEZO log rows only.</p>
     </div>
   );
 }

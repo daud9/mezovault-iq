@@ -1,62 +1,38 @@
 # MezoVault IQ
 
-**App:** [mezovault-iq.daud9.deno.net](https://mezovault-iq.daud9.deno.net/)
+A Mezo Testnet console focused on Trove management, risk analysis, and protocol data.
 
-**Repository:** [daud9/mezovault-iq](https://github.com/daud9/mezovault-iq)
+## Primary tools
 
-MezoVault IQ is a Mezo Testnet console for checking balances and protocol positions, preparing wallet actions, and reading transaction receipts. Public reads, simulations and wallet-confirmed writes are shown as separate steps.
+- **Trove** — inspect collateral and debt, open a supported position, add BTC collateral, and use the Stability Pool. Borrowing more, repayment, withdrawal, and closure are not available.
+- **Trove Risk Lab** — compare a live Trove ratio with the current minimum collateral ratio and explore hypothetical BTC price declines. Scenarios are not predictions.
 
-> **Release status (2026-11-15):** commit `142bae5` is on `main` and deployed. The local audit and no-ai-slop review passed 386 tests, typecheck, production build, and responsive checks. Remaining risks are listed in [the feature audit](docs/FEATURE_AUDIT.md). No wallet transaction was signed or submitted.
+## Overview and protocol data
 
-## A short demo
+Overview shows native BTC, MUSD, MEZO, and configured Pool BTC balances separately. **There is no combined portfolio total.** A USD estimate is shown only for native BTC and only while the Mezo Testnet BTC/USD oracle is fresh. MUSD, MEZO, Pool BTC, Trove collateral and debt, Stability Pool deposits, and concentrated-liquidity positions are not included in that estimate.
 
-1. Open Pool Watch without connecting a wallet. Compare the configured Testnet pools at one shared block; the displayed values are reserve ratios, not trade quotes.
-2. Use Chain Watch only with a public address you are comfortable querying through public RPC providers. The page does not save the address.
-3. Connect a Testnet wallet and inspect Overview or Trove Risk Lab. Risk Lab’s adjustable BTC drawdown is a hypothetical scenario, not a price forecast.
-4. If you want to inspect a write path, open the MUSD Swap review. The app shows the exact terms before opening the wallet; do not approve a wallet request unless you intend to submit that transaction.
+- **Pool Watch** reads reserve ratios for configured Testnet pools; these are not trade quotes or USD liquidity.
+- **CL Positions** reads wallet-held and gauge-staked positions. Collect values are simulations, not payouts.
+- **CL Planner** estimates token amounts and has a separate Testnet mint flow.
+- **Chain Watch** reads public-address MUSD/MEZO balances on configured networks. RPC providers may log queried addresses; balances are unpriced and kept separate by network.
+- **Bridge Status** searches the latest 100 indexed Mezo Testnet NTT operations. It does not recover, claim, refund, or prove finality.
+- **Activity** combines up to 200 app-submitted hashes stored in this browser with loaded MUSD/MEZO transfer logs. It is not complete wallet history; CSV contains loaded token-log rows only.
 
-The demo does not require a transaction. A wallet prompt, simulation or receipt reader is not proof that a hosted or live transaction flow has been tested end to end.
+## Secondary wallet actions
 
-## App surfaces
+**Send** supports native BTC, MUSD, MEZO, and a configured Testnet Pool BTC ERC-20 with a review and wallet confirmation. **MUSD Swap** prepares a Testnet quote, simulation, approval, and swap review. The configured Pool BTC token address is not listed in Mezo's reviewed pool documentation; code, symbol, and decimal checks do not establish canonical identity.
 
-**Read-only and monitoring:** Overview shows available wallet balances and a partial BTC oracle estimate. Pool Watch reads three configured Testnet basic pools at a common block. Chain Watch checks configured MUSD and MEZO routes across supported EVM networks. Bridge Status Tracker looks up recent indexed Mezo Testnet NTT activity. CL Positions monitors wallet-held and gauge-staked position NFTs. Trove Risk Lab compares a live Trove ratio with the live MCR and offers hypothetical price-shock scenarios. Activity shows app-submitted transaction hashes and bounded token-transfer logs.
+**MUSD Pay Links** and the public **MUSD checkout** use a conditional Testnet x402 flow. The installed, lockfile-pinned `@x402/evm` 2.30.0 registry resolves a dollar price on `eip155:31611` to Mezo Testnet MUSD; an integration test checks the generated `PAYMENT-REQUIRED` asset. Mezo's docs list `https://facilitator.vativ.io` as the facilitator endpoint, and its public `/supported` response advertises Testnet MUSD for x402 `exact` with Permit2/EIP-2612 support; the server hard-codes that endpoint and is Testnet-only. The status endpoint reports configuration, not live health. The deployed token ABI and live signed verification/settlement have not been independently verified. Links remain reusable until their 30-day expiry: each use may authorize another payment, and the app does not track paid/consumed status. If an authorization is interrupted or the checkout result is ambiguous, the browser stores a pending marker locally and blocks another signature on that same link in that browser; it offers only explorer/status checking. This is not a server-side payment record, is not shared across devices, and can be lost if browser data is cleared. The server checks verified terms before calling settlement; a mismatched receipt after settlement is ambiguous, so check wallet activity before retrying. The legacy `/app/pay` route only prefills a standard Send transfer.
 
-**Wallet actions:** MUSD Swap prepares a Testnet MUSD-to-Pool-BTC swap with a separate exact approval when needed. Send supports native BTC, MUSD, MEZO and the configured Pool BTC ERC-20 on Testnet. MUSD Pay Links and the public `/pay` page use a Testnet x402 flow. Trove supports opening a position and adding BTC collateral. The Stability Pool supports MUSD deposits. CL Planner prepares a concentrated-liquidity position mint.
+Writes require a separate wallet action. A successful receipt means execution succeeded in the displayed block; it does not establish transaction finality. Testnet assets have no real monetary value.
 
-Every write requires an explicit wallet action. The app does not receive a seed phrase or private key. Successful receipt status means execution succeeded in a block; the app does not claim transaction finality.
+## Networks and configuration
 
-## Known limits before release
+The default network is Mezo Testnet (chain ID `31611`, RPC `https://rpc.test.mezo.org`). Mainnet uses chain ID `31612`. MUSD Swap and Pool BTC Send are Testnet-only.
 
-- Mezo’s official Pool BTC token address is not published in the pool documentation reviewed. Swap and Send check the configured address, code, symbol and decimals, but these checks do not prove canonical asset identity. The app warns users and keeps the route Testnet-only [Mezo Pools documentation](https://mezo.org/docs/developers/features/mezo-pools/).
-- Mezo’s contracts reference lists `0x7B7c000000000000000000000000000000000001` as MEZO, while the current Mainnet explorer labels the same address “Stub Token (goerli)” (STUB). Chain Watch now discloses this conflict and withholds a balance if the on-chain symbol does not match. Check the [contracts reference](https://mezo.org/docs/users/resources/contracts-reference/) and [Mainnet explorer](https://explorer.mezo.org/address/0x7B7c000000000000000000000000000000000001) before relying on a Mainnet MEZO balance.
-- Hosted x402 Pay Link creation, facilitator health and pending-payment recovery have not been tested live. The checkout now blocks another authorization after an unknown outcome in the current page session, but it does not provide durable reconciliation if the page is closed.
-- Activity is partial. It retains at most 200 app-submitted hashes in browser storage, reads MUSD/MEZO transfer logs in 5,000-block pages, and exports only loaded token-log rows. It is not a complete wallet history and does not include native BTC transfers.
-- Trove does not support borrowing more, repayment, collateral withdrawal or closure. Stability Pool withdrawals and collateral-gain actions are not exposed. CL collect estimates are simulations, not guaranteed payouts.
-- Most pages use one configured RPC endpoint and do not auto-refresh. Chain ID and token metadata checks do not independently authenticate a provider or establish contract canonicality.
+`VITE_DEFAULT_NETWORK` accepts `testnet` or `mainnet`; `VITE_MEZO_TESTNET_RPC` can override the Testnet RPC. Keep private keys, seed phrases, and server secrets out of `VITE_` variables. Dynamic Pay Links use the server-only `PAY_LINK_SECRET`.
 
-For feature-specific limitations and improvement priorities, see [the feature audit](docs/FEATURE_AUDIT.md).
-
-## Networks
-
-The app’s default Mezo Testnet configuration uses chain ID `31611` and `https://rpc.test.mezo.org`. Mainnet uses chain ID `31612`; its configured HTTPS endpoint is the Boar URL currently listed by Mezo’s [developer guide](https://mezo.org/docs/developers/getting-started/). MUSD Swap and Pool BTC Send are Testnet-only. Do not treat Testnet balances or assets as having real monetary value.
-
-## Validation and performance
-
-The current worktree passes:
-
-- `npm test`: 386 tests across 86 suites.
-- `npm run typecheck`.
-- `npm run build`.
-- `git diff --check`.
-
-Tests use local and mocked data. Chromium spot checks at 320×640, 375×812, 768×1024, 812×375 and 1440×900 found no horizontal overflow. The phone menu shows all eight secondary routes, and route changes focus the main content. These checks do not cover a live wallet popup, live x402 settlement or a real transaction. The screenshots show Pool Watch at Testnet block 16793573 from the local build used for `142bae5`, which is now deployed.
-
-- [Phone, 375×812](submission-assets/pool-watch-mobile-375.png)
-- [Desktop, 1440×900](submission-assets/pool-watch-desktop-1440.png)
-
-Vite builds separate route chunks; the shared entry is 314.18 KB (98.67 KB gzip), while the lazily loaded x402 buyer chunk is 397.59 KB (120.38 KB gzip). The build also reports non-fatal `@__PURE__` annotation warnings from the installed Zod dependency. No browser timing or Lighthouse score was measured.
-
-## Run locally
+## Local development
 
 Requirements: Node.js 20.19 or newer.
 
@@ -71,15 +47,4 @@ npm run build
 npm run preview
 ```
 
-`VITE_DEFAULT_NETWORK` accepts `testnet` (default) or `mainnet`. `VITE_MEZO_TESTNET_RPC` can override the public Testnet RPC. Never put a private key, seed phrase or server secret in a `VITE_` variable; browser-bundled values are public. The dynamic x402 server uses a separate server-only `PAY_LINK_SECRET`.
-
-## Project structure
-
-```text
-src/config/       network, token, pool and route settings
-src/lib/          RPC, ABI, wallet safety, transaction and protocol readers
-src/components/   wallet, balance and shared interface components
-src/pages/        Overview, Swap, Send, Pay Links, Activity, monitors and tools
-server/           dynamic app server and x402 merchant endpoints
-docs/             implementation notes and the source-linked feature audit
-```
+For the full route-by-route and wallet-control review, see [the feature audit](docs/FEATURE_AUDIT.md) and [the bridge/x402 implementation notes](docs/BRIDGE_TRACKER_AND_X402.md). The rate limiter is process-local and best-effort, not a shared replay or quota guarantee. Tests use local and mocked data; they do not certify a live wallet, transaction, deployed MUSD ABI, or hosted x402 settlement.

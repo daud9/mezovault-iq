@@ -22,9 +22,9 @@ export function ClPositionMonitor() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Mezo Testnet · live on-chain · read-only"
-        title="CL Position Monitor"
-        description="A wallet-specific view of Slipstream concentrated-liquidity NFTs: live pool ticks, your position ranges, simulated collect estimates, and gauge reward data where the contracts expose it."
+        eyebrow="Mezo Testnet · read-only"
+        title="CL Positions"
+        description="Wallet-held and gauge-staked concentrated-liquidity positions."
         actions={testnet && walletOnNetwork ? (
           <Button variant="ghost" onClick={refresh} className="min-h-11 px-2">
             <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh
@@ -35,28 +35,28 @@ export function ClPositionMonitor() {
       {!testnet ? (
         <Card className="space-y-3">
           <DataStatus state="not-configured" detail="Mezo Testnet only" />
-          <p className="text-sm leading-relaxed text-mist-400">This monitor reads only the official Mezo Testnet CL deployments. This app build is configured for {network.label}; changing the wallet network alone cannot change the app’s configured network. No mainnet CL positions are queried.</p>
+          <p className="text-sm text-mist-400">This app is configured for {network.label}; CL positions are read on Mezo Testnet only.</p>
         </Card>
       ) : !connected ? (
         <Card className="space-y-3">
           <DataStatus state="not-configured" detail="Wallet connection required" />
           <h2 className="text-base font-semibold text-mist-100">Connect a wallet to inspect its positions</h2>
-          <p className="text-sm leading-relaxed text-mist-400">The monitor reads only the selected public wallet address. It does not request keys or send transactions. Connect using the wallet control in the app header.</p>
+          <p className="text-sm text-mist-400">Connect a wallet to read its positions.</p>
         </Card>
       ) : !walletOnNetwork ? (
         <Card className="space-y-3">
           <DataStatus state="unavailable" detail="Wrong wallet network" />
           <h2 className="text-base font-semibold text-mist-100">Switch the wallet to Mezo Testnet</h2>
-          <p className="text-sm leading-relaxed text-mist-400">The connected wallet is on chain {state.chainId ?? "unknown"}. The position monitor requires chain 31611 and does not query a different network.</p>
+          <p className="text-sm text-mist-400">Switch the wallet to Mezo Testnet (chain 31611).</p>
         </Card>
       ) : view.status === "loading" || view.status === "idle" ? (
-        <LoadingState label="Reading the connected wallet’s CL NFTs and gauge positions from Mezo Testnet" />
+        <LoadingState label="Reading CL positions…" />
       ) : view.status === "error" ? (
         <ErrorState title="Live position read unavailable" description={view.message} onRetry={refresh} />
       ) : view.snapshot.positions.length === 0 ? (
         <EmptyState
           title="No CL positions found for this wallet"
-          description={`At block ${view.snapshot.blockNumber}, the position manager and all ${view.snapshot.poolCount} factory pools were checked for wallet-held NFTs and gauge-staked positions. No position was found.`}
+          description={`No wallet-held or gauge-staked position at block ${view.snapshot.blockNumber}.`}
           action={<Button variant="secondary" onClick={refresh}><RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh live reads</Button>}
         />
       ) : (
@@ -68,9 +68,8 @@ export function ClPositionMonitor() {
             ))}
           </div>
           <Card className="space-y-3 text-sm leading-relaxed text-mist-400">
-            <h2 className="font-medium text-mist-200">Read-only safety and data notes</h2>
-            <p>Everything above is read from Mezo Testnet at block {view.snapshot.blockNumber}. “Simulated collect estimate” is the return from an <code className="text-mist-300">eth_call</code> at that block; it does not collect, transfer, or persist anything and can differ from a later wallet transaction. If the simulation is unavailable, the displayed stored-owed amounts are only the last values checkpointed by the position manager.</p>
-            <p>This screen has no approval, deposit, decrease-liquidity, collect, stake, unstake, claim, or transaction action. Exit guidance describes the normal contract path only; it is not an execution button.</p>
+            <h2 className="font-medium text-mist-200">Data scope</h2>
+            <p>Collect values are read-only simulations at block {view.snapshot.blockNumber}; they are estimates, not payouts.</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2 pt-1">
               <a href={OFFICIAL_SOURCES.mezoPools} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 font-medium text-gold-300 hover:underline">
                 Mezo Pools docs <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
@@ -180,12 +179,6 @@ function PositionCard({ position, network }: { position: ClPositionView; network
         </section>
       </div>
 
-      <div className="border-t border-line pt-4">
-        <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Exit-path guidance · not an action</p>
-        <p className="mt-2 text-sm leading-relaxed text-mist-400">{position.isStaked
-          ? "The gauge currently holds this NFT. The usual exit path starts by withdrawing the position from its gauge; after it returns to the wallet, liquidity management and fee collection are handled through the position manager."
-          : "This NFT is currently held by the wallet. The usual full exit is to decrease the position’s liquidity, then collect the resulting owed tokens through the position manager; neither step is available here."}</p>
-      </div>
     </Card>
   );
 }

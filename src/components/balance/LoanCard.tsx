@@ -122,19 +122,19 @@ export function LoanCard() {
       body = openTroveConflict ? (
         <div className="space-y-3">
           <DataStatus state="unavailable" detail="Trove reads disagree for this wallet" />
-          <p className="text-sm text-rose-200" role="alert">The open-Trove checks found an existing or non-empty Trove for this account, but the summary read says there is none. No open action is available until a fresh read resolves this mismatch. Refresh the Trove read or verify the selected account; no wallet request was made.</p>
+          <p className="text-sm text-rose-200" role="alert">Open-Trove and summary reads disagree. Refresh before continuing.</p>
           <Button variant="secondary" onClick={refreshOpenTroveReads} className="min-h-11">Refresh Trove read</Button>
         </div>
       ) : !readFresh ? (
         <div className="space-y-3">
           <DataStatus state="unverified" detail="the last read is out of date" />
-          <p className="text-sm text-mist-400">The last read found no active Trove, but that may have changed. Refresh before acting.</p>
+          <p className="text-sm text-mist-400">Snapshot may be stale. Refresh before acting.</p>
         </div>
       ) : (
         <div className="space-y-3">
           <DataStatus state="live" detail={`no active Trove · block ${result.blockNumber}`} />
           <p className="text-base font-semibold text-mist-100">No active Trove was found for this wallet.</p>
-          <p className="text-sm text-mist-400">The pinned read at block {result.blockNumber.toLocaleString()} found no active Trove for <span className="break-all font-mono text-mist-300">{state.address}</span> on {network.label}. If you expected an existing Trove, confirm this is its owner account or refresh before choosing the open-only action below.</p>
+          <p className="text-sm text-mist-400">No active Trove for {state.address} at block {result.blockNumber.toLocaleString()}. Verify the owner account if unexpected.</p>
           {result.troveStatus === 4 && result.closedHistory && <ClosedRedemptionHistory history={result.closedHistory} explorerUrl={network.explorerUrl} />}
           <details
             className="rounded-lg border border-line bg-ink-800/40 px-3"
@@ -189,13 +189,13 @@ export function LoanCard() {
           <details className="rounded-lg border border-line bg-ink-800/40 px-3">
             <summary className="min-h-11 cursor-pointer py-3 text-sm font-medium text-mist-300">Details</summary>
             <div className="space-y-3 pb-4 text-sm text-mist-400">
-              <p>Collateral ratio: <span className="text-mist-100">{!readFresh || !priceFresh || ratioBps === null ? "Unavailable" : formatPercentBps(ratioBps)}</span>. This is information only, not a safe/at-risk verdict.</p>
-              {priceFresh && result.collateralValueUsd !== null && <p>Estimated collateral value: <span className="text-mist-100">${result.collateralValueUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>, using Mezo’s BTC/USD price.</p>}
+              <p>Collateral ratio: <span className="text-mist-100">{!readFresh || !priceFresh || ratioBps === null ? "Unavailable" : formatPercentBps(ratioBps)}</span>. Not a safety verdict.</p>
+              {priceFresh && result.collateralValueUsd !== null && <p>Testnet BTC estimate: <span className="text-mist-100">${result.collateralValueUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}</span>.</p>}
               {!priceFresh && <p>The BTC/USD price is stale or unavailable, so the collateral ratio is hidden. {result.riskInputsError ?? "Refresh after the oracle is healthy."}</p>}
               {priceFresh && result.mcrWei === null && result.riskInputsError && <p>Live MCR comparison is unavailable: {result.riskInputsError}</p>}
-              <p>Price and Trove reads were taken at block {result.blockNumber} · read {formatTime(result.retrievedAt)}{result.priceAgeSeconds === null ? "; oracle age unavailable" : ` · oracle update ${result.priceAgeSeconds}s old`}.</p>
+              <p>Block {result.blockNumber} · read {formatTime(result.retrievedAt)}{result.priceAgeSeconds === null ? "; oracle age unavailable" : ` · price ${result.priceAgeSeconds}s old`}.</p>
               <Link to="/app/trove-risk" className="inline-flex min-h-11 items-center font-medium text-gold-300 hover:underline">Open Trove Risk Lab</Link>
-              <p>Adding BTC is the only Trove-management action available here. Borrowing more, repaying, withdrawing, closing, and liquidation are not available.</p>
+              <p>Add collateral is the only Trove action available here; other management actions are not implemented.</p>
             </div>
           </details>
         </div>
@@ -261,13 +261,13 @@ function ClosedRedemptionHistory({ history, explorerUrl }: { history: ClosedTrov
         <p className="text-sm text-amber-200">The TroveManager reports closed by redemption, but its exact transaction and block could not be verified in the recent log window. {history.closureUnavailableReason ?? "Refresh the read or verify the network."}</p>
       )}
       {history.claimableSurplusRaw === null ? (
-        <p className="text-sm text-mist-400">Claimable BTC collateral surplus: unavailable. {history.surplusUnavailableReason ?? "No verified value is shown."}</p>
+        <p className="text-sm text-mist-400">BTC surplus unavailable. {history.surplusUnavailableReason ?? ""}</p>
       ) : history.claimableSurplusRaw > 0n ? (
         <p className="text-sm text-mist-300">Claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}: <span className="font-semibold text-mist-100">{history.claimableSurplusBtc} BTC</span>.</p>
       ) : (
         <p className="text-sm text-mist-300">No claimable BTC collateral surplus at block {history.snapshotBlock.toLocaleString()}.</p>
       )}
-      <p className="text-xs leading-relaxed text-mist-500">Final pre-redemption collateral ratio: unavailable; no current risk ratio is shown for a closed Trove. This history view does not provide a surplus-claim action.</p>
+      <p className="text-xs text-mist-500">Closed history; no current ratio or surplus-claim action.</p>
     </section>
   );
 }

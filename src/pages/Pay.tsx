@@ -6,7 +6,6 @@ import { SectionHeader } from "../components/ui/SectionHeader";
 import { DataStatus } from "../components/ui/DataStatus";
 import { useWallet } from "../components/wallet/WalletProvider";
 import { parsePaymentParams, buildSendQuery } from "../lib/paymentRequest";
-import { shortAddress } from "../lib/format";
 
 /** Shows a payment request from a link. It moves no funds. The payer reviews and authorizes on the Send page. */
 export function Pay() {
@@ -17,16 +16,16 @@ export function Pay() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Legacy payment request"
-        title="Standard payment request"
-        description="Older request links only prefill a standard wallet transfer. They are not gasless x402 checkouts; MUSD transfers require BTC for network fees. Nothing is sent from this page."
+        eyebrow="Payment request"
+        title="Legacy transfer link"
+        description="Prefills a standard transfer for review in Send. This page does not send funds."
       />
 
       {parsed.error && (
         <Card className="space-y-3 border-risk-high/40">
           <DataStatus state="unavailable" detail="invalid request" />
           <p className="text-sm text-mist-300">{parsed.error}</p>
-          <Link to="/app" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Go to the portfolio</Link>
+          <Link to="/app" className="inline-flex min-h-11 items-center text-sm font-medium text-gold-300 hover:underline">Open Overview</Link>
         </Card>
       )}
 
@@ -49,9 +48,7 @@ export function Pay() {
             <div><dt className="text-xs text-mist-500">Recipient</dt><dd className="break-all font-mono text-mist-200">{parsed.request.to}</dd></div>
             <div><dt className="text-xs text-mist-500">Network</dt><dd className="text-mist-200">{network.label} (chain {network.chainId})</dd></div>
           </dl>
-          <p className="text-xs leading-relaxed text-mist-500">
-            Confirm the recipient and amount carefully. A confirmed payment cannot be reversed. This legacy link uses a normal wallet transaction; the next screen estimates BTC network fees before you decide whether to continue.
-          </p>
+          <p className="text-xs leading-relaxed text-mist-500">Review the recipient, amount, and fee. Confirmed transfers cannot be reversed.</p>
 
           {state.status !== "connected" ? (
             <p className="text-sm text-mist-400">Connect your wallet from the header to continue.</p>
@@ -59,10 +56,12 @@ export function Pay() {
             <p className="text-sm text-mist-400">Switch your wallet to {network.label} before paying this request.</p>
           ) : parsed.request.amount ? (
             <ButtonLink to={`/app/send?${buildSendQuery(parsed.request)}`} className="min-h-11 w-full">
-              Review and authorize from {shortAddress(state.address ?? "0x")}
+              Review transfer in Send
             </ButtonLink>
           ) : (
-            <p className="text-sm text-mist-400">This request has no amount. Enter one on the Send page before paying.</p>
+            <ButtonLink to={`/app/send?${buildSendQuery(parsed.request)}`} variant="secondary" className="min-h-11 w-full">
+              Enter amount in Send
+            </ButtonLink>
           )}
         </Card>
       )}

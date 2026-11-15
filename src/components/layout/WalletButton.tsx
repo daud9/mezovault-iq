@@ -56,7 +56,7 @@ export function WalletButton({ className = "", compact = false }: { className?: 
             <div>
               <p className="text-xs text-mist-500">Network</p>
               <p className={isSupportedNetwork ? "text-mist-200" : "text-risk-high"}>
-                {isSupportedNetwork ? network.label : `Not ${network.label}. Switch to read balances.`}
+                {isSupportedNetwork ? network.label : `Not ${network.label}`}
               </p>
             </div>
             {state.error && <p role="alert" className="rounded-lg border border-risk-high/40 bg-risk-high/10 p-3 text-xs leading-relaxed text-risk-high">{state.error}</p>}

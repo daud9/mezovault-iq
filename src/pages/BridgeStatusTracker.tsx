@@ -12,13 +12,13 @@ import { getBridgeStage, lookupMezoNttTransaction, operationRoute, type BridgeLo
 function stageDescription(result: BridgeLookupResult): { title: string; body: string; state: "unverified" } {
   switch (result.stage) {
     case "destination-indexed":
-      return { title: "Destination transaction indexed", body: "Wormholescan has a destination-chain transaction record. This tracker does not independently verify its receipt status or finality.", state: "unverified" };
+      return { title: "Destination indexed", body: "Receipt status and finality are not verified.", state: "unverified" };
     case "attestation-available":
-      return { title: "Attestation available; destination not indexed", body: "Wormholescan reports a VAA for this operation, but no destination transaction record is indexed yet.", state: "unverified" };
+      return { title: "Attestation available", body: "No destination transaction is indexed yet.", state: "unverified" };
     case "source-indexed":
-      return { title: "Source operation indexed", body: "Wormholescan has the Mezo-side operation, but no VAA or destination record is present in this response.", state: "unverified" };
+      return { title: "Source indexed", body: "No attestation or destination record is shown.", state: "unverified" };
     default:
-      return { title: "Operation status unclear", body: "The indexed operation does not contain enough status fields for this tracker to describe progress.", state: "unverified" };
+      return { title: "Status unclear", body: "The indexed record has no usable progress status.", state: "unverified" };
   }
 }
 
@@ -62,16 +62,16 @@ export function BridgeStatusTracker() {
     <div className="space-y-8">
       <SectionHeader
         eyebrow="Read-only · Mezo Testnet"
-        title="Bridge Status Tracker"
-        description="Check Wormholescan’s indexed status for a MEZO NTT transfer that started on Mezo Testnet. This page only reports status; no supported recovery, claim, refund, or transaction action is available."
+        title="Bridge Status"
+        description="Check indexed MEZO NTT status. This page cannot recover transfers."
       />
 
       <Card className="space-y-5">
         <div className="flex items-start gap-3">
           <span className="rounded-xl border border-gold-500/30 bg-gold-500/10 p-2 text-gold-300"><Search className="h-5 w-5" aria-hidden="true" /></span>
           <div>
-            <h2 className="text-sm font-semibold text-mist-100">Track a Mezo Testnet source transaction</h2>
-            <p className="mt-1 text-sm leading-relaxed text-mist-400">Paste the `0x` transaction hash from the Mezo-side NTT transfer. The lookup checks the latest 100 indexed operations for the official Testnet Wormhole transceiver.</p>
+            <h2 className="text-sm font-semibold text-mist-100">Mezo Testnet source transaction</h2>
+            <p className="mt-1 text-sm text-mist-400">Lookup searches the latest 100 indexed operations.</p>
           </div>
         </div>
 
@@ -97,7 +97,7 @@ export function BridgeStatusTracker() {
         {result?.stage === "not-found" && (
           <div className="space-y-3 rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-4" role="status">
             <DataStatus state="unverified" detail="no matching operation in indexed page" />
-            <p className="text-sm leading-relaxed text-mist-300">No matching source transaction was found among the latest {result.pageSize} indexed operations for this transceiver. This does <strong className="text-mist-100">not</strong> prove the transfer failed: the hash may be outside this recent page, not indexed yet, or not be a Mezo Testnet MEZO NTT transfer.</p>
+            <p className="text-sm text-mist-300">No match in the latest {result.pageSize} indexed operations. This does not prove the transfer failed.</p>
           </div>
         )}
 
@@ -131,8 +131,8 @@ export function BridgeStatusTracker() {
         <div className="flex items-start gap-3">
           <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0 text-risk-medium" aria-hidden="true" />
           <div className="space-y-2">
-            <h2 className="text-sm font-semibold text-mist-100">Status tracking cannot recover a transfer</h2>
-            <p className="text-sm leading-relaxed text-mist-400">Mezo’s Testnet bridge docs describe MEZO transfers through Wormhole NTT and tell users to wait for confirmation on both chains. They do not document a Testnet rescue, refund, or manual-claim action. A missing or pending index entry is not permission to retry the transfer.</p>
+            <h2 className="text-sm font-semibold text-mist-100">Status only · no rescue action</h2>
+            <p className="text-sm text-mist-400">A missing or pending record is not a reason to resend.</p>
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               <a href={MEZO_TESTNET_NTT.bridgeDocs} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Mezo Testnet bridge docs <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
               <a href={MEZO_TESTNET_NTT.wormholescanDocs} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Wormholescan API guide <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
@@ -142,15 +142,15 @@ export function BridgeStatusTracker() {
       </Card>
 
       <Card className="space-y-3">
-        <h2 className="text-sm font-semibold text-mist-100">Legacy Mainnet native-BTC deposits</h2>
-        <p className="text-sm leading-relaxed text-mist-400">The separate Mezo Mainnet native-BTC bridge-in closed on October 13, 2026. Mezo directs deposits started before closure to tBTCScan for status checks. That flow is not the Mezo Testnet NTT tracker above.</p>
+        <h2 className="text-sm font-semibold text-mist-100">Existing Mainnet BTC deposits</h2>
+        <p className="text-sm text-mist-400">The bridge-in is closed; check older deposits on tBTCScan.</p>
         <div className="flex flex-wrap gap-x-5 gap-y-2">
           <a href="https://mezo.org/docs/users/mainnet/track-your-native-bitcoin-deposit/" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Mezo deposit tracking guide <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
           <a href="https://tbtcscan.com/deposits" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-gold-300 hover:underline">Open tBTCScan deposits <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" /></a>
         </div>
       </Card>
 
-      <p className="text-xs leading-relaxed text-mist-500">Lookup source: <a href={MEZO_TESTNET_NTT.deploymentSource} target="_blank" rel="noopener noreferrer" className="text-gold-300 hover:underline">official Mezo Testnet NTT deployment manifest</a>. Wormholescan receives only the configured transceiver address; the pasted transaction hash is matched in the browser and is not included in the API request. Selected app network: {network.label}.</p>
+      <p className="text-xs leading-relaxed text-mist-500">Hash is matched in your browser. Wormholescan receives the <a href={MEZO_TESTNET_NTT.deploymentSource} target="_blank" rel="noopener noreferrer" className="text-gold-300 hover:underline">configured transceiver address</a>.</p>
     </div>
   );
 }

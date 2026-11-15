@@ -43,9 +43,8 @@ export function AppShell() {
               <SideLink key={item.to} {...item} />
             ))}
           </nav>
-          <div className="mt-4 rounded-xl border border-line bg-ink-800/60 p-4 text-xs leading-relaxed text-mist-400">
-            <p className="font-medium text-mist-200">Testnet wallet actions</p>
-            <p className="mt-1">Wallet transactions require your own approval. Opening a new Trove and adding BTC to an active Trove are available only on Mezo Testnet after fresh preflight; other Trove operations and unverified vault actions are unavailable.</p>
+          <div className="mt-4 rounded-xl border border-line bg-ink-800/60 p-3 text-xs leading-relaxed text-mist-400">
+            {DEFAULT_NETWORK.label} · Review every wallet request.
           </div>
         </aside>
 
@@ -140,6 +139,13 @@ function SideLink({ to, label, icon: Icon, end }: NavItemProps) {
   );
 }
 
+function mobileLabel(label: string) {
+  if (label === "Trove Risk Lab") return "Risk Lab";
+  if (label === "Pool Watch") return "Pools";
+  if (label === "MUSD Swap") return "Swap";
+  return label;
+}
+
 function MobilePrimaryLink({ to, label, icon: Icon, end, onNavigate }: NavItemProps & { onNavigate: () => void }) {
   return (
     <NavLink
@@ -156,7 +162,7 @@ function MobilePrimaryLink({ to, label, icon: Icon, end, onNavigate }: NavItemPr
       }
     >
       <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-      <span className="max-w-full truncate">{label === "MUSD Swap" ? "Swap" : label}</span>
+      <span className="max-w-full truncate">{mobileLabel(label)}</span>
     </NavLink>
   );
 }

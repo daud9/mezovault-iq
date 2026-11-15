@@ -1,6 +1,9 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { FacilitatorClient } from "@x402/core/server";
 import { buildLinkAuthorizationMessage, X402_TESTNET_NETWORK } from "../src/lib/x402PayLinks.ts";
 import { createMerchantApp, FixedWindowLimiter } from "./app.ts";
@@ -8,6 +11,7 @@ import { createMerchantApp, FixedWindowLimiter } from "./app.ts";
 const SECRET = "test-only-hmac-key-do-not-use-in-production-0001";
 const RECIPIENT = "0x1111111111111111111111111111111111111111" as const;
 const BUYER = "0x2222222222222222222222222222222222222222";
+const TESTNET_MUSD = "0x118917a40FAF1CD7a13dB0Ef56C86De7973Ac503";
 const TEST_SIGNATURE = `0x${"ab".repeat(65)}` as `0x${string}`;
 const FAKE_TX = `0x${"cd".repeat(32)}`;
 
@@ -157,6 +161,7 @@ describe("Mezo Testnet x402 pay-link server", () => {
     assert.equal(accepts.length, 1);
     assert.equal(accepts[0].scheme, "exact");
     assert.equal(accepts[0].network, X402_TESTNET_NETWORK);
+    assert.equal(accepts[0].asset, TESTNET_MUSD, "@x402/evm 2.30.0 must resolve Testnet USD pricing to the exact MUSD contract");
     assert.equal(accepts[0].payTo, RECIPIENT);
     assert.equal(accepts[0].amount, "3250000000000000000");
     assert.equal(accepts[0].maxTimeoutSeconds, 300);
@@ -179,7 +184,7 @@ describe("Mezo Testnet x402 pay-link server", () => {
     assert.ok(paid.headers.get("payment-response"), "successful settlement must carry an x402 receipt");
     assert.deepEqual(JSON.parse(paidText), {
       ok: true,
-      message: "Payment settled by the Mezo x402 facilitator.",
+      message: "Payment settled by the facilitator endpoint listed in Mezo's x402 documentation.",
       network: X402_TESTNET_NETWORK,
     });
     assert.equal(facilitator.verifies.length, 1);
@@ -189,6 +194,41 @@ describe("Mezo Testnet x402 pay-link server", () => {
     assert.equal(facilitator.verifies[0].amount, "3250000000000000000");
     assert.equal(facilitator.settles[0].payTo, RECIPIENT);
     assert.equal(facilitator.settles[0].amount, "3250000000000000000");
+  });
+
+  it("allows a reusable link to receive another separately submitted checkout request", async (t) => {
+    // This verifies the app's no-consumption policy with a mock; it does not establish live facilitator replay behavior.
+    const facilitator = new MockFacilitator();
+    const running = await startApp(makeApp(facilitator));
+    t.after(running.close);
+    const link = await createLink(running.baseUrl);
+
+    const submitAttempt = async (signature: `0x${string}`) => {
+      const challenge = await fetch(link.resourceUrl, {
+        method: "POST",
+        headers: { Accept: "application/json", "Content-Type": "application/json" },
+        body: linkBody(link.token),
+      });
+      const encoded = challenge.headers.get("payment-required");
+      assert.equal(challenge.status, 402);
+      assert.ok(encoded);
+      const required = decodePaymentRequired(encoded);
+      const accepts = required.accepts as Array<Record<string, unknown>>;
+      const payload = { x402Version: 2, resource: required.resource, accepted: accepts[0], payload: { authorization: { from: BUYER }, signature } };
+      return fetch(link.resourceUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "PAYMENT-SIGNATURE": encodeHeader(payload) },
+        body: linkBody(link.token),
+      });
+    };
+
+    const first = await submitAttempt(TEST_SIGNATURE);
+    assert.equal(first.status, 200, await first.text());
+    const secondSignature = `0x${"ef".repeat(65)}` as `0x${string}`;
+    const second = await submitAttempt(secondSignature);
+    assert.equal(second.status, 200, await second.text());
+    assert.equal(facilitator.verifies.length, 2);
+    assert.equal(facilitator.settles.length, 2);
   });
 
   it("never returns a paid response when the facilitator reports settlement failure", async (t) => {
@@ -219,7 +259,7 @@ describe("Mezo Testnet x402 pay-link server", () => {
     assert.notEqual(JSON.parse(await failed.text()).ok, true);
   });
 
-  it("refuses to confirm a successful facilitator receipt for the wrong network or amount", async (t) => {
+  it("fails closed on a post-settlement receipt mismatch without implying that no payment occurred", async (t) => {
     const mismatches: Array<{ network: `${string}:${string}`; amount: string | null }> = [
       { network: "eip155:31612", amount: null },
       { network: X402_TESTNET_NETWORK, amount: "1" },
@@ -246,7 +286,11 @@ describe("Mezo Testnet x402 pay-link server", () => {
       });
       assert.equal(response.status, 502);
       assert.equal(response.headers.get("payment-response"), null);
-      assert.equal((await response.json() as { error: string }).error, "settlement_receipt_mismatch");
+      const body = await response.json() as { error: string; network: string; transaction?: string };
+      assert.equal(body.error, "settlement_receipt_mismatch");
+      assert.equal(body.network, mismatch.network);
+      assert.equal(body.transaction, FAKE_TX);
+      assert.equal(facilitator.verifies.length, 1);
       assert.equal(facilitator.settles.length, 1);
     }
   });
@@ -338,5 +382,36 @@ describe("Mezo Testnet x402 pay-link server", () => {
 
     const weak = await fetch(`${running.baseUrl}/api/pay-links/status`);
     assert.deepEqual(await weak.json(), { enabled: false, network: X402_TESTNET_NETWORK, facilitator: "https://facilitator.vativ.io" });
+  });
+});
+
+describe("API not-found behavior with SPA serving enabled", () => {
+  it("returns JSON 404s for unmatched API paths while preserving the client-route fallback", async (t) => {
+    const staticDir = await mkdtemp(join(tmpdir(), "mezovault-iq-static-"));
+    await writeFile(join(staticDir, "index.html"), "<!doctype html><title>SPA fixture</title>", "utf8");
+    t.after(async () => { await rm(staticDir, { recursive: true, force: true }); });
+
+    const running = await startApp(createMerchantApp({ facilitator: new MockFacilitator(), staticDir }));
+    t.after(running.close);
+
+    for (const path of ["/api", "/api/no-such-route", "/api/pay-links"]) {
+      const response = await fetch(`${running.baseUrl}${path}`);
+      assert.equal(response.status, 404, path);
+      assert.match(response.headers.get("content-type") ?? "", /^application\/json/i, path);
+      assert.equal((await response.json() as { error: string }).error, "not_found");
+    }
+
+    const head = await fetch(`${running.baseUrl}/api/no-such-route`, { method: "HEAD" });
+    assert.equal(head.status, 404);
+    assert.match(head.headers.get("content-type") ?? "", /^application\/json/i);
+
+    const unknownPost = await fetch(`${running.baseUrl}/api/no-such-route`, { method: "POST" });
+    assert.equal(unknownPost.status, 404);
+    assert.match(unknownPost.headers.get("content-type") ?? "", /^application\/json/i);
+
+    const clientRoute = await fetch(`${running.baseUrl}/some-client-route`);
+    assert.equal(clientRoute.status, 200);
+    assert.match(clientRoute.headers.get("content-type") ?? "", /^text\/html/i);
+    assert.match(await clientRoute.text(), /SPA fixture/);
   });
 });

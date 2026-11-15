@@ -34,9 +34,7 @@ export function BtcBalanceCard() {
         <p className="text-2xl font-semibold text-mist-100">
           {r.formatted} <span className="text-base font-medium text-gold-300">{r.symbol}</span>
         </p>
-        <p className="text-xs text-mist-500">
-          Exact: {r.exact} {r.symbol} · block {r.blockNumber} · retrieved {formatTime(r.retrievedAt)}
-        </p>
+        <p className="text-xs text-mist-500">Block {r.blockNumber} · {formatTime(r.retrievedAt)}</p>
         <p className="text-xs text-mist-500">Source: {network.label} RPC (eth_getBalance). This is the native gas balance.</p>
       </div>
     );
@@ -65,12 +63,9 @@ export function BtcBalanceCard() {
         const estimatedUsd = estimateBtcBalanceUsd(view.result.balanceRaw, price.priceUsdWad);
         btcEstimate = (
           <div className="space-y-2 rounded-lg border border-line bg-ink-800/60 p-3">
-            <p className="text-sm font-semibold text-mist-100">BTC-only oracle reference: ≈ ${estimatedUsd}</p>
+            <p className="text-sm font-semibold text-mist-100">BTC-only estimate · ≈ ${estimatedUsd}</p>
             <DataStatus state="live" detail={`BTC/USD oracle · ${ageSeconds}s old · block ${price.blockNumber}`} />
-            <p className="text-xs leading-relaxed text-mist-500">
-              Uses this wallet’s native BTC balance and Mezo’s on-chain BTC/USD price. It is not a portfolio total; MUSD, MEZO, and DeFi positions are excluded.
-            </p>
-            {network.key === "testnet" && <p className="text-xs leading-relaxed text-mist-500">Testnet BTC has no real monetary value; this oracle reference does not imply redeemable or realizable USD value.</p>}
+            {network.key === "testnet" && <p className="text-xs text-mist-500">Testnet reference only; no real USD value is implied.</p>}
             <p className="text-xs text-mist-500">Oracle updated {formatTime(new Date(price.updatedAt * 1_000).toISOString())}.</p>
           </div>
         );
@@ -78,14 +73,12 @@ export function BtcBalanceCard() {
         btcEstimate = (
           <div className="space-y-2">
             <DataStatus state="unavailable" detail="BTC/USD price expired" />
-            <p className="text-xs text-mist-500">
-              The last oracle update is older than the {MAX_BTC_USD_AGE_SECONDS.toLocaleString()}-second freshness limit. Refresh to check again; no USD estimate is shown.
-            </p>
+            <p className="text-xs text-mist-500">Oracle update exceeds {MAX_BTC_USD_AGE_SECONDS.toLocaleString()} seconds; no estimate is shown.</p>
           </div>
         );
       }
     } else if (priceView.status === "loading" || priceView.status === "idle") {
-      btcEstimate = <p className="text-xs text-mist-500" role="status">Checking the Mezo BTC/USD oracle; no USD estimate is shown until its freshness is verified.</p>;
+      btcEstimate = <p className="text-xs text-mist-500" role="status">Checking BTC/USD oracle…</p>;
     } else {
       btcEstimate = (
         <div className="space-y-2">
@@ -100,8 +93,8 @@ export function BtcBalanceCard() {
     <Card className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Wallet BTC (gas)</p>
-          <p className="mt-1 text-sm text-mist-400">Native balance on {network.label}</p>
+          <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Wallet BTC · gas</p>
+          <p className="mt-1 text-sm text-mist-400">Native balance · {network.label}</p>
         </div>
         {state.status === "connected" && isSupportedNetwork && (
           <Button

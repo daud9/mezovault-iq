@@ -85,9 +85,9 @@ export function ChainWatch() {
   return (
     <div className="space-y-8">
       <SectionHeader
-        eyebrow="Access & Distribution · Public read-only checks"
-        title="MUSD / MEZO Chain Watch"
-        description="Check a public EVM address against configured MUSD and MEZO token routes on Mezo, Ethereum, Base, and BNB Chain. No wallet connection is needed."
+        eyebrow="Public read-only checks"
+        title="Chain Watch"
+        description="Read MUSD and MEZO balances for a public EVM address across supported networks."
       />
 
       <Card highlight className="space-y-5">
@@ -119,7 +119,7 @@ export function ChainWatch() {
             </Button>
           </div>
           <p id="chain-watch-address-hint" className="text-xs leading-relaxed text-mist-500">
-            Nothing is queried until you press Check balances. The address is not added to the URL or browser storage by this page.
+            The lookup starts when you press Check balances. The address is not saved by this page.
           </p>
           <p id="chain-watch-address-error" className="min-h-5 text-sm text-risk-high" role="alert">
             {validationError ?? ""}
@@ -129,19 +129,19 @@ export function ChainWatch() {
         <div className="flex gap-3 rounded-xl border border-gold-500/20 bg-gold-500/5 p-4 text-sm leading-relaxed text-mist-300">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-gold-300" aria-hidden="true" />
           <p>
-            <span className="font-semibold text-mist-100">Privacy and permissions:</span> on submission, the relevant public RPC providers receive the address in read-only balance requests and may log it. This page does not connect a wallet, sign, bridge, transfer, or save the address. Use only an address you are comfortable querying through those providers.
+            Public RPC providers receive the address and may log it. This page does not connect a wallet or save the address.
           </p>
         </div>
       </Card>
 
       <Card className="space-y-2 border border-risk-medium/30 bg-risk-medium/5 text-sm leading-relaxed text-mist-300">
-        <p className="font-semibold text-mist-100">Mezo Mainnet MEZO address needs confirmation</p>
-        <p>The <a href={CHAIN_WATCH_SOURCES.contracts} target="_blank" rel="noopener noreferrer" className="text-gold-300 underline">Mezo contracts reference</a> lists <span className="break-all font-mono">0x7B7c000000000000000000000000000000000001</span> as MEZO. The <a href="https://explorer.mezo.org/address/0x7B7c000000000000000000000000000000000001" target="_blank" rel="noopener noreferrer" className="text-gold-300 underline">Mezo Mainnet explorer</a> currently labels that address “Stub Token (goerli)” (STUB). This app requires an on-chain MEZO symbol and withholds the balance if it differs. Check both official pages before relying on a Mainnet MEZO balance.</p>
+        <p className="font-semibold text-mist-100">Mezo Mainnet MEZO label conflict</p>
+        <p>The <a href={CHAIN_WATCH_SOURCES.contracts} target="_blank" rel="noopener noreferrer" className="text-gold-300 underline">contracts reference</a> lists this address as MEZO, while the <a href="https://explorer.mezo.org/address/0x7B7c000000000000000000000000000000000001" target="_blank" rel="noopener noreferrer" className="text-gold-300 underline">Mainnet explorer</a> labels it STUB. A symbol mismatch withholds the balance.</p>
       </Card>
 
       {view.status === "loading" && (
         <Card>
-          <p role="status" className="text-sm text-mist-300">Checking configured token addresses and RPC-reported network IDs…</p>
+          <p role="status" className="text-sm text-mist-300">Reading balances across networks…</p>
         </Card>
       )}
       {view.status === "failed" && (
@@ -154,7 +154,7 @@ export function ChainWatch() {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <h2 id="chain-watch-results-title" className="text-lg font-semibold text-mist-100">Balances by network</h2>
-              <p className="mt-1 text-sm text-mist-400">For {shortAddress(view.address ?? "")} · each network is a separate balance, not a combined portfolio.</p>
+              <p className="mt-1 text-sm text-mist-400">For {shortAddress(view.address ?? "")} · balances stay separate by network.</p>
             </div>
             <Button type="button" variant="ghost" onClick={() => void lookup(view.address ?? "")} className="min-h-11 px-2">
               <RefreshCw className="h-4 w-4" aria-hidden="true" /> Refresh reads
@@ -165,17 +165,14 @@ export function ChainWatch() {
               <NetworkCard key={result.network.key} result={result} address={view.address ?? ""} />
             ))}
           </div>
-          <Card className="space-y-2 text-sm leading-relaxed text-mist-400">
-            <p className="font-medium text-mist-200">How to read these balances</p>
-            <p>Each figure is read at the displayed block after the RPC reports the expected chain ID and the configured token address returns code, the expected symbol and 18 decimals. These checks do not independently authenticate the RPC or prove the address is canonical. A successful zero is shown as 0; an unavailable read stays unavailable. No USD valuation, total, price, or cross-network fungibility is implied.</p>
-          </Card>
+          <p className="text-xs leading-relaxed text-mist-500">Balances are unpriced; contract metadata checks do not prove canonical token identity.</p>
         </section>
       )}
 
       <section aria-labelledby="chain-watch-bridges-title" className="space-y-4">
         <div>
           <h2 id="chain-watch-bridges-title" className="text-lg font-semibold text-mist-100">Official bridge guides</h2>
-          <p className="mt-1 text-sm leading-relaxed text-mist-400">These are Mezo documentation links, not bridge actions. Review the route and transaction details on the official interface before deciding whether to connect or sign there.</p>
+          <p className="mt-1 text-sm leading-relaxed text-mist-400">Official bridge documentation links; no bridge action is available here.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           {CHAIN_WATCH_BRIDGE_GUIDES.map((guide) => (
@@ -183,7 +180,7 @@ export function ChainWatch() {
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400">{guide.symbol} route</p>
                 <p className="mt-2 text-base font-semibold text-mist-100">{guide.route}</p>
-                <p className="mt-2 text-sm leading-relaxed text-mist-400">{guide.note}</p>
+              <p className="mt-2 text-sm leading-relaxed text-mist-400">{guide.note}</p>
               </div>
               <a href={guide.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-gold-300 hover:underline">
                 Mezo official bridge documentation <ExternalLink className="h-4 w-4" aria-hidden="true" />
@@ -191,9 +188,7 @@ export function ChainWatch() {
             </Card>
           ))}
         </div>
-        <p className="text-xs leading-relaxed text-mist-500">
-          Token addresses come from the <a href={CHAIN_WATCH_SOURCES.contracts} target="_blank" rel="noopener noreferrer" className="text-gold-300 hover:underline">Mezo contracts reference</a>. Ethereum, Base, and BNB use shared PublicNode RPC endpoints; Mezo uses its public mainnet/testnet endpoints. Providers are independent services, not part of this app.
-        </p>
+      <p className="text-xs leading-relaxed text-mist-500">Token addresses: <a href={CHAIN_WATCH_SOURCES.contracts} target="_blank" rel="noopener noreferrer" className="text-gold-300 hover:underline">Mezo contracts reference</a>.</p>
       </section>
     </div>
   );
