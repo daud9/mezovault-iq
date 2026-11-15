@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import { MEZO_NETWORKS } from "../config/chains";
 import { TESTNET_CL_CONTRACTS } from "../config/clPositions";
 import type { RpcClient } from "./rpc";
-import { alignClPriceRange, calculateClTokenSplit, clHumanPrice, readClPlannerSnapshot, type ClPlannerPool } from "./clPlanner";
+import { alignClPriceRange, calculateClTokenSplit, clHumanPrice, clPlannerEstimateFallback, readClPlannerSnapshot, type ClPlannerPool } from "./clPlanner";
 
 const FACTORY_POOL = "0x1111111111111111111111111111111111111111";
 const ZERO_LIQUIDITY_POOL = "0x2222222222222222222222222222222222222222";
@@ -76,6 +76,11 @@ function createRpc(options: { wrongChain?: boolean } = {}) {
 }
 
 describe("Mezo Testnet CL planner math", () => {
+  it("labels the live repro as paused during refresh rather than as missing inputs", () => {
+    assert.equal(clPlannerEstimateFallback(false, "3000000", "4000000", "1000"), "paused");
+    assert.equal(clPlannerEstimateFallback(true, "3000000", "", "1000"), "needs-input");
+  });
+
   it("converts token1-per-token0 prices to outward-rounded, spacing-aligned ticks", () => {
     const pool = createPool();
     const range = alignClPriceRange(pool, 0.9, 1.1);

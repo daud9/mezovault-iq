@@ -59,6 +59,22 @@ export interface ClSplitResult {
   budgetToken1: number;
 }
 
+export type ClPlannerEstimateFallback = "paused" | "needs-input" | null;
+
+/** Distinguishes stale/refreshing pool data from genuinely incomplete inputs. */
+export function clPlannerEstimateFallback(
+  fresh: boolean,
+  lowerPrice: string,
+  upperPrice: string,
+  budgetToken1: string,
+): ClPlannerEstimateFallback {
+  if (!fresh) return "paused";
+  if (!lowerPrice.trim() || !upperPrice.trim() || !budgetToken1.trim()) {
+    return "needs-input";
+  }
+  return null;
+}
+
 /**
  * Reads factory-enumerated Mezo Testnet Slipstream pools from one block. Pools with
  * zero current liquidity or unreadable token decimals are excluded; no pool list is

@@ -228,7 +228,7 @@ export function StabilityPoolPanel() {
                     ? `Approve exactly ${formatTokenUnits(review.amountWei, 18, 18)} MUSD.`
                     : `Deposit ${formatTokenUnits(review.amountWei, 18, 18)} MUSD into the Pool.`}
                 </p>
-                <p className="mt-1 text-xs text-mist-500">Fresh checks gate each wallet request.</p>
+                <p className="mt-1 text-xs text-mist-500">Preflight runs before review; each review expires after 60 seconds.</p>
               </div>
 
               {review.action === "approve" ? (

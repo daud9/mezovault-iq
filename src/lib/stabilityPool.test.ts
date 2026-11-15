@@ -245,6 +245,8 @@ describe("Mezo Testnet Stability Pool read and guarded action preparation", () =
     assert.equal(requestReadyStabilityPoolAction({ ...base, connectedAccount: "0x2222222222222222222222222222222222222222" }).status, "context-changed");
     assert.equal(requestReadyStabilityPoolAction({ ...base, walletChainId: 1 }).status, "context-changed");
     assert.equal(requestReadyStabilityPoolAction({ ...base, ready: { ...ready, checkedAtMs: NOW_MS - 60_001 } }).status, "stale");
+    const expiredReview = { ...ready, review: { ...review, reviewedAtMs: NOW_MS - 60_001 } };
+    assert.equal(requestReadyStabilityPoolAction({ ...base, ready: expiredReview }).status, "stale");
     const wrongBlock = { ...ready, review: { ...review, snapshot: { ...review.snapshot, blockTag: "0x101" as const } } };
     assert.equal(requestReadyStabilityPoolAction({ ...base, ready: wrongBlock }).status, "context-changed");
     const alteredCall = { ...ready, review: { ...review, transaction: { ...review.transaction, data: "0xdeadbeef" as const } } };

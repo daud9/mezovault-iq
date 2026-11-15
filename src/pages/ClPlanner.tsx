@@ -9,7 +9,7 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { OFFICIAL_SOURCES } from "../config/chains";
 import { TESTNET_CL_CONTRACTS } from "../config/clPositions";
 import { useClPlanner } from "../hooks/useClPlanner";
-import { calculateClTokenSplit, clHumanPrice, type ClPlannerPool } from "../lib/clPlanner";
+import { calculateClTokenSplit, clHumanPrice, clPlannerEstimateFallback, type ClPlannerPool } from "../lib/clPlanner";
 import { shortAddress } from "../lib/format";
 
 const MAX_SNAPSHOT_AGE_MS = 120_000;
@@ -61,6 +61,8 @@ export function ClPlanner() {
     }
   }, [pool, fresh, lowerPrice, upperPrice, budget]);
 
+  const estimateFallback = clPlannerEstimateFallback(fresh, lowerPrice, upperPrice, budget);
+
   const testnet = network.key === "testnet" && network.chainId === TESTNET_CL_CONTRACTS.chainId;
 
   return (
@@ -102,7 +104,7 @@ export function ClPlanner() {
             </div>
 
             {view.refreshError && <p role="alert" className="rounded-xl border border-risk-high/30 bg-risk-high/5 p-3 text-sm text-risk-high">The latest refresh failed: {view.refreshError}. The previous snapshot is retained for reference, but calculations are paused until a fresh read succeeds.</p>}
-            {!fresh && !view.refreshError && <p role="status" className="rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm text-risk-medium">Calculations pause until a fresh pool read succeeds.</p>}
+            {estimateFallback === "paused" && !view.refreshError && <p role="status" className="rounded-xl border border-risk-medium/30 bg-risk-medium/5 p-3 text-sm text-risk-medium">Estimate paused while waiting for a fresh pool read.</p>}
 
             <div className="grid gap-4 lg:grid-cols-2">
               <Field id="cl-planner-pool" label="Active factory pool" hint={`${snapshot.pools.length} selectable · ${snapshot.factoryPoolCount} factory-listed · ${snapshot.excludedPoolCount} excluded (zero liquidity or unreadable decimals)`}>
@@ -162,9 +164,9 @@ export function ClPlanner() {
                 </div>
                 <p className="text-xs leading-relaxed text-mist-500">Estimate only; excludes fees, gas, slippage, and price movement. Not a quote.</p>
               </div>
-            ) : (
+            ) : estimateFallback === "needs-input" ? (
               <p className="rounded-xl border border-line bg-ink-800/40 p-4 text-sm text-mist-400">Enter a positive range and token1 budget to estimate the split.</p>
-            )}
+            ) : null}
           </Card>
 
           <ClDepositPanel
