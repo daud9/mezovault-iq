@@ -16,9 +16,10 @@ import {
   type SimulatedClTransaction,
 } from "../../lib/clDeposit";
 import { createRpcClient } from "../../lib/rpc";
-import { addEntry, browserStore } from "../../lib/txLedger";
+import { addEntry, browserStore, parseLedgerReceipt, updateEntryForContext } from "../../lib/txLedger";
 import { describeSendError } from "../../lib/transfer";
 import type { ClPlannerPool } from "../../lib/clPlanner";
+import { parseChainId } from "../../lib/network";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { useWallet } from "../wallet/WalletProvider";
@@ -46,6 +47,8 @@ interface SimulationBundle {
 interface Submission {
   hash: string;
   kind: "mint" | "approve" | "reset-approval";
+  from: string;
+  chainId: number;
 }
 
 type ReceiptState =
@@ -155,7 +158,7 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
       };
       const hash = await wallet.sendTransaction(transactionRequest, { account, chainId: TESTNET_CL_CONTRACTS.chainId });
       recordClAction(hash, simulation, review);
-      setSubmission({ hash, kind: simulation.kind });
+      setSubmission({ hash, kind: simulation.kind, from: review.wallet, chainId: review.chainId });
       setReceiptState({ status: "not-checked" });
       setSimulationBundle(null);
       setError("");
@@ -171,32 +174,31 @@ export function ClDepositPanel({ pool, lowerPrice, upperPrice, budgetToken1, pla
     setBusy(true);
     setError("");
     try {
+      const localChainId = parseChainId(await rpc.call<unknown>("eth_chainId"));
+      if (localChainId !== submission.chainId) {
+        setReceiptState({ status: "error", message: "The RPC reports a different network; receipt outcome is unknown." });
+        return;
+      }
       const receipt = await rpc.call<{ status?: unknown; blockNumber?: unknown } | null>("eth_getTransactionReceipt", [submission.hash]);
       if (receipt === null) {
         setReceiptState({ status: "pending" });
         return;
       }
-      if (typeof receipt.status !== "string" || !/^0x[0-9a-fA-F]+$/.test(receipt.status) || typeof receipt.blockNumber !== "string" || !/^0x[0-9a-fA-F]+$/.test(receipt.blockNumber)) {
-        setReceiptState({ status: "error", message: "The RPC returned an incomplete transaction receipt; confirmation is unknown." });
+      const parsedReceipt = parseLedgerReceipt(receipt, submission.hash);
+      if (!parsedReceipt) {
+        setReceiptState({ status: "error", message: "The RPC returned an incomplete or mismatched transaction receipt; confirmation is unknown." });
         return;
       }
-      const blockBigInt = BigInt(receipt.blockNumber);
-      if (blockBigInt > BigInt(Number.MAX_SAFE_INTEGER)) {
-        setReceiptState({ status: "error", message: "The receipt block number is outside the safe integer range; confirmation is unknown." });
-        return;
-      }
-      const blockNumber = Number(blockBigInt);
-      const receiptStatus = BigInt(receipt.status);
-      if (receiptStatus === 1n) {
-        setReceiptState({ status: "confirmed", blockNumber });
+      if (parsedReceipt.status === "success") {
+        setReceiptState({ status: "confirmed", blockNumber: parsedReceipt.blockNumber });
+        updateEntryForContext(browserStore(), submission.hash, submission.from, submission.chainId, parsedReceipt);
         setReviewBundle(null);
         setSimulationBundle(null);
-      } else if (receiptStatus === 0n) {
-        setReceiptState({ status: "reverted", blockNumber });
+      } else if (parsedReceipt.status === "reverted") {
+        setReceiptState({ status: "reverted", blockNumber: parsedReceipt.blockNumber });
+        updateEntryForContext(browserStore(), submission.hash, submission.from, submission.chainId, parsedReceipt);
         setReviewBundle(null);
         setSimulationBundle(null);
-      } else {
-        setReceiptState({ status: "error", message: "The receipt status was not recognized; confirmation is unknown." });
       }
     } catch (caught) {
       setReceiptState({ status: "error", message: errorMessage(caught) });

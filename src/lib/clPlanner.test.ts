@@ -39,12 +39,13 @@ function createPool(overrides: Partial<ClPlannerPool> = {}): ClPlannerPool {
   };
 }
 
-function createRpc(options: { wrongChain?: boolean } = {}) {
+function createRpc(options: { wrongChain?: boolean; onCall?: (method: string) => void } = {}) {
   const calls: { to: string; data: string; blockTag: string }[] = [];
   const methods: string[] = [];
   const rpc: RpcClient = {
     async call<T>(method: string, params: unknown[] = []): Promise<T> {
       methods.push(method);
+      options.onCall?.(method);
       if (method === "eth_chainId") return (options.wrongChain ? "0x7b7c" : "0x7b7b") as T;
       if (method === "eth_blockNumber") return BLOCK_TAG as T;
       if (method === "eth_getBlockByNumber") return { timestamp: "0x65a0bc00" } as T;
@@ -161,6 +162,25 @@ describe("Mezo Testnet CL planner live reader", () => {
     assert.ok(calls.every((call) => call.blockTag === BLOCK_TAG));
     assert.ok(calls.some((call) => call.to === TESTNET_CL_CONTRACTS.factory.toLowerCase() && call.data.startsWith("0x41d1de97")));
     assert.ok(methods.every((method) => ["eth_chainId", "eth_blockNumber", "eth_getBlockByNumber", "eth_getCode", "eth_call"].includes(method)));
+  });
+
+  it("counts pool-read duration toward snapshot age from the start of the read", async () => {
+    const startMs = Date.parse("2026-11-12T12:00:00.000Z");
+    let nowMs = startMs;
+    let delayed = false;
+    const { rpc } = createRpc({
+      onCall: (method) => {
+        if (method === "eth_call" && !delayed) {
+          nowMs += 121_000;
+          delayed = true;
+        }
+      },
+    });
+
+    const snapshot = await readClPlannerSnapshot({ network: MEZO_NETWORKS.testnet, rpc, now: () => new Date(nowMs) });
+
+    assert.equal(snapshot.fetchedAt, new Date(startMs).toISOString());
+    assert.equal(nowMs - Date.parse(snapshot.fetchedAt), 121_000);
   });
 
   it("fails closed when the RPC reports a different chain", async () => {

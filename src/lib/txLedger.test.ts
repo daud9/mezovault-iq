@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { addEntry, updateEntry, readLedger, entriesFor, parseLedgerReceipt, type LedgerEntry, type LedgerStore } from "./txLedger";
+import { addEntry, updateEntry, updateEntryForContext, readLedger, entriesFor, parseLedgerReceipt, type LedgerEntry, type LedgerStore } from "./txLedger";
 
 function memoryStore(initial: string | null = null): LedgerStore & { raw: () => string | null } {
   let value = initial;
@@ -9,6 +9,8 @@ function memoryStore(initial: string | null = null): LedgerStore & { raw: () => 
 
 const FROM = "0x1111111111111111111111111111111111111111";
 const OTHER = "0x3333333333333333333333333333333333333333";
+const HASH = `0x${"a".repeat(64)}`;
+const UPPER_HASH = `0x${"A".repeat(64)}`;
 const entry = (hash: string, over: Partial<LedgerEntry> = {}): LedgerEntry => ({
   hash,
   chainId: 31611,
@@ -49,6 +51,48 @@ describe("transaction ledger", () => {
     assert.equal(parseLedgerReceipt({ status: "0x2", blockNumber: "0x2a" }), null);
     assert.equal(parseLedgerReceipt({ status: "0x1", blockNumber: "not-hex" }), null);
     assert.equal(parseLedgerReceipt({ status: "0x1", blockNumber: `0x${(BigInt(Number.MAX_SAFE_INTEGER) + 1n).toString(16)}` }), null);
+  });
+
+  it("binds CL receipt parsing to the expected transaction hash", () => {
+    const receipt = { transactionHash: HASH, status: "0x1", blockNumber: "0x2a" };
+    assert.deepEqual(parseLedgerReceipt(receipt, UPPER_HASH), { status: "success", blockNumber: 42 });
+    assert.equal(parseLedgerReceipt({ ...receipt, transactionHash: `0x${"b".repeat(64)}` }, HASH), null);
+    assert.equal(parseLedgerReceipt({ status: "0x1", blockNumber: "0x2a" }, HASH), null);
+  });
+
+  it("maps certain receipt outcomes only to the matching hash, account, and chain entry", () => {
+    const s = memoryStore(JSON.stringify([
+      entry(HASH),
+      entry(HASH, { from: OTHER }),
+      entry(HASH, { chainId: 1 }),
+      entry(`0x${"c".repeat(64)}`),
+    ]));
+
+    const confirmed = parseLedgerReceipt({ transactionHash: HASH, status: "0x1", blockNumber: "0x2a" }, HASH);
+    assert.ok(confirmed);
+    updateEntryForContext(s, UPPER_HASH, FROM.toUpperCase(), 31611, confirmed);
+    let all = readLedger(s);
+    assert.equal(all.find((item) => item.hash === HASH && item.from === FROM && item.chainId === 31611)?.status, "success");
+    assert.equal(all.find((item) => item.hash === HASH && item.from === FROM && item.chainId === 31611)?.blockNumber, 42);
+    assert.equal(all.find((item) => item.hash === HASH && item.from === OTHER)?.status, "pending");
+    assert.equal(all.find((item) => item.hash === HASH && item.chainId === 1)?.status, "pending");
+    assert.equal(all.find((item) => item.hash.startsWith("0xcccc"))?.status, "pending");
+
+    const reverted = parseLedgerReceipt({ transactionHash: HASH, status: "0x0", blockNumber: "0x2b" }, HASH);
+    assert.ok(reverted);
+    updateEntryForContext(s, HASH, FROM, 31611, reverted);
+    all = readLedger(s);
+    assert.equal(all.find((item) => item.hash === HASH && item.from === FROM && item.chainId === 31611)?.status, "reverted");
+    assert.equal(all.find((item) => item.hash === HASH && item.from === FROM && item.chainId === 31611)?.blockNumber, 43);
+  });
+
+  it("does not update the ledger when a receipt is unavailable or not bound to the submitted hash", () => {
+    const s = memoryStore();
+    addEntry(s, entry(HASH));
+    assert.equal(parseLedgerReceipt(null, HASH), null);
+    assert.equal(parseLedgerReceipt({ transactionHash: `0x${"b".repeat(64)}`, status: "0x0", blockNumber: "0x2a" }, HASH), null);
+    assert.equal(readLedger(s)[0].status, "pending");
+    assert.equal(readLedger(s)[0].blockNumber, null);
   });
 
   it("updates status from a receipt without duplicating the entry", () => {

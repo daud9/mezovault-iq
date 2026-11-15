@@ -6,6 +6,7 @@ import { Card } from "../components/ui/Card";
 import { useWallet } from "../components/wallet/WalletProvider";
 import { MEZO_NETWORKS } from "../config/chains";
 import { clearX402PendingAttempt, readX402PendingAttempt, saveX402PendingAttempt } from "../lib/x402CheckoutState";
+import { getX402CheckoutAction, type X402CheckoutAction } from "../lib/x402CheckoutPresentation";
 import {
   createMezoTestnetX402HttpClient,
   decodeMUSDRequirementsHeader,
@@ -60,6 +61,12 @@ export function X402Checkout() {
   const resourceUrl = useMemo(() => new URL(RESOURCE_PATH, window.location.origin).href, []);
   const connected = wallet.status === "connected" && Boolean(wallet.address);
   const onTestnet = connected && wallet.chainId === MEZO_NETWORKS.testnet.chainId;
+  const checkoutAction: X402CheckoutAction = getX402CheckoutAction({
+    connected,
+    onTestnet,
+    hasReceipt: receipt !== null,
+    paymentStatusUnknown,
+  });
 
   useEffect(() => {
     let active = true;
@@ -313,22 +320,22 @@ export function X402Checkout() {
                 <p className="text-xs text-mist-400">This link can accept multiple separately authorized payments until its 30-day expiry; the app does not track a paid status. Confirm the sender intends this reuse. Cancel if asked to send a transaction or pay gas.</p>
               </div>
 
-              {wallet.status !== "connected" ? (
+              {checkoutAction === "connect-wallet" ? (
                 <Button onClick={() => { void connect(); }} disabled={working} className="min-h-11 w-full">
                   <Wallet className="h-4 w-4" aria-hidden="true" /> Connect buyer wallet
                 </Button>
-              ) : !onTestnet ? (
+              ) : checkoutAction === "switch-network" ? (
                 <Button variant="secondary" onClick={() => { void switchToTestnet(); }} disabled={working} className="min-h-11 w-full">
                   Switch wallet to Mezo Testnet
                 </Button>
-              ) : receipt ? (
+              ) : checkoutAction === "settled" && receipt ? (
                 <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4" role="status">
                   <div className="flex items-center gap-2 text-emerald-300"><CheckCircle2 className="h-5 w-5" aria-hidden="true" /><h2 className="font-semibold">Payment settled</h2></div>
                   <p className="text-sm text-mist-300">Facilitator reports settlement; finality is not verified.</p>
                   <a href={`${MEZO_NETWORKS.testnet.explorerUrl.replace(/\/?$/, "/")}tx/${receipt.transaction}`} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center gap-1 break-all font-mono text-xs text-gold-300 hover:underline">Transaction: {receipt.transaction} <ExternalLink className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /></a>
                   <p className="break-all font-mono text-xs text-mist-500">Buyer: {receipt.payer}</p>
                 </div>
-              ) : paymentStatusUnknown ? (
+              ) : checkoutAction === "unresolved" ? (
                 <div className="space-y-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4" role="alert">
                   <h2 className="font-semibold text-amber-200">Payment status needs checking</h2>
                   <p className="text-sm leading-relaxed text-mist-300">{paymentError ?? "No final settlement confirmation was received."} Do not authorize another payment until you have checked the existing attempt. The server does not store a settlement history.</p>

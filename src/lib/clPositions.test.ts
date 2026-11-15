@@ -128,6 +128,60 @@ function createRpc(options: { wrongOwner?: boolean; failCollect?: boolean } = {}
   return { rpc, methods, calls };
 }
 
+function indexedAddress(index: number): string {
+  return `0x${index.toString(16).padStart(40, "0")}`;
+}
+
+function createBudgetRpc(gaugeCount: number, positionsPerGauge: number, directlyOwnedCount = 0, duplicateGaugeTokenIds = false) {
+  const calls: { to: string; data: string; blockTag: string }[] = [];
+  const pools = Array.from({ length: gaugeCount }, (_, index) => ({
+    address: indexedAddress(0x1000 + index),
+    gauge: indexedAddress(0x2000 + index),
+  }));
+  const rpc: RpcClient = {
+    async call<T>(method: string, params: unknown[] = []): Promise<T> {
+      if (method === "eth_chainId") return "0x7b7b" as T;
+      if (method === "eth_blockNumber") return BLOCK_TAG as T;
+      if (method === "eth_getBlockByNumber") return { timestamp: `0x${BLOCK_TIMESTAMP.toString(16)}` } as T;
+      if (method === "eth_getCode") return "0x60016000" as T;
+      if (method !== "eth_call") throw new Error(`Unexpected RPC method ${method}`);
+
+      const [txValue, blockTag] = params as [{ to: string; data: string }, string];
+      const { to, data } = txValue;
+      const normalizedTo = to.toLowerCase();
+      const selector = data.slice(0, 10).toLowerCase();
+      const args = data.slice(10);
+      calls.push({ to: normalizedTo, data, blockTag });
+      if (blockTag !== BLOCK_TAG) throw new Error("A read escaped the snapshot block.");
+
+      const factory = TESTNET_CL_CONTRACTS.factory.toLowerCase();
+      const manager = TESTNET_CL_CONTRACTS.positionManager.toLowerCase();
+      if (normalizedTo === factory && selector === "0xefde4e64") return uintResult(gaugeCount) as T;
+      if (normalizedTo === factory && selector === "0x41d1de97") {
+        const index = Number(BigInt(`0x${args.slice(0, 64)}`));
+        return addressResult(pools[index].address) as T;
+      }
+      const poolIndex = pools.findIndex((pool) => pool.address.toLowerCase() === normalizedTo);
+      if (poolIndex >= 0 && selector === "0xa6f19c84") return addressResult(pools[poolIndex].gauge) as T;
+      if (pools.some((pool) => pool.gauge.toLowerCase() === normalizedTo) && selector === "0xae775c32") {
+        return uintResult(positionsPerGauge) as T;
+      }
+      if (normalizedTo === manager && selector === "0x70a08231") return uintResult(directlyOwnedCount) as T;
+      if (selector === "0x38463937") {
+        const gaugeIndex = pools.findIndex((pool) => pool.gauge.toLowerCase() === normalizedTo);
+        const index = Number(BigInt(`0x${args.slice(64, 128)}`));
+        return uintResult(duplicateGaugeTokenIds ? index + 1 : gaugeIndex * positionsPerGauge + index + 1) as T;
+      }
+      if (normalizedTo === manager && selector === "0x2f745c59") {
+        const index = Number(BigInt(`0x${args.slice(64, 128)}`));
+        return uintResult(gaugeCount * positionsPerGauge + index + 1) as T;
+      }
+      throw new Error(`Unexpected eth_call ${to} ${selector}`);
+    },
+  };
+  return { rpc, calls };
+}
+
 describe("Mezo Testnet CL position reader", () => {
   it("classifies the live tick with an inclusive lower and exclusive upper bound", () => {
     assert.equal(classifyClRange(100, 100, 120), "in-range");
@@ -139,6 +193,39 @@ describe("Mezo Testnet CL position reader", () => {
   it("formats token amounts without floating-point rounding and avoids assumed decimals", () => {
     assert.equal(formatClAmount("1234567890123456789", 18), "1.234567");
     assert.equal(formatClAmount("42", null), "42 raw units");
+  });
+
+  it("rejects aggregate gauge counts above the cap before enumerating any staked IDs", async () => {
+    const { rpc, calls } = createBudgetRpc(3, 334);
+    await assert.rejects(
+      readClPositionSnapshot({ network: MEZO_NETWORKS.testnet, owner: OWNER, rpc }),
+      /more CL positions than this read-only view will enumerate/,
+    );
+    assert.equal(calls.filter((call) => call.data.startsWith("0xae775c32")).length, 3);
+    assert.equal(calls.filter((call) => call.data.startsWith("0x38463937")).length, 0);
+    assert.equal(calls.filter((call) => call.data.startsWith("0x2f745c59")).length, 0);
+    assert.ok(calls.every((call) => call.blockTag === BLOCK_TAG));
+  });
+
+  it("includes wallet-held positions in the global budget before either enumeration path", async () => {
+    const { rpc, calls } = createBudgetRpc(4, 250, 1);
+    await assert.rejects(
+      readClPositionSnapshot({ network: MEZO_NETWORKS.testnet, owner: OWNER, rpc }),
+      /more CL positions than this read-only view will enumerate/,
+    );
+    assert.equal(calls.filter((call) => call.data.startsWith("0xae775c32")).length, 4);
+    assert.equal(calls.filter((call) => call.data.startsWith("0x70a08231")).length, 1);
+    assert.equal(calls.filter((call) => call.data.startsWith("0x38463937")).length, 0);
+    assert.equal(calls.filter((call) => call.data.startsWith("0x2f745c59")).length, 0);
+  });
+
+  it("does not suppress duplicate NFT ambiguity when raw counts fit within the cap", async () => {
+    const { rpc, calls } = createBudgetRpc(2, 1, 0, true);
+    await assert.rejects(
+      readClPositionSnapshot({ network: MEZO_NETWORKS.testnet, owner: OWNER, rpc }),
+      /appeared in more than one gauge/,
+    );
+    assert.equal(calls.filter((call) => call.data.startsWith("0x38463937")).length, 2);
   });
 
   it("finds both wallet-held and gauge-staked NFTs from one same-block read-only snapshot", async () => {

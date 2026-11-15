@@ -4,6 +4,7 @@ import { Button } from "../ui/Button";
 import { useWallet } from "../wallet/WalletProvider";
 import { shortAddress } from "../../lib/format";
 import { buildMobileWalletLink, isMobileUserAgent } from "../../lib/walletDiscovery";
+import { WalletDetailsPopover } from "./WalletDetailsPopover";
 
 /**
  * Connect Wallet control. Shows the shortened address once connected, and opens a panel with
@@ -31,47 +32,44 @@ export function WalletButton({ className = "", compact = false }: { className?: 
 
   if (isConnected && state.address) {
     return (
-      <div className={`relative ${className}`}>
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls="wallet-details-panel"
-          onClick={() => setOpen((o) => !o)}
-          className={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-xl border ${compactPadding} text-sm ${compactType} font-semibold transition ${
-            isSupportedNetwork
-              ? "border-gold-500/50 bg-gold-500/10 text-gold-300 hover:bg-gold-500/20"
-              : "border-risk-high/50 bg-risk-high/10 text-risk-high"
-          }`}
-        >
-          <Wallet className="h-4 w-4" aria-hidden="true" />
-          {isSupportedNetwork ? shortAddress(state.address) : "Wrong network"}
-        </button>
-
-        {open && (
-          <div id="wallet-details-panel" role="region" aria-label="Wallet details" className="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2.5rem))] space-y-4 rounded-xl border border-line bg-ink-900 p-4 text-sm shadow-xl">
-            <div>
-              <p className="text-xs text-mist-500">Connected{state.walletName ? ` with ${state.walletName}` : ""}</p>
-              <p className="mt-1 break-all font-mono text-xs text-mist-100">{state.address}</p>
-            </div>
-            <div>
-              <p className="text-xs text-mist-500">Network</p>
-              <p className={isSupportedNetwork ? "text-mist-200" : "text-risk-high"}>
-                {isSupportedNetwork ? network.label : `Not ${network.label}`}
-              </p>
-            </div>
-            {state.error && <p role="alert" className="rounded-lg border border-risk-high/40 bg-risk-high/10 p-3 text-xs leading-relaxed text-risk-high">{state.error}</p>}
-            {!isSupportedNetwork && (
-              <Button onClick={switchNetwork} className="min-h-11 w-full">
-                Switch to {network.label}
-              </Button>
-            )}
-            <Button variant="secondary" onClick={() => { disconnect(); setOpen(false); }} className="min-h-11 w-full">
-              Disconnect in this app
-            </Button>
-            <p className="text-xs leading-relaxed text-mist-500">This clears the connection shown here. It does not revoke this app’s authorization in your wallet.</p>
-          </div>
+      <WalletDetailsPopover
+        className={className}
+        open={open}
+        onToggle={() => setOpen((current) => !current)}
+        buttonClassName={`inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-xl border ${compactPadding} text-sm ${compactType} font-semibold transition ${
+          isSupportedNetwork
+            ? "border-gold-500/50 bg-gold-500/10 text-gold-300 hover:bg-gold-500/20"
+            : "border-risk-high/50 bg-risk-high/10 text-risk-high"
+        }`}
+        buttonContent={
+          <>
+            <Wallet className="h-4 w-4" aria-hidden="true" />
+            {isSupportedNetwork ? shortAddress(state.address) : "Wrong network"}
+          </>
+        }
+        panelClassName="absolute right-0 top-full z-30 mt-2 w-[min(18rem,calc(100vw-2.5rem))] space-y-4 rounded-xl border border-line bg-ink-900 p-4 text-sm shadow-xl"
+      >
+        <div>
+          <p className="text-xs text-mist-500">Connected{state.walletName ? ` with ${state.walletName}` : ""}</p>
+          <p className="mt-1 break-all font-mono text-xs text-mist-100">{state.address}</p>
+        </div>
+        <div>
+          <p className="text-xs text-mist-500">Network</p>
+          <p className={isSupportedNetwork ? "text-mist-200" : "text-risk-high"}>
+            {isSupportedNetwork ? network.label : `Not ${network.label}`}
+          </p>
+        </div>
+        {state.error && <p role="alert" className="rounded-lg border border-risk-high/40 bg-risk-high/10 p-3 text-xs leading-relaxed text-risk-high">{state.error}</p>}
+        {!isSupportedNetwork && (
+          <Button onClick={switchNetwork} className="min-h-11 w-full">
+            Switch to {network.label}
+          </Button>
         )}
-      </div>
+        <Button variant="secondary" onClick={() => { disconnect(); setOpen(false); }} className="min-h-11 w-full">
+          Disconnect in this app
+        </Button>
+        <p className="text-xs leading-relaxed text-mist-500">This clears the connection shown here. It does not revoke this app’s authorization in your wallet.</p>
+      </WalletDetailsPopover>
     );
   }
 

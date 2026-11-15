@@ -13,6 +13,7 @@ import { createRpcClient } from "../../lib/rpc";
 import { addEntry, browserStore } from "../../lib/txLedger";
 import { describeWalletError } from "../../lib/wallet";
 import { useNativeBalance } from "../../hooks/useNativeBalance";
+import type { AddCollateralConfirmationReceipt } from "./AddCollateralConfirmation";
 import { Button } from "../ui/Button";
 import { useWallet } from "../wallet/WalletProvider";
 
@@ -33,7 +34,7 @@ interface Submission {
   prepared: PreparedAddCollateral;
 }
 
-export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
+export function AddCollateralAction({ onConfirmed }: { onConfirmed(receipt: AddCollateralConfirmationReceipt): void }) {
   const { state: walletState, network, sendTransaction } = useWallet();
   const { view: nativeBalanceView, refresh: refreshNativeBalance } = useNativeBalance();
   const connectedAccount = walletState.status === "connected" ? walletState.address : null;
@@ -178,7 +179,14 @@ export function AddCollateralAction({ onConfirmed }: { onConfirmed(): void }) {
       const rpc = createRpcClient({ url: resolveRpcUrl(MEZO_NETWORKS.testnet) });
       const result = await readAddCollateralReceipt({ rpc, hash: submission.hash, expected: submission.prepared.transaction });
       setReceiptState(result);
-      if (result.status === "confirmed") onConfirmed();
+      if (result.status === "confirmed") {
+        onConfirmed({
+          hash: submission.hash,
+          blockNumber: result.blockNumber,
+          amountBtc: formatUnits18(submission.prepared.collateralWei, 18),
+          account: submission.prepared.account,
+        });
+      }
       if (result.status === "confirmed") refreshNativeBalance();
     } catch (caught) {
       setReceiptState({ status: "error", message: receiptMessage(caught) });

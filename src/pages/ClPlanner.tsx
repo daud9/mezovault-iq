@@ -128,7 +128,7 @@ export function ClPlanner() {
                 <p className="text-xs font-medium uppercase tracking-wider text-mist-500">Live pool state</p>
                 <p className="mt-2 text-sm font-semibold text-mist-100">1 {pool.token0.symbol} ≈ {formatPrice(clHumanPrice(pool))} {pool.token1.symbol}</p>
                 <p className="mt-1 break-all text-xs text-mist-500">Tick {pool.currentTick.toLocaleString()} · tick spacing {pool.tickSpacing} · active liquidity {pool.activeLiquidity}</p>
-                <p className="mt-1 break-all text-xs text-mist-500">Pool {pool.address} · block {snapshot.blockNumber.toLocaleString()} · read {formatAge(snapshotAge)} ago</p>
+                <p className="mt-1 break-all text-xs text-mist-500">Pool {pool.address} · block {snapshot.blockNumber.toLocaleString()} · read started {formatAge(snapshotAge)} ago</p>
               </div>
             </div>
 

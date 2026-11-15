@@ -5,6 +5,7 @@ import { DataStatus } from "../ui/DataStatus";
 import { OpenTrovePlanner } from "./OpenTrovePlanner";
 import { OpenTroveAction } from "./OpenTroveAction";
 import { AddCollateralAction } from "./AddCollateralAction";
+import { AddCollateralConfirmationNotice, type AddCollateralConfirmationReceipt } from "./AddCollateralConfirmation";
 import { useWallet } from "../wallet/WalletProvider";
 import { useLoan } from "../../hooks/useLoan";
 import { useOpenTroveSnapshot } from "../../hooks/useOpenTroveSnapshot";
@@ -20,6 +21,7 @@ export function LoanCard() {
   const [nowMs, setNowMs] = useState(() => Date.now());
   const [noActiveTrove, setNoActiveTrove] = useState(false);
   const [openTroveConflictAccount, setOpenTroveConflictAccount] = useState<string | null>(null);
+  const [confirmedCollateralReceipt, setConfirmedCollateralReceipt] = useState<AddCollateralConfirmationReceipt | null>(null);
   const [plannerCollateralBtc, setPlannerCollateralBtc] = useState("");
   const [plannerRequestedMusd, setPlannerRequestedMusd] = useState("");
   const plannerCollateralTouched = useRef(false);
@@ -95,6 +97,10 @@ export function LoanCard() {
     refresh();
     refreshPlanner();
   }, [refresh, refreshPlanner]);
+  const handleCollateralConfirmed = useCallback((receipt: AddCollateralConfirmationReceipt) => {
+    setConfirmedCollateralReceipt(receipt);
+    handleTroveConfirmed();
+  }, [handleTroveConfirmed]);
   const handleExistingTroveDetected = useCallback(() => {
     if (state.address) setOpenTroveConflictAccount(state.address.toLowerCase());
     refresh();
@@ -167,7 +173,7 @@ export function LoanCard() {
             <Metric label="MUSD borrowed" value={`${result.debtMusd} MUSD`} />
           </div>
           {readFresh ? (
-            <AddCollateralAction onConfirmed={() => { refresh(); refreshPlanner(); }} />
+            <AddCollateralAction onConfirmed={handleCollateralConfirmed} />
           ) : (
             <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
               <p className="text-sm text-amber-200" role="status">Trove data is stale. Waiting for a fresh read before adding BTC.</p>
@@ -209,6 +215,9 @@ export function LoanCard() {
           <p className="mt-1 text-sm text-mist-400">BTC collateral · MUSD debt</p>
         </div>
       </div>
+      {confirmedCollateralReceipt?.account.toLowerCase() === accountKey && (
+        <AddCollateralConfirmationNotice receipt={confirmedCollateralReceipt} />
+      )}
       {body}
     </Card>
   );

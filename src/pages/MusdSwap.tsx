@@ -9,7 +9,7 @@ import { resolveRpcUrl } from "../config/env";
 import { TESTNET_POOL_BTC_TOKEN } from "../config/pools";
 import { MEZO_NETWORKS } from "../config/chains";
 import { createRpcClient } from "../lib/rpc";
-import { addEntry, browserStore } from "../lib/txLedger";
+import { addEntry, browserStore, updateEntryForContext } from "../lib/txLedger";
 import {
   formatMUSDTokenAmount,
   MUSD_SWAP_MAX_REVIEW_AGE_MS,
@@ -23,6 +23,7 @@ import { formatTokenUnits } from "../lib/tokenAmount";
 
 interface Submission {
   hash: string;
+  chainId: number;
   prepared: PreparedMUSDAction;
 }
 
@@ -112,7 +113,7 @@ export function MusdSwap() {
     );
     setBusy("wallet");
     void walletRequest.then((hash) => {
-      const sent = { hash, prepared };
+      const sent = { hash, chainId: network.chainId, prepared };
       addEntry(browserStore(), {
         hash,
         chainId: network.chainId,
@@ -141,6 +142,12 @@ export function MusdSwap() {
     try {
       const outcome = await readMUSDReceipt({ network, rpc, prepared: target.prepared, transactionHash: target.hash });
       setReceiptOutcome(outcome);
+      if (outcome.status === "confirmed" || outcome.status === "reverted") {
+        updateEntryForContext(browserStore(), target.hash, target.prepared.transaction.from, target.chainId, {
+          status: outcome.status === "confirmed" ? "success" : "reverted",
+          blockNumber: outcome.blockNumber,
+        });
+      }
       if (outcome.status === "confirmed" && target.prepared.kind === "approve") {
         setApprovalReceipt({ hash: target.hash, blockNumber: outcome.blockNumber, account: target.prepared.transaction.from });
         const refreshed = await prepare();

@@ -86,6 +86,7 @@ export async function readClPlannerSnapshot(input: {
   now?: () => Date;
 }): Promise<ClPlannerSnapshot> {
   const { network, rpc } = input;
+  const fetchedAt = (input.now ?? (() => new Date()))().toISOString();
   if (network.key !== "testnet" || network.chainId !== TESTNET_CL_CONTRACTS.chainId) {
     throw new Error("The CL planner reads only the official Mezo Testnet deployments (chain 31611).");
   }
@@ -136,7 +137,7 @@ export async function readClPlannerSnapshot(input: {
     chainId: actualChainId,
     blockNumber,
     blockTimestamp,
-    fetchedAt: (input.now ?? (() => new Date()))().toISOString(),
+    fetchedAt,
     factoryPoolCount,
     excludedPoolCount: results.filter((result) => result.pool === null).length,
     pools,

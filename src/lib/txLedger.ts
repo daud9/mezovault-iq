@@ -76,10 +76,36 @@ export function updateEntry(
   );
 }
 
+/** Update a receipt only on the exact submitted hash, sender, and chain ledger entry. */
+export function updateEntryForContext(
+  store: LedgerStore,
+  hash: string,
+  from: string,
+  chainId: number,
+  patch: Pick<LedgerEntry, "status" | "blockNumber">,
+): void {
+  write(
+    store,
+    readLedger(store).map((entry) =>
+      entry.hash.toLowerCase() === hash.toLowerCase() &&
+      entry.from.toLowerCase() === from.toLowerCase() &&
+      entry.chainId === chainId
+        ? { ...entry, ...patch }
+        : entry,
+    ),
+  );
+}
+
 /** Only recognize a receipt with a valid status and safe block number; malformed RPC data stays unconfirmed. */
-export function parseLedgerReceipt(value: unknown): { status: "success" | "reverted"; blockNumber: number } | null {
+export function parseLedgerReceipt(
+  value: unknown,
+  expectedHash?: string,
+): { status: "success" | "reverted"; blockNumber: number } | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
-  const receipt = value as { status?: unknown; blockNumber?: unknown };
+  const receipt = value as { status?: unknown; blockNumber?: unknown; transactionHash?: unknown };
+  if (expectedHash !== undefined &&
+      (!/^0x[0-9a-fA-F]{64}$/.test(expectedHash) || typeof receipt.transactionHash !== "string" ||
+       receipt.transactionHash.toLowerCase() !== expectedHash.toLowerCase())) return null;
   if (typeof receipt.status !== "string" || !/^0x[0-9a-fA-F]+$/.test(receipt.status) ||
       typeof receipt.blockNumber !== "string" || !/^0x[0-9a-fA-F]+$/.test(receipt.blockNumber)) return null;
   try {

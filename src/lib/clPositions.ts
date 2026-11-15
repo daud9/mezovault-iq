@@ -96,6 +96,7 @@ interface PositionRecord {
 interface GaugePool {
   poolAddress: `0x${string}`;
   gaugeAddress: `0x${string}` | null;
+  stakedCount: bigint;
   tokenIds: string[];
 }
 
@@ -147,19 +148,29 @@ export async function readClPositionSnapshot(input: {
     await requireContractCode(rpc, poolAddress, blockTag, "CL pool");
     const gaugeResult = await call(rpc, poolAddress, SELECTOR.gauge, blockTag);
     const gaugeAddress = decodeAddress(gaugeResult, "CL pool gauge");
-    if (isZeroAddress(gaugeAddress)) return { poolAddress, gaugeAddress: null, tokenIds: [] };
+    if (isZeroAddress(gaugeAddress)) return { poolAddress, gaugeAddress: null, stakedCount: 0n, tokenIds: [] };
     await requireContractCode(rpc, gaugeAddress, blockTag, "CL gauge");
     const count = await readUint(rpc, gaugeAddress, SELECTOR.stakedLength, [addressWord(owner)], blockTag);
     if (count > MAX_POSITIONS) throw new Error("A CL gauge returned an unexpectedly large position count.");
-    const tokenIds = await mapLimit(Array.from({ length: Number(count) }, (_, index) => index), READ_CONCURRENCY, async (index) => {
-      const encoded = await call(rpc, gaugeAddress, encodeCall(SELECTOR.stakedByIndex, [addressWord(owner), uintWord(BigInt(index))]), blockTag);
-      return readUintWord(encoded, "staked position token ID").toString();
-    });
-    return { poolAddress, gaugeAddress, tokenIds };
+    return { poolAddress, gaugeAddress, stakedCount: count, tokenIds: [] };
   });
 
   const directlyOwnedCount = await readUint(rpc, TESTNET_CL_CONTRACTS.positionManager, SELECTOR.balanceOf, [addressWord(owner)], blockTag);
   if (directlyOwnedCount > MAX_POSITIONS) throw new Error("The position manager returned an unexpectedly large wallet position count.");
+  const totalPositionCount = gaugePools.reduce((total, entry) => total + entry.stakedCount, directlyOwnedCount);
+  if (totalPositionCount > MAX_POSITIONS) throw new Error("The wallet has more CL positions than this read-only view will enumerate.");
+
+  // Check every raw count before enumerating any IDs; otherwise many individually
+  // valid gauges can cause excessive aggregate work before the cap is applied.
+  const gaugeIndexRequests = gaugePools.flatMap((entry) =>
+    Array.from({ length: Number(entry.stakedCount) }, (_, index) => ({ entry, index })),
+  );
+  const gaugeTokenIds = await mapLimit(gaugeIndexRequests, READ_CONCURRENCY, async ({ entry, index }) => {
+    const gaugeAddress = entry.gaugeAddress!;
+    const encoded = await call(rpc, gaugeAddress, encodeCall(SELECTOR.stakedByIndex, [addressWord(owner), uintWord(BigInt(index))]), blockTag);
+    return readUintWord(encoded, "staked position token ID").toString();
+  });
+  gaugeIndexRequests.forEach(({ entry }, index) => entry.tokenIds.push(gaugeTokenIds[index]));
   const directlyOwnedIds = await mapLimit(Array.from({ length: Number(directlyOwnedCount) }, (_, index) => index), READ_CONCURRENCY, async (index) => {
     const encoded = await call(rpc, TESTNET_CL_CONTRACTS.positionManager, encodeCall(SELECTOR.tokenOfOwnerByIndex, [addressWord(owner), uintWord(BigInt(index))]), blockTag);
     return readUintWord(encoded, "wallet position token ID").toString();
@@ -179,8 +190,6 @@ export async function readClPositionSnapshot(input: {
     if (allTokenIds.has(tokenId)) throw new Error(`Position NFT ${tokenId} appeared as both wallet-held and staked at the checked block.`);
     allTokenIds.add(tokenId);
   }
-  if (BigInt(allTokenIds.size) > MAX_POSITIONS) throw new Error("The wallet has more CL positions than this read-only view will enumerate.");
-
   const tokenInfoCache = new Map<string, Promise<ClTokenInfo>>();
   const poolStateCache = new Map<string, Promise<PoolState>>();
   const rewardScheduleCache = new Map<string, Promise<ClRewardSchedule>>();

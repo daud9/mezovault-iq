@@ -27,6 +27,7 @@
   ],
   "exclude": [
     "src/**/*.test.ts",
+    "src/**/*.test.tsx",
     "src/lib/testHelpers.ts"
   ]
 }

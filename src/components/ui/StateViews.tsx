@@ -24,15 +24,17 @@ export function EmptyState({ title, description, action }: { title: string; desc
 
 export function ErrorState({ title = "Something went wrong", description, onRetry }: { title?: string; description: string; onRetry?: () => void }) {
   return (
-    <Card className="flex flex-col items-center gap-3 border-risk-high/30 py-12 text-center">
-      <AlertTriangle className="h-8 w-8 text-risk-high" aria-hidden="true" />
-      <h3 className="text-base font-semibold text-mist-100">{title}</h3>
-      <p className="max-w-md text-sm text-mist-400">{description}</p>
-      {onRetry && (
-        <button onClick={onRetry} className="text-sm font-medium text-gold-300 hover:underline">
-          Try again
-        </button>
-      )}
-    </Card>
+    <div role="alert">
+      <Card className="flex flex-col items-center gap-3 border-risk-high/30 py-12 text-center">
+        <AlertTriangle className="h-8 w-8 text-risk-high" aria-hidden="true" />
+        <h3 className="text-base font-semibold text-mist-100">{title}</h3>
+        <p className="max-w-md text-sm text-mist-400">{description}</p>
+        {onRetry && (
+          <button onClick={onRetry} className="text-sm font-medium text-gold-300 hover:underline">
+            Try again
+          </button>
+        )}
+      </Card>
+    </div>
   );
 }

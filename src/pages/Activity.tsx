@@ -9,6 +9,7 @@ import { useWallet } from "../components/wallet/WalletProvider";
 import { useMezoBalance } from "../hooks/useMezoBalance";
 import { resolveRpcUrl } from "../config/env";
 import { createRpcClient, type RpcClient } from "../lib/rpc";
+import { isActivityContextCurrent, receiptMatchesRequestedHash, withVerifiedActivityChain } from "../lib/activityRpc";
 import { readTransfersInRange, type TransferLog } from "../lib/transferLogs";
 import { browserStore, entriesFor, parseLedgerReceipt, readLedger, updateEntry, type LedgerEntry } from "../lib/txLedger";
 import { formatTokenUnits } from "../lib/tokenAmount";
@@ -75,6 +76,7 @@ export function Activity() {
   const [transferCoverage, setTransferCoverage] = useState<TransferCoverage | null>(null);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [olderError, setOlderError] = useState<string | null>(null);
+  const [historyContextKey, setHistoryContextKey] = useState<string | null>(null);
   const [loadingTransfers, setLoadingTransfers] = useState(false);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [tick, setTick] = useState(0);
@@ -82,6 +84,14 @@ export function Activity() {
 
   const address = state.address;
   const ready = state.status === "connected" && address !== null && isSupportedNetwork;
+  const activityContextKey = ready && address && network.musd ? `${network.chainId}:${address.toLowerCase()}` : null;
+  const historyContextMatches = isActivityContextCurrent(historyContextKey, activityContextKey);
+  const visibleTransfers = historyContextMatches ? transfers : null;
+  const visibleTransferCoverage = historyContextMatches ? transferCoverage : null;
+  const visibleTransferError = historyContextMatches ? transferError : null;
+  const visibleOlderError = historyContextMatches ? olderError : null;
+  const visibleLoadingTransfers = !historyContextMatches || loadingTransfers;
+  const visibleLoadingOlder = historyContextMatches && loadingOlder;
   const mezoDecimals = mezo.view.status === "done" && mezo.view.result.status === "ok" ? mezo.view.result.decimals : null;
 
   const mine = useMemo(
@@ -102,8 +112,11 @@ export function Activity() {
     (async () => {
       for (const entry of pending) {
         try {
-          const receipt = await rpc.call<unknown>("eth_getTransactionReceipt", [entry.hash]);
-          if (receipt) {
+          if (cancelled) return;
+          const receipt = await withVerifiedActivityChain(rpc, network.chainId, () =>
+            rpc.call<unknown>("eth_getTransactionReceipt", [entry.hash]),
+          );
+          if (!cancelled && receipt && receiptMatchesRequestedHash(receipt, entry.hash)) {
             const parsed = parseLedgerReceipt(receipt);
             if (parsed) updateEntry(store, entry.hash, parsed);
           }
@@ -121,8 +134,10 @@ export function Activity() {
   // Read the latest page of standard ERC-20 Transfer logs, limited to verified token contracts.
   useEffect(() => {
     if (!ready || !address || !network.musd) return;
+    const contextKey = `${network.chainId}:${address.toLowerCase()}`;
     const generation = ++historyGeneration.current;
     let cancelled = false;
+    setHistoryContextKey(contextKey);
     setLoadingTransfers(true);
     setLoadingOlder(false);
     setTransfers(null);
@@ -132,15 +147,18 @@ export function Activity() {
     const rpc = createRpcClient({ url: resolveRpcUrl(network) });
     (async () => {
       try {
-        const snapshotBlock = blockNumberFromHex(await rpc.call<string>("eth_blockNumber"));
-        const fromBlock = Math.max(0, snapshotBlock - PAGE_BLOCKS + 1);
-        const items = await readTokenTransfers({
-          rpc,
-          network,
-          owner: address,
-          fromBlock,
-          toBlock: snapshotBlock,
-          mezoDecimals,
+        const { snapshotBlock, fromBlock, items } = await withVerifiedActivityChain(rpc, network.chainId, async () => {
+          const snapshotBlock = blockNumberFromHex(await rpc.call<string>("eth_blockNumber"));
+          const fromBlock = Math.max(0, snapshotBlock - PAGE_BLOCKS + 1);
+          const items = await readTokenTransfers({
+            rpc,
+            network,
+            owner: address,
+            fromBlock,
+            toBlock: snapshotBlock,
+            mezoDecimals,
+          });
+          return { snapshotBlock, fromBlock, items };
         });
         if (!cancelled && generation === historyGeneration.current) {
           setTransfers(items);
@@ -167,12 +185,15 @@ export function Activity() {
     const toBlock = currentFromBlock - 1;
     const fromBlock = Math.max(0, toBlock - PAGE_BLOCKS + 1);
     const generation = historyGeneration.current;
+    const contextKey = `${network.chainId}:${address.toLowerCase()}`;
     const rpc = createRpcClient({ url: resolveRpcUrl(network) });
     setLoadingOlder(true);
     setOlderError(null);
     try {
-      const older = await readTokenTransfers({ rpc, network, owner: address, fromBlock, toBlock, mezoDecimals });
-      if (generation === historyGeneration.current) {
+      const older = await withVerifiedActivityChain(rpc, network.chainId, () =>
+        readTokenTransfers({ rpc, network, owner: address, fromBlock, toBlock, mezoDecimals }),
+      );
+      if (generation === historyGeneration.current && contextKey === `${network.chainId}:${address.toLowerCase()}`) {
         setTransfers((current) => [...(current ?? []), ...older].sort((a, b) => b.log.blockNumber - a.log.blockNumber));
         setTransferCoverage((current) =>
           current && current.fromBlock === currentFromBlock ? { ...current, fromBlock, retrievedAt: new Date().toISOString() } : current,
@@ -188,13 +209,13 @@ export function Activity() {
   }
 
   function exportLoadedTransfers() {
-    if (!transfers || !transferCoverage) return;
-    const csv = buildActivityCsv(transfers, transferCoverage);
+    if (!visibleTransfers || !visibleTransferCoverage) return;
+    const csv = buildActivityCsv(visibleTransfers, visibleTransferCoverage);
     const file = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(file);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `mezovault-iq-transfers-${transferCoverage.fromBlock}-${transferCoverage.toBlock}.csv`;
+    anchor.download = `mezovault-iq-transfers-${visibleTransferCoverage.fromBlock}-${visibleTransferCoverage.toBlock}.csv`;
     anchor.click();
     window.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
@@ -256,29 +277,29 @@ export function Activity() {
 
           <section className="space-y-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-mist-500">MUSD and MEZO token transfers</h2>
-            {!loadingTransfers && !transferError && transfers && transferCoverage && (
+            {!visibleLoadingTransfers && !visibleTransferError && visibleTransfers && visibleTransferCoverage && (
               <CoverageMap
-                fromBlock={transferCoverage.fromBlock}
-                toBlock={transferCoverage.toBlock}
-                snapshotBlock={transferCoverage.snapshotBlock}
+                fromBlock={visibleTransferCoverage.fromBlock}
+                toBlock={visibleTransferCoverage.toBlock}
+                snapshotBlock={visibleTransferCoverage.snapshotBlock}
                 tokens={mezoDecimals === null ? ["MUSD"] : ["MUSD", "MEZO"]}
-                count={transfers.length}
+                count={visibleTransfers.length}
               />
             )}
             <Card className="space-y-3">
-              {loadingTransfers && <p className="text-sm text-mist-400" role="status">Reading the latest {PAGE_BLOCKS.toLocaleString()} blocks of token transfers from {network.label}…</p>}
-              {!loadingTransfers && transferError && (
+              {visibleLoadingTransfers && <p className="text-sm text-mist-400" role="status">Reading the latest {PAGE_BLOCKS.toLocaleString()} blocks of token transfers from {network.label}…</p>}
+              {!visibleLoadingTransfers && visibleTransferError && (
                 <div className="space-y-2">
                   <DataStatus state="unavailable" />
-                  <p className="text-sm text-mist-400">Could not read token transfers: {transferError}</p>
+                  <p className="text-sm text-mist-400">Could not read token transfers: {visibleTransferError}</p>
                 </div>
               )}
-              {!loadingTransfers && !transferError && transfers && transfers.length === 0 && transferCoverage && (
-                <p className="text-sm text-mist-400">No MUSD or MEZO transfer events in blocks {transferCoverage.fromBlock.toLocaleString()}–{transferCoverage.toBlock.toLocaleString()}.</p>
+              {!visibleLoadingTransfers && !visibleTransferError && visibleTransfers && visibleTransfers.length === 0 && visibleTransferCoverage && (
+                <p className="text-sm text-mist-400">No MUSD or MEZO transfer events in blocks {visibleTransferCoverage.fromBlock.toLocaleString()}–{visibleTransferCoverage.toBlock.toLocaleString()}.</p>
               )}
-              {!loadingTransfers && !transferError && transfers && transfers.length > 0 && (
+              {!visibleLoadingTransfers && !visibleTransferError && visibleTransfers && visibleTransfers.length > 0 && (
                 <ul className="divide-y divide-line">
-                  {transfers.map((transfer) => {
+                  {visibleTransfers.map((transfer) => {
                     const amount = formatTokenUnits(transfer.log.valueRaw, transfer.decimals, Math.min(6, transfer.decimals));
                     const incoming = transfer.log.direction === "incoming";
                     const self = transfer.log.direction === "self";
@@ -301,16 +322,16 @@ export function Activity() {
                 </ul>
               )}
 
-              {!loadingTransfers && !transferError && transferCoverage && (
+              {!visibleLoadingTransfers && !visibleTransferError && visibleTransferCoverage && (
                 <div className="space-y-3 border-t border-line pt-3">
                   <p className="text-xs leading-relaxed text-mist-500">
-                    Blocks {transferCoverage.fromBlock.toLocaleString()}–{transferCoverage.toBlock.toLocaleString()} · snapshot {transferCoverage.snapshotBlock.toLocaleString()}.
+                    Blocks {visibleTransferCoverage.fromBlock.toLocaleString()}–{visibleTransferCoverage.toBlock.toLocaleString()} · snapshot {visibleTransferCoverage.snapshotBlock.toLocaleString()}.
                   </p>
-                  {olderError && <p className="text-sm text-risk-high">Could not load the older page: {olderError}</p>}
+                  {visibleOlderError && <p className="text-sm text-risk-high">Could not load the older page: {visibleOlderError}</p>}
                   <div className="flex flex-wrap items-center gap-2">
-                    {transferCoverage.fromBlock > 0 ? (
-                      <Button variant="secondary" onClick={loadOlderTransfers} disabled={loadingOlder} className="min-h-11">
-                        {loadingOlder ? "Loading older transfers…" : `Load older transfers (${Math.max(0, transferCoverage.fromBlock - PAGE_BLOCKS).toLocaleString()}–${(transferCoverage.fromBlock - 1).toLocaleString()})`}
+                    {visibleTransferCoverage.fromBlock > 0 ? (
+                      <Button variant="secondary" onClick={loadOlderTransfers} disabled={visibleLoadingOlder} className="min-h-11">
+                        {visibleLoadingOlder ? "Loading older transfers…" : `Load older transfers (${Math.max(0, visibleTransferCoverage.fromBlock - PAGE_BLOCKS).toLocaleString()}–${(visibleTransferCoverage.fromBlock - 1).toLocaleString()})`}
                       </Button>
                     ) : (
                       <p className="text-xs text-mist-500">Reached block 0 for these token logs.</p>

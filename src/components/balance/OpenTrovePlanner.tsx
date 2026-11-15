@@ -27,7 +27,6 @@ export function OpenTrovePlanner({
   disabled = false,
 }: OpenTrovePlannerProps) {
   const minimum = calculateMinimumOpenTroveAmounts(live);
-  const prefillReady = collateralBtc.length > 0 && requestedMusd.length > 0;
 
   return (
     <section className="space-y-3 rounded-xl border border-line bg-ink-900 p-3 text-mist-100" aria-labelledby="open-trove-planner-title">
@@ -50,7 +49,7 @@ export function OpenTrovePlanner({
             placeholder={minimum.status === "ready" ? minimum.collateralBtc : "Calculating…"}
             aria-label="BTC collateral amount"
             className="min-h-11 w-full rounded-lg border border-line bg-ink-800 px-3 text-mist-100 outline-none focus:border-gold-300 disabled:opacity-60"
-            disabled={disabled || !prefillReady}
+            disabled={disabled}
           />
         </label>
         <label className="space-y-1 text-sm">
@@ -65,7 +64,7 @@ export function OpenTrovePlanner({
             placeholder={minimum.status === "ready" ? minimum.requestedMusd : "Calculating…"}
             aria-label="Requested MUSD debt amount"
             className="min-h-11 w-full rounded-lg border border-line bg-ink-800 px-3 text-mist-100 outline-none focus:border-gold-300 disabled:opacity-60"
-            disabled={disabled || !prefillReady}
+            disabled={disabled}
           />
         </label>
       </div>
